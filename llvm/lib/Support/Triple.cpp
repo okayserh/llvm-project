@@ -73,6 +73,7 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
   case spirv32:        return "spirv32";
   case spirv64:        return "spirv64";
   case systemz:        return "s390x";
+  case t8xx:           return "t8xx";
   case tce:            return "tce";
   case tcele:          return "tcele";
   case thumb:          return "thumb";
@@ -130,6 +131,8 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
   case sparcel:
   case sparc:       return "sparc";
 
+  case t8xx:        return "t8xx";
+    
   case systemz:     return "s390";
 
   case x86:
@@ -342,6 +345,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("sparcv9", sparcv9)
     .Case("s390x", systemz)
     .Case("systemz", systemz)
+    .Case("t8xx", t8xx)
     .Case("tce", tce)
     .Case("tcele", tcele)
     .Case("thumb", thumb)
@@ -486,6 +490,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Case("sparc", Triple::sparc)
     .Case("sparcel", Triple::sparcel)
     .Cases("sparcv9", "sparc64", Triple::sparcv9)
+    .Case("t8xx", Triple::t8xx)
     .Case("tce", Triple::tce)
     .Case("tcele", Triple::tcele)
     .Case("xcore", Triple::xcore)
@@ -844,6 +849,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::sparcv9:
   case Triple::spir64:
   case Triple::spir:
+  case Triple::t8xx: // TODO
   case Triple::tce:
   case Triple::tcele:
   case Triple::thumbeb:
@@ -1422,6 +1428,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::sparcel:
   case llvm::Triple::spir:
   case llvm::Triple::spirv32:
+  case llvm::Triple::t8xx:
   case llvm::Triple::tce:
   case llvm::Triple::tcele:
   case llvm::Triple::thumb:
@@ -1512,6 +1519,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::sparcel:
   case Triple::spir:
   case Triple::spirv32:
+  case Triple::t8xx:
   case Triple::tce:
   case Triple::tcele:
   case Triple::thumb:
@@ -1566,6 +1574,7 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::r600:
   case Triple::shave:
   case Triple::sparcel:
+  case Triple::t8xx:
   case Triple::tce:
   case Triple::tcele:
   case Triple::xcore:
@@ -1670,6 +1679,8 @@ Triple Triple::getBigEndianArchVariant() const {
   case Triple::ve:
   case Triple::csky:
 
+  case Triple::t8xx:
+    
   // ARM is intentionally unsupported here, changing the architecture would
   // drop any arch suffixes.
   case Triple::arm:
@@ -1706,6 +1717,8 @@ Triple Triple::getLittleEndianArchVariant() const {
   case Triple::sparcv9:
   case Triple::systemz:
   case Triple::m68k:
+
+  case Triple::t8xx:
 
   // ARM is intentionally unsupported here, changing the architecture would
   // drop any arch suffixes.
@@ -1770,6 +1783,7 @@ bool Triple::isLittleEndian() const {
   case Triple::spir:
   case Triple::spirv32:
   case Triple::spirv64:
+  case Triple::t8xx:
   case Triple::tcele:
   case Triple::thumb:
   case Triple::ve:
