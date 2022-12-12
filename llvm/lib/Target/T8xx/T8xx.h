@@ -1,0 +1,35 @@
+//===-- T8xx.h - Top-level interface for T8xx representation --*- C++ -*-===//
+//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+//
+// This file contains the entry points for global functions defined in the LLVM
+// T8xx back-end.
+//
+//===----------------------------------------------------------------------===//
+
+#ifndef LLVM_LIB_TARGET_SPARC_SPARC_H
+#define LLVM_LIB_TARGET_SPARC_SPARC_H
+
+#include "MCTargetDesc/T8xxMCTargetDesc.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetMachine.h"
+
+namespace llvm {
+  class FunctionPass;
+  class T8xxTargetMachine;
+  class AsmPrinter;
+  class MCInst;
+  class MachineInstr;
+
+  FunctionPass *createT8xxISelDag(T8xxTargetMachine &TM);
+
+  void LowerT8xxMachineInstrToMCInst(const MachineInstr *MI,
+                                      MCInst &OutMI,
+                                      AsmPrinter &AP);
+} // end namespace llvm;
+
+#endif
