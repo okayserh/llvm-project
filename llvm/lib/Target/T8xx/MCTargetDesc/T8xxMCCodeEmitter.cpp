@@ -71,18 +71,6 @@ public:
   unsigned getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
                              SmallVectorImpl<MCFixup> &Fixups,
                              const MCSubtargetInfo &STI) const;
-  unsigned getBranchTargetOpValue(const MCInst &MI, unsigned OpNo,
-                             SmallVectorImpl<MCFixup> &Fixups,
-                             const MCSubtargetInfo &STI) const;
-  unsigned getSImm13OpValue(const MCInst &MI, unsigned OpNo,
-                            SmallVectorImpl<MCFixup> &Fixups,
-                            const MCSubtargetInfo &STI) const;
-  unsigned getBranchPredTargetOpValue(const MCInst &MI, unsigned OpNo,
-                                      SmallVectorImpl<MCFixup> &Fixups,
-                                      const MCSubtargetInfo &STI) const;
-  unsigned getBranchOnRegTargetOpValue(const MCInst &MI, unsigned OpNo,
-                                       SmallVectorImpl<MCFixup> &Fixups,
-                                       const MCSubtargetInfo &STI) const;
 };
 
 } // end anonymous namespace
@@ -96,6 +84,7 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
                                                             : support::big);
 
   // Some instructions have phantom operands that only contribute a fixup entry.
+  /*
   unsigned SymOpNo = 0;
   switch (MI.getOpcode()) {
   default: break;
@@ -113,6 +102,7 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
     assert(op == 0 && "Unexpected operand value!");
     (void)op; // suppress warning.
   }
+  */
 
   ++MCNumEmitted;  // Keep track of the # of mi's emitted.
 }
@@ -143,36 +133,6 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
   return 0;
 }
 
-unsigned
-T8xxMCCodeEmitter::getSImm13OpValue(const MCInst &MI, unsigned OpNo,
-                                     SmallVectorImpl<MCFixup> &Fixups,
-                                     const MCSubtargetInfo &STI) const {
-  const MCOperand &MO = MI.getOperand(OpNo);
-
-  if (MO.isImm())
-    return MO.getImm();
-
-  assert(MO.isExpr() &&
-         "getSImm13OpValue expects only expressions or an immediate");
-
-  const MCExpr *Expr = MO.getExpr();
-
-  // Constant value, no fixup is needed
-  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr))
-    return CE->getValue();
-
-  MCFixupKind Kind;
-  if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr)) {
-    Kind = MCFixupKind(SExpr->getFixupKind());
-  } else {
-    bool IsPic = Ctx.getObjectFileInfo()->isPositionIndependent();
-    Kind = IsPic ? MCFixupKind(T8xx::fixup_sparc_got13)
-                 : MCFixupKind(T8xx::fixup_sparc_13);
-  }
-
-  Fixups.push_back(MCFixup::create(0, Expr, Kind));
-  return 0;
-}
 
 unsigned T8xxMCCodeEmitter::
 getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
@@ -182,6 +142,7 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
   const MCExpr *Expr = MO.getExpr();
   const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr);
 
+  /*
   if (MI.getOpcode() == T8::TLS_CALL) {
     // No fixups for __tls_get_addr. Will emit for fixups for tls_symbol in
     // encodeInstruction.
@@ -195,53 +156,12 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
 #endif
     return 0;
   }
-
+  */
   MCFixupKind Kind = MCFixupKind(SExpr->getFixupKind());
   Fixups.push_back(MCFixup::create(0, Expr, Kind));
   return 0;
 }
 
-unsigned T8xxMCCodeEmitter::
-getBranchTargetOpValue(const MCInst &MI, unsigned OpNo,
-                  SmallVectorImpl<MCFixup> &Fixups,
-                  const MCSubtargetInfo &STI) const {
-  const MCOperand &MO = MI.getOperand(OpNo);
-  if (MO.isReg() || MO.isImm())
-    return getMachineOpValue(MI, MO, Fixups, STI);
-
-  Fixups.push_back(MCFixup::create(0, MO.getExpr(),
-                                   (MCFixupKind)T8xx::fixup_sparc_br22));
-  return 0;
-}
-
-unsigned T8xxMCCodeEmitter::
-getBranchPredTargetOpValue(const MCInst &MI, unsigned OpNo,
-                           SmallVectorImpl<MCFixup> &Fixups,
-                           const MCSubtargetInfo &STI) const {
-  const MCOperand &MO = MI.getOperand(OpNo);
-  if (MO.isReg() || MO.isImm())
-    return getMachineOpValue(MI, MO, Fixups, STI);
-
-  Fixups.push_back(MCFixup::create(0, MO.getExpr(),
-                                   (MCFixupKind)T8xx::fixup_sparc_br19));
-  return 0;
-}
-
-unsigned T8xxMCCodeEmitter::
-getBranchOnRegTargetOpValue(const MCInst &MI, unsigned OpNo,
-                           SmallVectorImpl<MCFixup> &Fixups,
-                           const MCSubtargetInfo &STI) const {
-  const MCOperand &MO = MI.getOperand(OpNo);
-  if (MO.isReg() || MO.isImm())
-    return getMachineOpValue(MI, MO, Fixups, STI);
-
-  Fixups.push_back(MCFixup::create(0, MO.getExpr(),
-                                   (MCFixupKind)T8xx::fixup_sparc_br16_2));
-  Fixups.push_back(MCFixup::create(0, MO.getExpr(),
-                                   (MCFixupKind)T8xx::fixup_sparc_br16_14));
-
-  return 0;
-}
 
 #include "T8xxGenMCCodeEmitter.inc"
 

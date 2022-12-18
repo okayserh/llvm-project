@@ -33,70 +33,27 @@ static cl::opt<bool>
 ReserveAppRegisters("t8xx-reserve-app-registers", cl::Hidden, cl::init(false),
                     cl::desc("Reserve application registers (%g2-%g4)"));
 
-T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8::O7) {}
+T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8::R15) {}
 
 const MCPhysReg*
 T8xxRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-  return CSR_SaveList;
+  //  return CSR_SaveList;
 }
 
 const uint32_t *
 T8xxRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                         CallingConv::ID CC) const {
-  return CSR_RegMask;
+  //  return CSR_RegMask;
 }
 
 const uint32_t*
 T8xxRegisterInfo::getRTCallPreservedMask(CallingConv::ID CC) const {
-  return RTCSR_RegMask;
+  //  return RTCSR_RegMask;
 }
 
 BitVector T8xxRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
   const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
-  // FIXME: G1 reserved for now for large imm generation by frame code.
-  Reserved.set(T8::G1);
-
-  // G1-G4 can be used in applications.
-  if (ReserveAppRegisters) {
-    Reserved.set(T8::G2);
-    Reserved.set(T8::G3);
-    Reserved.set(T8::G4);
-  }
-  // G5 is not reserved in 64 bit mode.
-  if (!Subtarget.is64Bit())
-    Reserved.set(T8::G5);
-
-  Reserved.set(T8::O6);
-  Reserved.set(T8::I6);
-  Reserved.set(T8::I7);
-  Reserved.set(T8::G0);
-  Reserved.set(T8::G6);
-  Reserved.set(T8::G7);
-
-  // Also reserve the register pair aliases covering the above
-  // registers, with the same conditions.
-  Reserved.set(T8::G0_G1);
-  if (ReserveAppRegisters)
-    Reserved.set(T8::G2_G3);
-  if (ReserveAppRegisters || !Subtarget.is64Bit())
-    Reserved.set(T8::G4_G5);
-
-  Reserved.set(T8::O6_O7);
-  Reserved.set(T8::I6_I7);
-  Reserved.set(T8::G6_G7);
-
-  // Unaliased double registers are not available in non-V9 targets.
-  if (!Subtarget.isV9()) {
-    for (unsigned n = 0; n != 16; ++n) {
-      for (MCRegAliasIterator AI(T8::D16 + n, this, true); AI.isValid(); ++AI)
-        Reserved.set(*AI);
-    }
-  }
-
-  // Reserve ASR1-ASR31
-  for (unsigned n = 0; n < 31; n++)
-    Reserved.set(T8::ASR1 + n);
 
   return Reserved;
 }
@@ -105,12 +62,13 @@ const TargetRegisterClass*
 T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
                                       unsigned Kind) const {
   const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
-  return Subtarget.is64Bit() ? &T8::I64RegsRegClass : &T8::IntRegsRegClass;
+  return &T8::IntRegsRegClass;
 }
 
 static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,
                       MachineInstr &MI, const DebugLoc &dl,
                       unsigned FIOperandNum, int Offset, unsigned FramePtr) {
+  /*
   // Replace frame index with a frame pointer reference.
   if (Offset >= -4096 && Offset <= 4095) {
     // If the offset is small enough to fit in the immediate field, directly
@@ -157,6 +115,7 @@ static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,
   // Insert: G1+%lo(offset) into the user.
   MI.getOperand(FIOperandNum).ChangeToRegister(T8::G1, false);
   MI.getOperand(FIOperandNum + 1).ChangeToImmediate(0);
+  */
 }
 
 
@@ -165,7 +124,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                        int SPAdj, unsigned FIOperandNum,
                                        RegScavenger *RS) const {
   assert(SPAdj == 0 && "Unexpected");
-
+  
   MachineInstr &MI = *II;
   DebugLoc dl = MI.getDebugLoc();
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
@@ -179,6 +138,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   Offset += MI.getOperand(FIOperandNum + 1).getImm();
 
+  /*
   if (!Subtarget.isV9() || !Subtarget.hasHardQuad()) {
     if (MI.getOpcode() == T8::STQFri) {
       const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
@@ -207,14 +167,14 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       Offset += 8;
     }
   }
-
+  */
   replaceFI(MF, II, MI, dl, FIOperandNum, Offset, FrameReg);
   // replaceFI never removes II
   return false;
 }
 
 Register T8xxRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  return T8::I6;
+  return T8::R6;
 }
 
 // T8xx has no architectural need for stack realignment support,

@@ -64,7 +64,7 @@ namespace llvm {
     const T8xxSubtarget *Subtarget;
   public:
     T8xxTargetLowering(const TargetMachine &TM, const T8xxSubtarget &STI);
-    SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+    //    SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
     bool useSoftFloat() const override;
 
@@ -76,12 +76,6 @@ namespace llvm {
                                        const APInt &DemandedElts,
                                        const SelectionDAG &DAG,
                                        unsigned Depth = 0) const override;
-
-    MachineBasicBlock *
-    EmitInstrWithCustomInserter(MachineInstr &MI,
-                                MachineBasicBlock *MBB) const override;
-
-    const char *getTargetNodeName(unsigned Opcode) const override;
 
     ConstraintType getConstraintType(StringRef Constraint) const override;
     ConstraintWeight
@@ -108,19 +102,15 @@ namespace llvm {
     /// exception address on entry to an EH pad.
     Register
     getExceptionPointerRegister(const Constant *PersonalityFn) const override {
-      return T8::I0;
+      return T8::R0;
     }
 
     /// If a physical register, this returns the register that receives the
     /// exception typeid on entry to a landing pad.
     Register
     getExceptionSelectorRegister(const Constant *PersonalityFn) const override {
-      return T8::I1;
+      return T8::R1;
     }
-
-    /// Override to support customized stack guard loading.
-    bool useLoadStackGuardNode() const override;
-    void insertSSPDeclarations(Module &M) const override;
 
     /// getSetCCResultType - Return the ISD::SETCC ValueType
     EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
@@ -131,23 +121,11 @@ namespace llvm {
                          const SmallVectorImpl<ISD::InputArg> &Ins,
                          const SDLoc &dl, SelectionDAG &DAG,
                          SmallVectorImpl<SDValue> &InVals) const override;
-    SDValue LowerFormalArguments_32(SDValue Chain, CallingConv::ID CallConv,
-                                    bool isVarArg,
-                                    const SmallVectorImpl<ISD::InputArg> &Ins,
-                                    const SDLoc &dl, SelectionDAG &DAG,
-                                    SmallVectorImpl<SDValue> &InVals) const;
-    SDValue LowerFormalArguments_64(SDValue Chain, CallingConv::ID CallConv,
-                                    bool isVarArg,
-                                    const SmallVectorImpl<ISD::InputArg> &Ins,
-                                    const SDLoc &dl, SelectionDAG &DAG,
-                                    SmallVectorImpl<SDValue> &InVals) const;
 
     SDValue
       LowerCall(TargetLowering::CallLoweringInfo &CLI,
                 SmallVectorImpl<SDValue> &InVals) const override;
     SDValue LowerCall_32(TargetLowering::CallLoweringInfo &CLI,
-                         SmallVectorImpl<SDValue> &InVals) const;
-    SDValue LowerCall_64(TargetLowering::CallLoweringInfo &CLI,
                          SmallVectorImpl<SDValue> &InVals) const;
 
     bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
@@ -164,11 +142,6 @@ namespace llvm {
                            const SmallVectorImpl<ISD::OutputArg> &Outs,
                            const SmallVectorImpl<SDValue> &OutVals,
                            const SDLoc &DL, SelectionDAG &DAG) const;
-    SDValue LowerReturn_64(SDValue Chain, CallingConv::ID CallConv,
-                           bool IsVarArg,
-                           const SmallVectorImpl<ISD::OutputArg> &Outs,
-                           const SmallVectorImpl<SDValue> &OutVals,
-                           const SDLoc &DL, SelectionDAG &DAG) const;
 
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;
@@ -179,23 +152,6 @@ namespace llvm {
     SDValue makeHiLoPair(SDValue Op, unsigned HiTF, unsigned LoTF,
                          SelectionDAG &DAG) const;
     SDValue makeAddress(SDValue Op, SelectionDAG &DAG) const;
-
-    SDValue LowerF128_LibCallArg(SDValue Chain, ArgListTy &Args, SDValue Arg,
-                                 const SDLoc &DL, SelectionDAG &DAG) const;
-    SDValue LowerF128Op(SDValue Op, SelectionDAG &DAG,
-                        const char *LibFuncName,
-                        unsigned numArgs) const;
-    SDValue LowerF128Compare(SDValue LHS, SDValue RHS, unsigned &SPCC,
-                             const SDLoc &DL, SelectionDAG &DAG) const;
-
-    SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG) const;
-
-    SDValue PerformBITCASTCombine(SDNode *N, DAGCombinerInfo &DCI) const;
-
-    SDValue bitcastConstantFPToInt(ConstantFPSDNode *C, const SDLoc &DL,
-                                   SelectionDAG &DAG) const;
-
-    SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
     bool IsEligibleForTailCallOptimization(CCState &CCInfo,
                                            CallLoweringInfo &CLI,

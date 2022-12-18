@@ -23,7 +23,6 @@ namespace llvm {
 class T8xxTargetMachine : public LLVMTargetMachine {
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
   T8xxSubtarget Subtarget;
-  bool is64Bit;
   mutable StringMap<std::unique_ptr<T8xxSubtarget>> SubtargetMap;
 
 public:
@@ -31,7 +30,7 @@ public:
                      StringRef FS, const TargetOptions &Options,
                      std::optional<Reloc::Model> RM,
                      std::optional<CodeModel::Model> CM, CodeGenOpt::Level OL,
-                     bool JIT, bool is64bit);
+                     bool JIT);
   ~T8xxTargetMachine() override;
 
   const T8xxSubtarget *getSubtargetImpl() const { return &Subtarget; }

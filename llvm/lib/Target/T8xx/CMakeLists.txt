@@ -15,8 +15,6 @@ tablegen(LLVM T8xxGenSubtargetInfo.inc -gen-subtarget)
 add_public_tablegen_target(T8xxCommonTableGen)
 
 add_llvm_target(T8xxCodeGen
-  DelaySlotFiller.cpp
-  LeonPasses.cpp
   T8xxAsmPrinter.cpp
   T8xxInstrInfo.cpp
   T8xxISelDAGToDAG.cpp

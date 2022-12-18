@@ -39,7 +39,7 @@
 using namespace llvm;
 
 // The generated AsmMatcher T8xxGenAsmMatcher uses "T8xx" as the target
-// namespace. But SPARC backend uses "SP" as its namespace.
+// namespace. But T8xx backend uses "T8" as its namespace.
 namespace llvm {
 namespace T8xx {
 
@@ -130,8 +130,6 @@ public:
     Parser.addAliasForDirective(".word", ".4byte");
     Parser.addAliasForDirective(".uaword", ".4byte");
     Parser.addAliasForDirective(".nword", is64Bit() ? ".8byte" : ".4byte");
-    if (is64Bit())
-      Parser.addAliasForDirective(".xword", ".8byte");
 
     // Initialize the set of available features.
     setAvailableFeatures(ComputeAvailableFeatures(getSTI().getFeatureBits()));
@@ -141,72 +139,11 @@ public:
 } // end anonymous namespace
 
   static const MCPhysReg IntRegs[32] = {
-    T8xx::G0, T8xx::G1, T8xx::G2, T8xx::G3,
-    T8xx::G4, T8xx::G5, T8xx::G6, T8xx::G7,
-    T8xx::O0, T8xx::O1, T8xx::O2, T8xx::O3,
-    T8xx::O4, T8xx::O5, T8xx::O6, T8xx::O7,
-    T8xx::L0, T8xx::L1, T8xx::L2, T8xx::L3,
-    T8xx::L4, T8xx::L5, T8xx::L6, T8xx::L7,
-    T8xx::I0, T8xx::I1, T8xx::I2, T8xx::I3,
-    T8xx::I4, T8xx::I5, T8xx::I6, T8xx::I7 };
+    T8xx::R0, T8xx::R1, T8xx::R2, T8xx::R3,
+    T8xx::R4, T8xx::R5, T8xx::R6, T8xx::R7,
+    T8xx::R8, T8xx::R9, T8xx::R10, T8xx::R11,
+    T8xx::R12, T8xx::R13, T8xx::R14, T8xx::R15 };
 
-  static const MCPhysReg FloatRegs[32] = {
-    T8xx::F0,  T8xx::F1,  T8xx::F2,  T8xx::F3,
-    T8xx::F4,  T8xx::F5,  T8xx::F6,  T8xx::F7,
-    T8xx::F8,  T8xx::F9,  T8xx::F10, T8xx::F11,
-    T8xx::F12, T8xx::F13, T8xx::F14, T8xx::F15,
-    T8xx::F16, T8xx::F17, T8xx::F18, T8xx::F19,
-    T8xx::F20, T8xx::F21, T8xx::F22, T8xx::F23,
-    T8xx::F24, T8xx::F25, T8xx::F26, T8xx::F27,
-    T8xx::F28, T8xx::F29, T8xx::F30, T8xx::F31 };
-
-  static const MCPhysReg DoubleRegs[32] = {
-    T8xx::D0,  T8xx::D1,  T8xx::D2,  T8xx::D3,
-    T8xx::D4,  T8xx::D5,  T8xx::D6,  T8xx::D7,
-    T8xx::D8,  T8xx::D9,  T8xx::D10, T8xx::D11,
-    T8xx::D12, T8xx::D13, T8xx::D14, T8xx::D15,
-    T8xx::D16, T8xx::D17, T8xx::D18, T8xx::D19,
-    T8xx::D20, T8xx::D21, T8xx::D22, T8xx::D23,
-    T8xx::D24, T8xx::D25, T8xx::D26, T8xx::D27,
-    T8xx::D28, T8xx::D29, T8xx::D30, T8xx::D31 };
-
-  static const MCPhysReg QuadFPRegs[32] = {
-    T8xx::Q0,  T8xx::Q1,  T8xx::Q2,  T8xx::Q3,
-    T8xx::Q4,  T8xx::Q5,  T8xx::Q6,  T8xx::Q7,
-    T8xx::Q8,  T8xx::Q9,  T8xx::Q10, T8xx::Q11,
-    T8xx::Q12, T8xx::Q13, T8xx::Q14, T8xx::Q15 };
-
-  static const MCPhysReg ASRRegs[32] = {
-    T8::Y,     T8::ASR1,  T8::ASR2,  T8::ASR3,
-    T8::ASR4,  T8::ASR5,  T8::ASR6, T8::ASR7,
-    T8::ASR8,  T8::ASR9,  T8::ASR10, T8::ASR11,
-    T8::ASR12, T8::ASR13, T8::ASR14, T8::ASR15,
-    T8::ASR16, T8::ASR17, T8::ASR18, T8::ASR19,
-    T8::ASR20, T8::ASR21, T8::ASR22, T8::ASR23,
-    T8::ASR24, T8::ASR25, T8::ASR26, T8::ASR27,
-    T8::ASR28, T8::ASR29, T8::ASR30, T8::ASR31};
-
-  static const MCPhysReg IntPairRegs[] = {
-    T8xx::G0_G1, T8xx::G2_G3, T8xx::G4_G5, T8xx::G6_G7,
-    T8xx::O0_O1, T8xx::O2_O3, T8xx::O4_O5, T8xx::O6_O7,
-    T8xx::L0_L1, T8xx::L2_L3, T8xx::L4_L5, T8xx::L6_L7,
-    T8xx::I0_I1, T8xx::I2_I3, T8xx::I4_I5, T8xx::I6_I7};
-
-  static const MCPhysReg CoprocRegs[32] = {
-    T8xx::C0,  T8xx::C1,  T8xx::C2,  T8xx::C3,
-    T8xx::C4,  T8xx::C5,  T8xx::C6,  T8xx::C7,
-    T8xx::C8,  T8xx::C9,  T8xx::C10, T8xx::C11,
-    T8xx::C12, T8xx::C13, T8xx::C14, T8xx::C15,
-    T8xx::C16, T8xx::C17, T8xx::C18, T8xx::C19,
-    T8xx::C20, T8xx::C21, T8xx::C22, T8xx::C23,
-    T8xx::C24, T8xx::C25, T8xx::C26, T8xx::C27,
-    T8xx::C28, T8xx::C29, T8xx::C30, T8xx::C31 };
-
-  static const MCPhysReg CoprocPairRegs[] = {
-    T8xx::C0_C1,   T8xx::C2_C3,   T8xx::C4_C5,   T8xx::C6_C7,
-    T8xx::C8_C9,   T8xx::C10_C11, T8xx::C12_C13, T8xx::C14_C15,
-    T8xx::C16_C17, T8xx::C18_C19, T8xx::C20_C21, T8xx::C22_C23,
-    T8xx::C24_C25, T8xx::C26_C27, T8xx::C28_C29, T8xx::C30_C31};
 
 namespace {
 
@@ -468,71 +405,6 @@ public:
     return Op;
   }
 
-  static bool MorphToIntPairReg(T8xxOperand &Op) {
-    unsigned Reg = Op.getReg();
-    assert(Op.Reg.Kind == rk_IntReg);
-    unsigned regIdx = 32;
-    if (Reg >= T8xx::G0 && Reg <= T8xx::G7)
-      regIdx = Reg - T8xx::G0;
-    else if (Reg >= T8xx::O0 && Reg <= T8xx::O7)
-      regIdx = Reg - T8xx::O0 + 8;
-    else if (Reg >= T8xx::L0 && Reg <= T8xx::L7)
-      regIdx = Reg - T8xx::L0 + 16;
-    else if (Reg >= T8xx::I0 && Reg <= T8xx::I7)
-      regIdx = Reg - T8xx::I0 + 24;
-    if (regIdx % 2 || regIdx > 31)
-      return false;
-    Op.Reg.RegNum = IntPairRegs[regIdx / 2];
-    Op.Reg.Kind = rk_IntPairReg;
-    return true;
-  }
-
-  static bool MorphToDoubleReg(T8xxOperand &Op) {
-    unsigned Reg = Op.getReg();
-    assert(Op.Reg.Kind == rk_FloatReg);
-    unsigned regIdx = Reg - T8xx::F0;
-    if (regIdx % 2 || regIdx > 31)
-      return false;
-    Op.Reg.RegNum = DoubleRegs[regIdx / 2];
-    Op.Reg.Kind = rk_DoubleReg;
-    return true;
-  }
-
-  static bool MorphToQuadReg(T8xxOperand &Op) {
-    unsigned Reg = Op.getReg();
-    unsigned regIdx = 0;
-    switch (Op.Reg.Kind) {
-    default: llvm_unreachable("Unexpected register kind!");
-    case rk_FloatReg:
-      regIdx = Reg - T8xx::F0;
-      if (regIdx % 4 || regIdx > 31)
-        return false;
-      Reg = QuadFPRegs[regIdx / 4];
-      break;
-    case rk_DoubleReg:
-      regIdx =  Reg - T8xx::D0;
-      if (regIdx % 2 || regIdx > 31)
-        return false;
-      Reg = QuadFPRegs[regIdx / 2];
-      break;
-    }
-    Op.Reg.RegNum = Reg;
-    Op.Reg.Kind = rk_QuadReg;
-    return true;
-  }
-
-  static bool MorphToCoprocPairReg(T8xxOperand &Op) {
-    unsigned Reg = Op.getReg();
-    assert(Op.Reg.Kind == rk_CoprocReg);
-    unsigned regIdx = 32;
-    if (Reg >= T8xx::C0 && Reg <= T8xx::C31)
-      regIdx = Reg - T8xx::C0;
-    if (regIdx % 2 || regIdx > 31)
-      return false;
-    Op.Reg.RegNum = CoprocPairRegs[regIdx / 2];
-    Op.Reg.Kind = rk_CoprocPairReg;
-    return true;
-  }
 
   static std::unique_ptr<T8xxOperand>
   MorphToMEMrr(unsigned Base, std::unique_ptr<T8xxOperand> Op) {
@@ -548,7 +420,7 @@ public:
   CreateMEMr(unsigned Base, SMLoc S, SMLoc E) {
     auto Op = std::make_unique<T8xxOperand>(k_MemoryReg);
     Op->Mem.Base = Base;
-    Op->Mem.OffsetReg = T8xx::G0;  // always 0
+    Op->Mem.OffsetReg = T8xx::R0;  // always 0
     Op->Mem.Off = nullptr;
     Op->StartLoc = S;
     Op->EndLoc = E;
@@ -592,28 +464,14 @@ bool T8xxAsmParser::expandSET(MCInst &Inst, SMLoc IDLoc,
   // that would splat the sign bit across the upper half of the destination
   // register, whereas 'set' is defined to zero the high 32 bits.
   bool IsEffectivelyImm13 =
-      IsImm && ((is64Bit() ? 0 : -4096) <= ImmValue && ImmValue < 4096);
+    IsImm && (-4096 <= ImmValue && ImmValue < 4096);
   const MCExpr *ValExpr;
   if (IsImm)
     ValExpr = MCConstantExpr::create(ImmValue, getContext());
   else
     ValExpr = MCValOp.getExpr();
 
-  MCOperand PrevReg = MCOperand::createReg(T8xx::G0);
-
-  // If not just a signed imm13 value, then either we use a 'sethi' with a
-  // following 'or', or a 'sethi' by itself if there are no more 1 bits.
-  // In either case, start with the 'sethi'.
-  if (!IsEffectivelyImm13) {
-    MCInst TmpInst;
-    const MCExpr *Expr = adjustPICRelocation(T8xxMCExpr::VK_T8xx_HI, ValExpr);
-    TmpInst.setLoc(IDLoc);
-    TmpInst.setOpcode(T8::SETHIi);
-    TmpInst.addOperand(MCRegOp);
-    TmpInst.addOperand(MCOperand::createExpr(Expr));
-    Instructions.push_back(TmpInst);
-    PrevReg = MCRegOp;
-  }
+  MCOperand PrevReg = MCOperand::createReg(T8xx::R0);
 
   // The low bits require touching in 3 cases:
   // * A non-immediate value will always require both instructions.
@@ -625,6 +483,7 @@ bool T8xxAsmParser::expandSET(MCInst &Inst, SMLoc IDLoc,
   // bits of the immediate value via the %lo() assembler function.
   // Note also, the 'or' instruction doesn't mind a large value in the case
   // where the operand to 'set' was 0xFFFFFzzz - it does exactly what you mean.
+  /*
   if (!IsImm || IsEffectivelyImm13 || (ImmValue & 0x3ff)) {
     MCInst TmpInst;
     const MCExpr *Expr;
@@ -639,6 +498,7 @@ bool T8xxAsmParser::expandSET(MCInst &Inst, SMLoc IDLoc,
     TmpInst.addOperand(MCOperand::createExpr(Expr));
     Instructions.push_back(TmpInst);
   }
+  */
   return false;
 }
 
@@ -658,10 +518,12 @@ bool T8xxAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       Inst.setLoc(IDLoc);
       Instructions.push_back(Inst);
       break;
+      /*
     case T8::SET:
       if (expandSET(Inst, IDLoc, Instructions))
         return true;
       break;
+      */
     }
 
     for (const MCInst &I : Instructions) {
@@ -732,7 +594,7 @@ bool T8xxAsmParser::ParseInstruction(ParseInstructionInfo &Info,
   Operands.push_back(T8xxOperand::CreateToken(Name, NameLoc));
 
   // apply mnemonic aliases, if any, so that we can parse operands correctly.
-  applyMnemonicAliases(Name, getAvailableFeatures(), 0);
+  //TODO OKH  applyMnemonicAliases(Name, getAvailableFeatures(), 0);
 
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
     // Read the first operand.
@@ -799,7 +661,7 @@ T8xxAsmParser::parseMEMOperand(OperandVector &Operands) {
 
   // Single immediate operand
   if (LHS->isImm()) {
-    Operands.push_back(T8xxOperand::MorphToMEMri(T8xx::G0, std::move(LHS)));
+    Operands.push_back(T8xxOperand::MorphToMEMri(T8xx::R0, std::move(LHS)));
     return MatchOperand_Success;
   }
 
@@ -1030,7 +892,7 @@ OperandMatchResultTy T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
 OperandMatchResultTy
 T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
 
-  OperandMatchResultTy ResTy = MatchOperandParserImpl(Operands, Mnemonic);
+  OperandMatchResultTy ResTy; // = MatchOperandParserImpl(Operands, Mnemonic);
 
   // If there wasn't a custom match, try the generic matcher below. Otherwise,
   // there was a match, but an error occurred, in which case, just return that
@@ -1114,42 +976,7 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
       StringRef name = Parser.getTok().getString();
       Parser.Lex(); // Eat the identifier token.
       E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-      switch (RegNo) {
-      default:
-        Op = T8xxOperand::CreateReg(RegNo, RegKind, S, E);
-        break;
-      case T8xx::PSR:
-        Op = T8xxOperand::CreateToken("%psr", S);
-        break;
-      case T8xx::FSR:
-        Op = T8xxOperand::CreateToken("%fsr", S);
-        break;
-      case T8xx::FQ:
-        Op = T8xxOperand::CreateToken("%fq", S);
-        break;
-      case T8xx::CPSR:
-        Op = T8xxOperand::CreateToken("%csr", S);
-        break;
-      case T8xx::CPQ:
-        Op = T8xxOperand::CreateToken("%cq", S);
-        break;
-      case T8xx::WIM:
-        Op = T8xxOperand::CreateToken("%wim", S);
-        break;
-      case T8xx::TBR:
-        Op = T8xxOperand::CreateToken("%tbr", S);
-        break;
-      case T8xx::PC:
-        Op = T8xxOperand::CreateToken("%pc", S);
-        break;
-      case T8xx::ICC:
-        if (name == "xcc")
-          Op = T8xxOperand::CreateToken("%xcc", S);
-        else
-          Op = T8xxOperand::CreateToken("%icc", S);
-        break;
-      }
-      break;
+      Op = T8xxOperand::CreateReg(RegNo, RegKind, S, E);
     }
     if (matchT8xxAsmModifiers(EVal, E)) {
       E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
@@ -1208,6 +1035,7 @@ bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, unsigned &RegNo,
   int64_t intVal = 0;
   RegNo = 0;
   RegKind = T8xxOperand::rk_None;
+  /*
   if (Tok.is(AsmToken::Identifier)) {
     StringRef name = Tok.getString();
 
@@ -1448,6 +1276,7 @@ bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, unsigned &RegNo,
       return true;
     }
   }
+  */
   return false;
 }
 
@@ -1558,6 +1387,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxAsmParser() {
 unsigned T8xxAsmParser::validateTargetOperandClass(MCParsedAsmOperand &GOp,
                                                     unsigned Kind) {
   T8xxOperand &Op = (T8xxOperand &)GOp;
+  /*
   if (Op.isFloatOrDoubleReg()) {
     switch (Kind) {
     default: break;
@@ -1579,5 +1409,6 @@ unsigned T8xxAsmParser::validateTargetOperandClass(MCParsedAsmOperand &GOp,
      if (T8xxOperand::MorphToCoprocPairReg(Op))
        return MCTargetAsmParser::Match_Success;
    }
+  */
   return Match_InvalidOperand;
 }
