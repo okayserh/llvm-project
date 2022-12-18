@@ -34,8 +34,8 @@ DisableLeafProc("disable-t8xx-leaf-proc",
 
 T8xxFrameLowering::T8xxFrameLowering(const T8xxSubtarget &ST)
     : TargetFrameLowering(TargetFrameLowering::StackGrowsDown,
-                          ST.is64Bit() ? Align(16) : Align(8), 0,
-                          ST.is64Bit() ? Align(16) : Align(8)) {}
+                          Align(8), 0,
+                          Align(8)) {}
 
 void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
                                           MachineBasicBlock &MBB,
@@ -49,11 +49,12 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
       *static_cast<const T8xxInstrInfo *>(MF.getSubtarget().getInstrInfo());
 
   if (NumBytes >= -4096 && NumBytes < 4096) {
-    BuildMI(MBB, MBBI, dl, TII.get(ADDri), T8::O6)
-      .addReg(T8::O6).addImm(NumBytes);
+    BuildMI(MBB, MBBI, dl, TII.get(ADDri), T8::R6)
+      .addReg(T8::R6).addImm(NumBytes);
     return;
   }
 
+  /*
   // Emit this the hard way.  This clobbers G1 which we always know is
   // available here.
   if (NumBytes >= 0) {
@@ -80,6 +81,8 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
     .addReg(T8::G1).addImm(LOX10(NumBytes));
   BuildMI(MBB, MBBI, dl, TII.get(ADDrr), T8::O6)
     .addReg(T8::O6).addReg(T8::G1);
+
+  */
 }
 
 void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
@@ -106,93 +109,6 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 
   // Get the number of bytes to allocate from the FrameInfo
   int NumBytes = (int) MFI.getStackSize();
-
-  unsigned SAVEri = T8::SAVEri;
-  unsigned SAVErr = T8::SAVErr;
-  if (FuncInfo->isLeafProc()) {
-    if (NumBytes == 0)
-      return;
-    SAVEri = T8::ADDri;
-    SAVErr = T8::ADDrr;
-  }
-
-  // The SPARC ABI is a bit odd in that it requires a reserved 92-byte
-  // (128 in v9) area in the user's stack, starting at %sp. Thus, the
-  // first part of the stack that can actually be used is located at
-  // %sp + 92.
-  //
-  // We therefore need to add that offset to the total stack size
-  // after all the stack objects are placed by
-  // PrologEpilogInserter calculateFrameObjectOffsets. However, since the stack needs to be
-  // aligned *after* the extra size is added, we need to disable
-  // calculateFrameObjectOffsets's built-in stack alignment, by having
-  // targetHandlesStackFrameRounding return true.
-
-
-  // Add the extra call frame stack size, if needed. (This is the same
-  // code as in PrologEpilogInserter, but also gets disabled by
-  // targetHandlesStackFrameRounding)
-  if (MFI.adjustsStack() && hasReservedCallFrame(MF))
-    NumBytes += MFI.getMaxCallFrameSize();
-
-  // Adds the SPARC subtarget-specific spill area to the stack
-  // size. Also ensures target-required alignment.
-  NumBytes = Subtarget.getAdjustedFrameSize(NumBytes);
-
-  // Finally, ensure that the size is sufficiently aligned for the
-  // data on the stack.
-  NumBytes = alignTo(NumBytes, MFI.getMaxAlign());
-
-  // Update stack size with corrected value.
-  MFI.setStackSize(NumBytes);
-
-  emitSPAdjustment(MF, MBB, MBBI, -NumBytes, SAVErr, SAVEri);
-
-  unsigned regFP = RegInfo.getDwarfRegNum(T8::I6, true);
-
-  // Emit ".cfi_def_cfa_register 30".
-  unsigned CFIIndex =
-      MF.addFrameInst(MCCFIInstruction::createDefCfaRegister(nullptr, regFP));
-  BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::CFI_INSTRUCTION))
-      .addCFIIndex(CFIIndex);
-
-  // Emit ".cfi_window_save".
-  CFIIndex = MF.addFrameInst(MCCFIInstruction::createWindowSave(nullptr));
-  BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::CFI_INSTRUCTION))
-      .addCFIIndex(CFIIndex);
-
-  unsigned regInRA = RegInfo.getDwarfRegNum(T8::I7, true);
-  unsigned regOutRA = RegInfo.getDwarfRegNum(T8::O7, true);
-  // Emit ".cfi_register 15, 31".
-  CFIIndex = MF.addFrameInst(
-      MCCFIInstruction::createRegister(nullptr, regOutRA, regInRA));
-  BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::CFI_INSTRUCTION))
-      .addCFIIndex(CFIIndex);
-
-  if (NeedsStackRealignment) {
-    int64_t Bias = Subtarget.getStackPointerBias();
-    unsigned regUnbiased;
-    if (Bias) {
-      // This clobbers G1 which we always know is available here.
-      regUnbiased = T8::G1;
-      // add %o6, BIAS, %g1
-      BuildMI(MBB, MBBI, dl, TII.get(T8::ADDri), regUnbiased)
-        .addReg(T8::O6).addImm(Bias);
-    } else
-      regUnbiased = T8::O6;
-
-    // andn %regUnbiased, MaxAlign-1, %regUnbiased
-    Align MaxAlign = MFI.getMaxAlign();
-    BuildMI(MBB, MBBI, dl, TII.get(T8::ANDNri), regUnbiased)
-        .addReg(regUnbiased)
-        .addImm(MaxAlign.value() - 1U);
-
-    if (Bias) {
-      // add %g1, -BIAS, %o6
-      BuildMI(MBB, MBBI, dl, TII.get(T8::ADDri), T8::O6)
-        .addReg(regUnbiased).addImm(-Bias);
-    }
-  }
 }
 
 MachineBasicBlock::iterator T8xxFrameLowering::
@@ -204,8 +120,8 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
     if (MI.getOpcode() == T8::ADJCALLSTACKDOWN)
       Size = -Size;
 
-    if (Size)
-      emitSPAdjustment(MF, MBB, I, Size, T8::ADDrr, T8::ADDri);
+    /*    if (Size)
+	  emitSPAdjustment(MF, MBB, I, Size, T8::ADDrr, T8::ADDri); */
   }
   return MBB.erase(I);
 }
@@ -218,6 +134,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   const T8xxInstrInfo &TII =
       *static_cast<const T8xxInstrInfo *>(MF.getSubtarget().getInstrInfo());
   DebugLoc dl = MBBI->getDebugLoc();
+  /*
   assert((MBBI->getOpcode() == T8::RETL || MBBI->getOpcode() == T8::TAIL_CALL ||
           MBBI->getOpcode() == T8::TAIL_CALLri) &&
          "Can only put epilog before 'retl' or 'tail_call' instruction!");
@@ -226,22 +143,14 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
       .addReg(T8::G0);
     return;
   }
+  */
   MachineFrameInfo &MFI = MF.getFrameInfo();
 
   int NumBytes = (int) MFI.getStackSize();
+  /*
   if (NumBytes != 0)
     emitSPAdjustment(MF, MBB, MBBI, NumBytes, T8::ADDrr, T8::ADDri);
-
-  // Preserve return address in %o7
-  if (MBBI->getOpcode() == T8::TAIL_CALL) {
-    MBB.addLiveIn(T8::O7);
-    BuildMI(MBB, MBBI, dl, TII.get(T8::ORrr), T8::G1)
-        .addReg(T8::G0)
-        .addReg(T8::O7);
-    BuildMI(MBB, MBBI, dl, TII.get(T8::ORrr), T8::O7)
-        .addReg(T8::G0)
-        .addReg(T8::G1);
-  }
+  */
 }
 
 bool T8xxFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
@@ -301,89 +210,23 @@ T8xxFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     FrameReg = RegInfo->getFrameRegister(MF);
     return StackOffset::getFixed(FrameOffset);
   } else {
-    FrameReg = T8::O6; // %sp
+    FrameReg = T8::R6; // %sp
     return StackOffset::getFixed(FrameOffset + MF.getFrameInfo().getStackSize());
   }
 }
 
-static bool LLVM_ATTRIBUTE_UNUSED verifyLeafProcRegUse(MachineRegisterInfo *MRI)
-{
-
-  for (unsigned reg = T8::I0; reg <= T8::I7; ++reg)
-    if (MRI->isPhysRegUsed(reg))
-      return false;
-
-  for (unsigned reg = T8::L0; reg <= T8::L7; ++reg)
-    if (MRI->isPhysRegUsed(reg))
-      return false;
-
-  return true;
-}
-
-bool T8xxFrameLowering::isLeafProc(MachineFunction &MF) const
-{
-
-  MachineRegisterInfo &MRI = MF.getRegInfo();
-  MachineFrameInfo    &MFI = MF.getFrameInfo();
-
-  return !(MFI.hasCalls()               // has calls
-           || MRI.isPhysRegUsed(T8::L0) // Too many registers needed
-           || MRI.isPhysRegUsed(T8::O6) // %sp is used
-           || hasFP(MF)                 // need %fp
-           || MF.hasInlineAsm());       // has inline assembly
-}
-
-void T8xxFrameLowering::remapRegsForLeafProc(MachineFunction &MF) const {
-  MachineRegisterInfo &MRI = MF.getRegInfo();
-  // Remap %i[0-7] to %o[0-7].
-  for (unsigned reg = T8::I0; reg <= T8::I7; ++reg) {
-    if (!MRI.isPhysRegUsed(reg))
-      continue;
-
-    unsigned mapped_reg = reg - T8::I0 + T8::O0;
-
-    // Replace I register with O register.
-    MRI.replaceRegWith(reg, mapped_reg);
-
-    // Also replace register pair super-registers.
-    if ((reg - T8::I0) % 2 == 0) {
-      unsigned preg = (reg - T8::I0) / 2 + T8::I0_I1;
-      unsigned mapped_preg = preg - T8::I0_I1 + T8::O0_O1;
-      MRI.replaceRegWith(preg, mapped_preg);
-    }
-  }
-
-  // Rewrite MBB's Live-ins.
-  for (MachineBasicBlock &MBB : MF) {
-    for (unsigned reg = T8::I0_I1; reg <= T8::I6_I7; ++reg) {
-      if (!MBB.isLiveIn(reg))
-        continue;
-      MBB.removeLiveIn(reg);
-      MBB.addLiveIn(reg - T8::I0_I1 + T8::O0_O1);
-    }
-    for (unsigned reg = T8::I0; reg <= T8::I7; ++reg) {
-      if (!MBB.isLiveIn(reg))
-        continue;
-      MBB.removeLiveIn(reg);
-      MBB.addLiveIn(reg - T8::I0 + T8::O0);
-    }
-  }
-
-  assert(verifyLeafProcRegUse(&MRI));
-#ifdef EXPENSIVE_CHECKS
-  MF.verify(0, "After LeafProc Remapping");
-#endif
-}
 
 void T8xxFrameLowering::determineCalleeSaves(MachineFunction &MF,
                                               BitVector &SavedRegs,
                                               RegScavenger *RS) const {
   TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
+
+  /*
   if (!DisableLeafProc && isLeafProc(MF)) {
     T8xxMachineFunctionInfo *MFI = MF.getInfo<T8xxMachineFunctionInfo>();
     MFI->setLeafProc(true);
 
     remapRegsForLeafProc(MF);
   }
-
+  */
 }

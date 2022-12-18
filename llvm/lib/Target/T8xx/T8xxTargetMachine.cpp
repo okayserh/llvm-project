@@ -26,29 +26,22 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
   RegisterTargetMachine<T8xxV8TargetMachine> X(getTheT8xxTarget());
 }
 
-static std::string computeDataLayout(const Triple &T, bool is64Bit) {
+static std::string computeDataLayout(const Triple &T) {
   // T8xx is typically big endian, but some are little.
   std::string Ret = T.getArch() == Triple::sparcel ? "e" : "E";
   Ret += "-m:e";
 
   // Some ABIs have 32bit pointers.
-  if (!is64Bit)
-    Ret += "-p:32:32";
+  Ret += "-p:32:32";
 
   // Alignments for 64 bit integers.
   Ret += "-i64:64";
 
   // On T8xxV9 128 floats are aligned to 128 bits, on others only to 64.
   // On T8xxV9 registers can hold 64 or 32 bits, on others only 32.
-  if (is64Bit)
-    Ret += "-n32:64";
-  else
-    Ret += "-f128:64-n32";
+  Ret += "-f128:64-n32";
 
-  if (is64Bit)
-    Ret += "-S128";
-  else
-    Ret += "-S64";
+  Ret += "-S64";
 
   return Ret;
 }
@@ -68,19 +61,13 @@ static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
 //
 // All code models require that the text segment is smaller than 2GB.
 static CodeModel::Model
-getEffectiveT8xxCodeModel(std::optional<CodeModel::Model> CM, Reloc::Model RM,
-                           bool Is64Bit, bool JIT) {
+getEffectiveT8xxCodeModel(std::optional<CodeModel::Model> CM, Reloc::Model RM, bool JIT) {
   if (CM) {
     if (*CM == CodeModel::Tiny)
       report_fatal_error("Target does not support the tiny CodeModel", false);
     if (*CM == CodeModel::Kernel)
       report_fatal_error("Target does not support the kernel CodeModel", false);
     return *CM;
-  }
-  if (Is64Bit) {
-    if (JIT)
-      return CodeModel::Large;
-    return RM == Reloc::PIC_ ? CodeModel::Small : CodeModel::Medium;
   }
   return CodeModel::Small;
 }
@@ -91,16 +78,14 @@ T8xxTargetMachine::T8xxTargetMachine(const Target &T, const Triple &TT,
                                        const TargetOptions &Options,
                                        std::optional<Reloc::Model> RM,
                                        std::optional<CodeModel::Model> CM,
-                                       CodeGenOpt::Level OL, bool JIT,
-                                       bool is64bit)
-    : LLVMTargetMachine(T, computeDataLayout(TT, is64bit), TT, CPU, FS, Options,
+                                       CodeGenOpt::Level OL, bool JIT)
+    : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options,
                         getEffectiveRelocModel(RM),
                         getEffectiveT8xxCodeModel(
-                            CM, getEffectiveRelocModel(RM), is64bit, JIT),
+                            CM, getEffectiveRelocModel(RM), JIT),
                         OL),
       TLOF(std::make_unique<T8xxELFTargetObjectFile>()),
-      Subtarget(TT, std::string(CPU), std::string(FS), *this, is64bit),
-      is64Bit(is64bit) {
+      Subtarget(TT, std::string(CPU), std::string(FS), *this) {
   initAsmInfo();
 }
 
@@ -130,8 +115,7 @@ T8xxTargetMachine::getSubtargetImpl(const Function &F) const {
     // creation will depend on the TM and the code generation flags on the
     // function that reside in TargetOptions.
     resetTargetOptions(F);
-    I = std::make_unique<T8xxSubtarget>(TargetTriple, CPU, FS, *this,
-                                          this->is64Bit);
+    I = std::make_unique<T8xxSubtarget>(TargetTriple, CPU, FS, *this);
   }
   return I.get();
 }
@@ -169,8 +153,9 @@ bool T8xxPassConfig::addInstSelector() {
 }
 
 void T8xxPassConfig::addPreEmitPass(){
-  addPass(createT8xxDelaySlotFillerPass());
-
+  //  addPass(createT8xxDelaySlotFillerPass());
+  /*
+  
   if (this->getT8xxTargetMachine().getSubtargetImpl()->insertNOPLoad())
   {
     addPass(new InsertNOPLoad());
@@ -182,6 +167,7 @@ void T8xxPassConfig::addPreEmitPass(){
   {
     addPass(new FixAllFDIVSQRT());
   }
+  */
 }
 
 void T8xxV8TargetMachine::anchor() { }
@@ -192,24 +178,4 @@ T8xxV8TargetMachine::T8xxV8TargetMachine(const Target &T, const Triple &TT,
                                            std::optional<Reloc::Model> RM,
                                            std::optional<CodeModel::Model> CM,
                                            CodeGenOpt::Level OL, bool JIT)
-    : T8xxTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, false) {}
-
-void T8xxV9TargetMachine::anchor() { }
-
-T8xxV9TargetMachine::T8xxV9TargetMachine(const Target &T, const Triple &TT,
-                                           StringRef CPU, StringRef FS,
-                                           const TargetOptions &Options,
-                                           std::optional<Reloc::Model> RM,
-                                           std::optional<CodeModel::Model> CM,
-                                           CodeGenOpt::Level OL, bool JIT)
-    : T8xxTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, true) {}
-
-void T8xxelTargetMachine::anchor() {}
-
-T8xxelTargetMachine::T8xxelTargetMachine(const Target &T, const Triple &TT,
-                                           StringRef CPU, StringRef FS,
-                                           const TargetOptions &Options,
-                                           std::optional<Reloc::Model> RM,
-                                           std::optional<CodeModel::Model> CM,
-                                           CodeGenOpt::Level OL, bool JIT)
-    : T8xxTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, false) {}
+    : T8xxTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT) {}

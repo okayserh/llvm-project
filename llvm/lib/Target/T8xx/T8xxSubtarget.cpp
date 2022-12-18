@@ -28,59 +28,36 @@ void T8xxSubtarget::anchor() { }
 T8xxSubtarget &T8xxSubtarget::initializeSubtargetDependencies(StringRef CPU,
                                                                 StringRef FS) {
   UseSoftMulDiv = false;
-  IsV9 = false;
-  IsLeon = false;
   V8DeprecatedInsts = false;
-  IsVIS = false;
-  IsVIS2 = false;
-  IsVIS3 = false;
   HasHardQuad = false;
   UsePopc = false;
+  UseFPU = false;
   UseSoftFloat = false;
   HasNoFSMULD = false;
   HasNoFMULS = false;
 
-  // Leon features
-  HasLeonCasa = false;
-  HasUmacSmac = false;
-  HasPWRPSR = false;
-  InsertNOPLoad = false;
-  FixAllFDIVSQRT = false;
-  DetectRoundChange = false;
-  HasLeonCycleCounter = false;
-
   // Determine default and user specified characteristics
   std::string CPUName = std::string(CPU);
   if (CPUName.empty())
-    CPUName = (Is64Bit) ? "v9" : "v8";
+    CPUName = "v8";
 
   // Parse features string.
   ParseSubtargetFeatures(CPUName, /*TuneCPU*/ CPUName, FS);
 
   // Popc is a v9-only instruction.
-  if (!IsV9)
-    UsePopc = false;
+  UsePopc = false;
 
   return *this;
 }
 
 T8xxSubtarget::T8xxSubtarget(const Triple &TT, const std::string &CPU,
-                               const std::string &FS, const TargetMachine &TM,
-                               bool is64Bit)
+                               const std::string &FS, const TargetMachine &TM)
     : T8xxGenSubtargetInfo(TT, CPU, /*TuneCPU*/ CPU, FS), TargetTriple(TT),
-      Is64Bit(is64Bit), InstrInfo(initializeSubtargetDependencies(CPU, FS)),
+      InstrInfo(initializeSubtargetDependencies(CPU, FS)),
       TLInfo(TM, *this), FrameLowering(*this) {}
 
 int T8xxSubtarget::getAdjustedFrameSize(int frameSize) const {
 
-  if (is64Bit()) {
-    // All 64-bit stack frames must be 16-byte aligned, and must reserve space
-    // for spilling the 16 window registers at %sp+BIAS..%sp+BIAS+128.
-    frameSize += 128;
-    // Frames with calls must also reserve space for 6 outgoing arguments
-    // whether they are used or not. LowerCall_64 takes care of that.
-    frameSize = alignTo(frameSize, 16);
-  } else {
     // Emit the correct save instruction based on the number of bytes in
     // the frame. Minimum stack frame size according to V8 ABI is:
     //   16 words for register window spill
@@ -93,7 +70,7 @@ int T8xxSubtarget::getAdjustedFrameSize(int frameSize) const {
     // Round up to next doubleword boundary -- a double-word boundary
     // is required by the ABI.
     frameSize = alignTo(frameSize, 8);
-  }
+
   return frameSize;
 }
 

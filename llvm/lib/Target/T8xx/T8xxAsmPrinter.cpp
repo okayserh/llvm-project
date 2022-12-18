@@ -71,6 +71,8 @@ namespace {
   };
 } // end of anonymous namespace
 
+/* TODO: Check reimplementation
+
 static MCOperand createT8xxMCOperand(T8xxMCExpr::VariantKind Kind,
                                       MCSymbol *Sym, MCContext &OutContext) {
   const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Sym,
@@ -166,6 +168,7 @@ static void EmitHiLo(MCStreamer &OutStreamer,  MCSymbol *GOTSym,
   EmitSETHI(OutStreamer, hi, RD, STI);
   EmitOR(OutStreamer, RD, lo, RD, STI);
 }
+*/
 
 void T8xxAsmPrinter::LowerGETPCXAndEmitMCInsts(const MachineInstr *MI,
                                                 const MCSubtargetInfo &STI)
@@ -173,13 +176,15 @@ void T8xxAsmPrinter::LowerGETPCXAndEmitMCInsts(const MachineInstr *MI,
   MCSymbol *GOTLabel   =
     OutContext.getOrCreateSymbol(Twine("_GLOBAL_OFFSET_TABLE_"));
 
+  /*
   const MachineOperand &MO = MI->getOperand(0);
   assert(MO.getReg() != T8::O7 &&
          "%o7 is assigned as destination for getpcx!");
+  */
 
-  MCOperand MCRegOP = MCOperand::createReg(MO.getReg());
+  //  MCOperand MCRegOP = MCOperand::createReg(MO.getReg());
 
-
+  /*
   if (!isPositionIndependent()) {
     // Just load the address of GOT to MCRegOP.
     switch(TM.getCodeModel()) {
@@ -248,12 +253,13 @@ void T8xxAsmPrinter::LowerGETPCXAndEmitMCInsts(const MachineInstr *MI,
                                        OutContext);
   EmitOR(*OutStreamer, MCRegOP, loImm, MCRegOP, STI);
   EmitADD(*OutStreamer, MCRegOP, RegO7, MCRegOP, STI);
+  */
 }
 
 void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
   T8xx_MC::verifyInstructionPredicates(MI->getOpcode(),
                                         getSubtargetInfo().getFeatureBits());
-
+  /*
   switch (MI->getOpcode()) {
   default: break;
   case TargetOpcode::DBG_VALUE:
@@ -263,6 +269,7 @@ void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
     LowerGETPCXAndEmitMCInsts(MI, getSubtargetInfo());
     return;
   }
+  */
   MachineBasicBlock::const_instr_iterator I = MI->getIterator();
   MachineBasicBlock::const_instr_iterator E = MI->getParent()->instr_end();
   do {
@@ -273,21 +280,7 @@ void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
 }
 
 void T8xxAsmPrinter::emitFunctionBodyStart() {
-  if (!MF->getSubtarget<T8xxSubtarget>().is64Bit())
     return;
-
-  const MachineRegisterInfo &MRI = MF->getRegInfo();
-  const unsigned globalRegs[] = { T8::G2, T8::G3, T8::G6, T8::G7, 0 };
-  for (unsigned i = 0; globalRegs[i] != 0; ++i) {
-    unsigned reg = globalRegs[i];
-    if (MRI.use_empty(reg))
-      continue;
-
-    if  (reg == T8::G6 || reg == T8::G7)
-      getTargetStreamer().emitT8xxRegisterIgnore(reg);
-    else
-      getTargetStreamer().emitT8xxRegisterScratch(reg);
-  }
 }
 
 void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
@@ -296,6 +289,7 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
   const MachineOperand &MO = MI->getOperand (opNum);
   T8xxMCExpr::VariantKind TF = (T8xxMCExpr::VariantKind) MO.getTargetFlags();
 
+  /*
 #ifndef NDEBUG
   // Verify the target flags.
   if (MO.isGlobal() || MO.isSymbol() || MO.isCPI()) {
@@ -345,7 +339,7 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
              "Invalid target flags for small address operand");
   }
 #endif
-
+  */
 
   bool CloseParen = T8xxMCExpr::printVariantKind(O, TF);
 
@@ -394,7 +388,7 @@ void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
   }
 
   if (MI->getOperand(opNum+1).isReg() &&
-      MI->getOperand(opNum+1).getReg() == T8::G0)
+      MI->getOperand(opNum+1).getReg() == T8::R0)
     return;   // don't print "+%g0"
   if (MI->getOperand(opNum+1).isImm() &&
       MI->getOperand(opNum+1).getImm() == 0)

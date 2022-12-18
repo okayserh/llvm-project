@@ -138,7 +138,7 @@ bool T8xxDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &R1, SDValue &R2) {
   }
 
   R1 = Addr;
-  R2 = CurDAG->getRegister(T8::G0, TLI->getPointerTy(CurDAG->getDataLayout()));
+  R2 = CurDAG->getRegister(T8::R0, TLI->getPointerTy(CurDAG->getDataLayout()));
   return true;
 }
 
@@ -155,6 +155,7 @@ bool T8xxDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &R1, SDValue &R2) {
 // inputs to asm need to be allocated to the IntPair register type,
 // and have that work. Then, delete this function.
 bool T8xxDAGToDAGISel::tryInlineAsm(SDNode *N){
+  /*
   std::vector<SDValue> AsmNodeOperands;
   unsigned Flag, Kind;
   bool Changed = false;
@@ -267,7 +268,7 @@ bool T8xxDAGToDAGISel::tryInlineAsm(SDNode *N){
           CurDAG->getMachineNode(
               TargetOpcode::REG_SEQUENCE, dl, MVT::v2i32,
               {
-                  CurDAG->getTargetConstant(T8::IntPairRegClassID, dl,
+		CurDAG->getTargetConstant(T8::IntPairRegClassID, dl,
                                             MVT::i32),
                   T0,
                   CurDAG->getTargetConstant(T8::sub_even, dl, MVT::i32),
@@ -290,7 +291,7 @@ bool T8xxDAGToDAGISel::tryInlineAsm(SDNode *N){
 
     if(PairedReg.getNode()) {
       OpChanged[OpChanged.size() -1 ] = true;
-      Flag = InlineAsm::getFlagWord(Kind, 1 /* RegNum*/);
+      Flag = InlineAsm::getFlagWord(Kind, 1);
       if (IsTiedToChangedOp)
         Flag = InlineAsm::getFlagWordForMatchingOp(Flag, DefIdx);
       else
@@ -316,6 +317,8 @@ bool T8xxDAGToDAGISel::tryInlineAsm(SDNode *N){
       CurDAG->getVTList(MVT::Other, MVT::Glue), AsmNodeOperands);
   New->setNodeId(-1);
   ReplaceNode(N, New.getNode());
+  */
+
   return true;
 }
 
@@ -337,7 +340,7 @@ void T8xxDAGToDAGISel::Select(SDNode *N) {
   case SPISD::GLOBAL_BASE_REG:
     ReplaceNode(N, getGlobalBaseReg());
     return;
-
+    /*
   case ISD::SDIV:
   case ISD::UDIV: {
     // sdivx / udivx handle 64-bit divides.
@@ -365,6 +368,8 @@ void T8xxDAGToDAGISel::Select(SDNode *N) {
     CurDAG->SelectNodeTo(N, Opcode, MVT::i32, DivLHS, DivRHS, TopPart);
     return;
   }
+    */
+
   }
 
   SelectCode(N);
