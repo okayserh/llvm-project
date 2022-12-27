@@ -68,7 +68,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                        RegScavenger *RS) const {
   MachineInstr &MI = *II;
   const MachineFunction &MF = *MI.getParent()->getParent();
-  //  const MachineFrameInfo *MFI = MF.getFrameInfo();
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
   MachineOperand &FIOp = MI.getOperand(FIOperandNum);
   unsigned FI = FIOp.getIndex();
 
@@ -85,12 +85,10 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   }
 
   // FIXME: check the size of offset.
-  /*
   MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
-  int Offset = MFI->getObjectOffset(FI) + MFI->getStackSize() + ImmOp.getImm();
+  int Offset = MFI.getObjectOffset(FI) + MFI.getStackSize() + ImmOp.getImm();
   FIOp.ChangeToRegister(T8xx::R15, false);  // TODO: Just a fix to make it compile
   ImmOp.setImm(Offset);
-  */
   
   return false;
 }
