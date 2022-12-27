@@ -88,12 +88,14 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
 bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 {
-  /*
-  switch (MI->getOpcode())
+  printf ("expandPostRAPseudo\n");
+
+  switch (MI.getOpcode())
   {
   default:
     return false;
-  case LEG::MOVi32: {
+    /*
+  case T8xx::MOVimmr: {
     DebugLoc DL = MI->getDebugLoc();
     MachineBasicBlock &MBB = *MI->getParent();
 
@@ -122,8 +124,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 
     MBB.erase(MI);
     return true;
+    */
   }
-  }
-  */
-  return true;
 }

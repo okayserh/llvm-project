@@ -93,7 +93,15 @@ def MOVrr  : T8InstImm<0x11,
 		let isCodeGenOnly = 0;
 		}
 
-def ADD : T8Inst<(outs IntRegs:$dst),
+def ADDimmr  : T8InstImm<0x10,
+		(outs IntRegs:$dst),
+       	 	(ins IntRegs:$src1, imm32:$src2),
+		"ldl $src1 ; adc $src2 ; stl $dst",
+		[(set i32:$dst, (add i32:$src1, imm:$src2))]> {
+		let isCodeGenOnly = 0;
+		}
+
+def ADDrr : T8Inst<(outs IntRegs:$dst),
        	 	(ins IntRegs:$src1, IntRegs:$src2),
 		"ldl $src1 ; ldl $src2 ; add ; stl $dst",
 		[(set i32:$dst, (add i32:$src1, i32:$src2))]> {

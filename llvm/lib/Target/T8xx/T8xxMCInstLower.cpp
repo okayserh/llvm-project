@@ -97,6 +97,8 @@ void llvm::LowerT8xxMachineInstrToMCInst(const MachineInstr *MI,
 
   OutMI.setOpcode(MI->getOpcode());
 
+  printf ("LowerT8xxMachineInstr\n");
+  
   for (const MachineOperand &MO : MI->operands()) {
     MCOperand MCOp = LowerOperand(MI, MO, AP);
 
