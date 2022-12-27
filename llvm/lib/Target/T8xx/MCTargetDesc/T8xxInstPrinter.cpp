@@ -55,6 +55,8 @@ void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
                                     raw_ostream &O) {
   const MCOperand &MO = MI->getOperand (opNum);
 
+  printf ("printOperand\n");
+  
   if (MO.isReg()) {
     printRegName(O, MO.getReg());
     return ;

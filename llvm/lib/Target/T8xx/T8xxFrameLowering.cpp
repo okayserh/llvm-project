@@ -133,42 +133,36 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
 
 void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
                                   MachineBasicBlock &MBB) const {
-  /*
-  T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
-  MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
-  const T8xxInstrInfo &TII =
-      *static_cast<const T8xxInstrInfo *>(MF.getSubtarget().getInstrInfo());
-  DebugLoc dl = MBBI->getDebugLoc();
-
   printf ("emitEpilogue\n");
-
-  MachineFrameInfo &MFI = MF.getFrameInfo();
-  */
 
   // Compute the stack size, to determine if we need an epilogue at all.
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   DebugLoc dl = MBBI->getDebugLoc();
-  uint64_t StackSize = computeStackSize(MF);
+  //  uint64_t StackSize = computeStackSize(MF);
+  uint64_t StackSize = 4;
   if (!StackSize) {
     return;
   }
 
   // Restore the stack pointer to what it was at the beginning of the function.
-  unsigned StackReg = LEG::SP;
-  unsigned OffsetReg = materializeOffset(MF, MBB, MBBI, (unsigned)StackSize);
+  unsigned StackReg = T8xx::R15;
+  //unsigned OffsetReg = materializeOffset(MF, MBB, MBBI, (unsigned)StackSize);
+  unsigned OffsetReg = 0;
+
   if (OffsetReg) {
-    BuildMI(MBB, MBBI, dl, TII.get(LEG::ADDrr), StackReg)
+    BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADDrr), StackReg)
         .addReg(StackReg)
         .addReg(OffsetReg)
         .setMIFlag(MachineInstr::FrameSetup);
   } else {
-    BuildMI(MBB, MBBI, dl, TII.get(LEG::ADDri), StackReg)
+    BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADDimmr), StackReg)
         .addReg(StackReg)
         .addImm(StackSize)
         .setMIFlag(MachineInstr::FrameSetup);
   }
 
+  printf ("emitEpilogue End\n");
 }
 
 bool T8xxFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
