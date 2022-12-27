@@ -111,7 +111,7 @@ def ADDrr : T8Inst<(outs IntRegs:$dst),
 
 // Benutzt von LEGInstrInfo.cpp "loadRegFromStackSlot"
 def LDR  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
-                   "ldl $addr ; tstl $val",
+                   "ldl $addr ; stl $val",
                    [(set i32:$val, (load ADDRrr:$addr))]> {
 		   let isCodeGenOnly = 0;
 		   let op = 0x13;
@@ -119,7 +119,7 @@ def LDR  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
 
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
 def STR  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
-                   "ldl $val ; tstl $addr",
+                   "ldl $val ; stl $addr",
                    [(store i32:$val, ADDRrr:$addr)]> {
 		   let isCodeGenOnly = 0;
 		   let op = 0x14;
