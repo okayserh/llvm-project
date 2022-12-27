@@ -44,13 +44,15 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
                                           unsigned ADDrr,
                                           unsigned ADDri) const {
 
+  printf ("emitSPAdjustment\n");
+
   DebugLoc dl;
   const T8xxInstrInfo &TII =
       *static_cast<const T8xxInstrInfo *>(MF.getSubtarget().getInstrInfo());
 
   if (NumBytes >= -4096 && NumBytes < 4096) {
-    BuildMI(MBB, MBBI, dl, TII.get(ADDri), T8::R6)
-      .addReg(T8::R6).addImm(NumBytes);
+    BuildMI(MBB, MBBI, dl, TII.get(ADDri), T8xx::R6)
+      .addReg(T8xx::R6).addImm(NumBytes);
     return;
   }
 
@@ -62,12 +64,12 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
     // sethi %hi(NumBytes), %g1
     // or %g1, %lo(NumBytes), %g1
     // add %sp, %g1, %sp
-    BuildMI(MBB, MBBI, dl, TII.get(T8::SETHIi), T8::G1)
+    BuildMI(MBB, MBBI, dl, TII.get(T8xx::SETHIi), T8xx::G1)
       .addImm(HI22(NumBytes));
-    BuildMI(MBB, MBBI, dl, TII.get(T8::ORri), T8::G1)
-      .addReg(T8::G1).addImm(LO10(NumBytes));
-    BuildMI(MBB, MBBI, dl, TII.get(ADDrr), T8::O6)
-      .addReg(T8::O6).addReg(T8::G1);
+    BuildMI(MBB, MBBI, dl, TII.get(T8xx::ORri), T8xx::G1)
+      .addReg(T8xx::G1).addImm(LO10(NumBytes));
+    BuildMI(MBB, MBBI, dl, TII.get(ADDrr), T8xx::O6)
+      .addReg(T8xx::O6).addReg(T8xx::G1);
     return ;
   }
 
@@ -75,12 +77,12 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
   // sethi %hix(NumBytes), %g1
   // xor %g1, %lox(NumBytes), %g1
   // add %sp, %g1, %sp
-  BuildMI(MBB, MBBI, dl, TII.get(T8::SETHIi), T8::G1)
+  BuildMI(MBB, MBBI, dl, TII.get(T8xx::SETHIi), T8xx::G1)
     .addImm(HIX22(NumBytes));
-  BuildMI(MBB, MBBI, dl, TII.get(T8::XORri), T8::G1)
-    .addReg(T8::G1).addImm(LOX10(NumBytes));
-  BuildMI(MBB, MBBI, dl, TII.get(ADDrr), T8::O6)
-    .addReg(T8::O6).addReg(T8::G1);
+  BuildMI(MBB, MBBI, dl, TII.get(T8xx::XORri), T8xx::G1)
+    .addReg(T8xx::G1).addImm(LOX10(NumBytes));
+  BuildMI(MBB, MBBI, dl, TII.get(ADDrr), T8xx::O6)
+    .addReg(T8xx::O6).addReg(T8xx::G1);
 
   */
 }
@@ -89,6 +91,8 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
   T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
 
+  printf ("emitPrologue\n");
+  
   assert(&MF.front() == &MBB && "Shrink-wrapping not yet supported");
   MachineFrameInfo &MFI = MF.getFrameInfo();
   const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
@@ -117,11 +121,11 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
   if (!hasReservedCallFrame(MF)) {
     MachineInstr &MI = *I;
     int Size = MI.getOperand(0).getImm();
-    if (MI.getOpcode() == T8::ADJCALLSTACKDOWN)
+    if (MI.getOpcode() == T8xx::ADJCALLSTACKDOWN)
       Size = -Size;
 
     /*    if (Size)
-	  emitSPAdjustment(MF, MBB, I, Size, T8::ADDrr, T8::ADDri); */
+	  emitSPAdjustment(MF, MBB, I, Size, T8xx::ADDrr, T8xx::ADDri); */
   }
   return MBB.erase(I);
 }
@@ -129,28 +133,42 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
 
 void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
                                   MachineBasicBlock &MBB) const {
+  /*
   T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   const T8xxInstrInfo &TII =
       *static_cast<const T8xxInstrInfo *>(MF.getSubtarget().getInstrInfo());
   DebugLoc dl = MBBI->getDebugLoc();
-  /*
-  assert((MBBI->getOpcode() == T8::RETL || MBBI->getOpcode() == T8::TAIL_CALL ||
-          MBBI->getOpcode() == T8::TAIL_CALLri) &&
-         "Can only put epilog before 'retl' or 'tail_call' instruction!");
-  if (!FuncInfo->isLeafProc()) {
-    BuildMI(MBB, MBBI, dl, TII.get(T8::RESTORErr), T8::G0).addReg(T8::G0)
-      .addReg(T8::G0);
+
+  printf ("emitEpilogue\n");
+
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  */
+
+  // Compute the stack size, to determine if we need an epilogue at all.
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
+  DebugLoc dl = MBBI->getDebugLoc();
+  uint64_t StackSize = computeStackSize(MF);
+  if (!StackSize) {
     return;
   }
-  */
-  MachineFrameInfo &MFI = MF.getFrameInfo();
 
-  int NumBytes = (int) MFI.getStackSize();
-  /*
-  if (NumBytes != 0)
-    emitSPAdjustment(MF, MBB, MBBI, NumBytes, T8::ADDrr, T8::ADDri);
-  */
+  // Restore the stack pointer to what it was at the beginning of the function.
+  unsigned StackReg = LEG::SP;
+  unsigned OffsetReg = materializeOffset(MF, MBB, MBBI, (unsigned)StackSize);
+  if (OffsetReg) {
+    BuildMI(MBB, MBBI, dl, TII.get(LEG::ADDrr), StackReg)
+        .addReg(StackReg)
+        .addReg(OffsetReg)
+        .setMIFlag(MachineInstr::FrameSetup);
+  } else {
+    BuildMI(MBB, MBBI, dl, TII.get(LEG::ADDri), StackReg)
+        .addReg(StackReg)
+        .addImm(StackSize)
+        .setMIFlag(MachineInstr::FrameSetup);
+  }
+
 }
 
 bool T8xxFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
@@ -210,7 +228,7 @@ T8xxFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     FrameReg = RegInfo->getFrameRegister(MF);
     return StackOffset::getFixed(FrameOffset);
   } else {
-    FrameReg = T8::R6; // %sp
+    FrameReg = T8xx::R6; // %sp
     return StackOffset::getFixed(FrameOffset + MF.getFrameInfo().getStackSize());
   }
 }

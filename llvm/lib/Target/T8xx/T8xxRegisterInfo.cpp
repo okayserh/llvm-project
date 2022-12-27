@@ -29,26 +29,22 @@ using namespace llvm;
 #define GET_REGINFO_TARGET_DESC
 #include "T8xxGenRegisterInfo.inc"
 
-static cl::opt<bool>
-ReserveAppRegisters("t8xx-reserve-app-registers", cl::Hidden, cl::init(false),
-                    cl::desc("Reserve application registers (%g2-%g4)"));
 
-T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8::R15) {}
+T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8xx::R15) {}
 
 const MCPhysReg*
 T8xxRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-  //  return CSR_SaveList;
+  static const uint16_t CalleeSavedRegs[] = { T8xx::R0, T8xx::R1, T8xx::R2,
+                                              0 };
+  return CalleeSavedRegs;
 }
 
 const uint32_t *
 T8xxRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                         CallingConv::ID CC) const {
-  //  return CSR_RegMask;
-}
-
-const uint32_t*
-T8xxRegisterInfo::getRTCallPreservedMask(CallingConv::ID CC) const {
-  //  return RTCSR_RegMask;
+  // This is defined in CallingConv.td via
+  // def CC_Save : CalleeSavedRegs<(add R4, R5, R6, R7, R8, R9)>;  
+  return CC_Save_RegMask;
 }
 
 BitVector T8xxRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
@@ -62,60 +58,7 @@ const TargetRegisterClass*
 T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
                                       unsigned Kind) const {
   const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
-  return &T8::IntRegsRegClass;
-}
-
-static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,
-                      MachineInstr &MI, const DebugLoc &dl,
-                      unsigned FIOperandNum, int Offset, unsigned FramePtr) {
-  /*
-  // Replace frame index with a frame pointer reference.
-  if (Offset >= -4096 && Offset <= 4095) {
-    // If the offset is small enough to fit in the immediate field, directly
-    // encode it.
-    MI.getOperand(FIOperandNum).ChangeToRegister(FramePtr, false);
-    MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
-    return;
-  }
-
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-
-  // FIXME: it would be better to scavenge a register here instead of
-  // reserving G1 all of the time.
-  if (Offset >= 0) {
-    // Emit nonnegaive immediates with sethi + or.
-    // sethi %hi(Offset), %g1
-    // add %g1, %fp, %g1
-    // Insert G1+%lo(offset) into the user.
-    BuildMI(*MI.getParent(), II, dl, TII.get(T8::SETHIi), T8::G1)
-      .addImm(HI22(Offset));
-
-
-    // Emit G1 = G1 + I6
-    BuildMI(*MI.getParent(), II, dl, TII.get(T8::ADDrr), T8::G1).addReg(T8::G1)
-      .addReg(FramePtr);
-    // Insert: G1+%lo(offset) into the user.
-    MI.getOperand(FIOperandNum).ChangeToRegister(T8::G1, false);
-    MI.getOperand(FIOperandNum + 1).ChangeToImmediate(LO10(Offset));
-    return;
-  }
-
-  // Emit Negative numbers with sethi + xor
-  // sethi %hix(Offset), %g1
-  // xor  %g1, %lox(offset), %g1
-  // add %g1, %fp, %g1
-  // Insert: G1 + 0 into the user.
-  BuildMI(*MI.getParent(), II, dl, TII.get(T8::SETHIi), T8::G1)
-    .addImm(HIX22(Offset));
-  BuildMI(*MI.getParent(), II, dl, TII.get(T8::XORri), T8::G1)
-    .addReg(T8::G1).addImm(LOX10(Offset));
-
-  BuildMI(*MI.getParent(), II, dl, TII.get(T8::ADDrr), T8::G1).addReg(T8::G1)
-    .addReg(FramePtr);
-  // Insert: G1+%lo(offset) into the user.
-  MI.getOperand(FIOperandNum).ChangeToRegister(T8::G1, false);
-  MI.getOperand(FIOperandNum + 1).ChangeToImmediate(0);
-  */
+  return &T8xx::IntRegsRegClass;
 }
 
 
@@ -123,58 +66,37 @@ bool
 T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                        int SPAdj, unsigned FIOperandNum,
                                        RegScavenger *RS) const {
-  assert(SPAdj == 0 && "Unexpected");
-  
   MachineInstr &MI = *II;
-  DebugLoc dl = MI.getDebugLoc();
-  int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
-  MachineFunction &MF = *MI.getParent()->getParent();
-  const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
-  const T8xxFrameLowering *TFI = getFrameLowering(MF);
+  const MachineFunction &MF = *MI.getParent()->getParent();
+  //  const MachineFrameInfo *MFI = MF.getFrameInfo();
+  MachineOperand &FIOp = MI.getOperand(FIOperandNum);
+  unsigned FI = FIOp.getIndex();
 
-  Register FrameReg;
-  int Offset;
-  Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg).getFixed();
-
-  Offset += MI.getOperand(FIOperandNum + 1).getImm();
-
-  /*
-  if (!Subtarget.isV9() || !Subtarget.hasHardQuad()) {
-    if (MI.getOpcode() == T8::STQFri) {
-      const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
-      Register SrcReg = MI.getOperand(2).getReg();
-      Register SrcEvenReg = getSubReg(SrcReg, T8::sub_even64);
-      Register SrcOddReg = getSubReg(SrcReg, T8::sub_odd64);
-      MachineInstr *StMI =
-        BuildMI(*MI.getParent(), II, dl, TII.get(T8::STDFri))
-        .addReg(FrameReg).addImm(0).addReg(SrcEvenReg);
-      replaceFI(MF, *StMI, *StMI, dl, 0, Offset, FrameReg);
-      MI.setDesc(TII.get(T8::STDFri));
-      MI.getOperand(2).setReg(SrcOddReg);
-      Offset += 8;
-    } else if (MI.getOpcode() == T8::LDQFri) {
-      const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
-      Register DestReg = MI.getOperand(0).getReg();
-      Register DestEvenReg = getSubReg(DestReg, T8::sub_even64);
-      Register DestOddReg = getSubReg(DestReg, T8::sub_odd64);
-      MachineInstr *LdMI =
-        BuildMI(*MI.getParent(), II, dl, TII.get(T8::LDDFri), DestEvenReg)
-        .addReg(FrameReg).addImm(0);
-      replaceFI(MF, *LdMI, *LdMI, dl, 1, Offset, FrameReg);
-
-      MI.setDesc(TII.get(T8::LDDFri));
-      MI.getOperand(0).setReg(DestOddReg);
-      Offset += 8;
-    }
+  // Determine if we can eliminate the index from this kind of instruction.
+  unsigned ImmOpIdx = 0;
+  switch (MI.getOpcode()) {
+  default:
+    // Not supported yet.
+    return false;
+  case T8xx::LDR:
+  case T8xx::STR:
+    ImmOpIdx = FIOperandNum + 1;
+    break;
   }
+
+  // FIXME: check the size of offset.
+  /*
+  MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
+  int Offset = MFI->getObjectOffset(FI) + MFI->getStackSize() + ImmOp.getImm();
+  FIOp.ChangeToRegister(T8xx::R15, false);  // TODO: Just a fix to make it compile
+  ImmOp.setImm(Offset);
   */
-  replaceFI(MF, II, MI, dl, FIOperandNum, Offset, FrameReg);
-  // replaceFI never removes II
+  
   return false;
 }
 
 Register T8xxRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  return T8::R6;
+  return T8xx::R6;
 }
 
 // T8xx has no architectural need for stack realignment support,

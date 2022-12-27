@@ -23,13 +23,6 @@ using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"
 
-// The generated AsmMatcher T8xxGenAsmWriter uses "T8xx" as the target
-// namespace. But T8xx backend uses "SP" as its namespace.
-namespace llvm {
-namespace T8xx {
-  using namespace T8;
-}
-}
 
 #define GET_INSTRUCTION_NAME
 #define PRINT_ALIAS_INSTR
@@ -68,11 +61,8 @@ void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
   }
 
   if (MO.isImm()) {
-    switch (MI->getOpcode()) {
-      default:
-        O << (int)MO.getImm();
-        return;
-    }
+    O << "#" << (int)MO.getImm();
+    return;
   }
 
   assert(MO.isExpr() && "Unknown operand kind in printOperand");
@@ -94,7 +84,7 @@ void T8xxInstPrinter::printMemOperand(const MCInst *MI, int opNum,
   const MCOperand &Op2 = MI->getOperand(opNum + 1);
 
   bool PrintedFirstOperand = false;
-  if (Op1.isReg() && Op1.getReg() != T8::R0) {
+  if (Op1.isReg() && Op1.getReg() != T8xx::R0) {
     printOperand(MI, opNum, STI, O);
     PrintedFirstOperand = true;
   }
@@ -102,7 +92,7 @@ void T8xxInstPrinter::printMemOperand(const MCInst *MI, int opNum,
   // Skip the second operand iff it adds nothing (literal 0 or %g0) and we've
   // already printed the first one
   const bool SkipSecondOperand =
-      PrintedFirstOperand && ((Op2.isReg() && Op2.getReg() == T8::R0) ||
+      PrintedFirstOperand && ((Op2.isReg() && Op2.getReg() == T8xx::R0) ||
                               (Op2.isImm() && Op2.getImm() == 0));
 
   if (!SkipSecondOperand) {
@@ -111,4 +101,23 @@ void T8xxInstPrinter::printMemOperand(const MCInst *MI, int opNum,
     printOperand(MI, opNum + 1, STI, O);
   }
 }
+
+
+// Print a 'memsrc' operand which is a (Register, Offset) pair.
+void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
+					  const MCSubtargetInfo &STI,
+					  raw_ostream &O) {
+  const MCOperand &Op1 = MI->getOperand(OpNum);
+  const MCOperand &Op2 = MI->getOperand(OpNum + 1);
+  O << "[";
+  printRegName(O, Op1.getReg());
+
+  unsigned Offset = Op2.getImm();
+  if (Offset) {
+    O << ", #" << Offset;
+  }
+  O << "]";
+}
+
+
 

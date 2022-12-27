@@ -23,19 +23,19 @@ using namespace llvm;
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
   // Register the target.
-  RegisterTargetMachine<T8xxV8TargetMachine> X(getTheT8xxTarget());
+  RegisterTargetMachine<T8xxTargetMachine> X(getTheT8xxTarget());
 }
 
 static std::string computeDataLayout(const Triple &T) {
   // T8xx is typically big endian, but some are little.
-  std::string Ret = T.getArch() == Triple::sparcel ? "e" : "E";
+  std::string Ret = "e";
   Ret += "-m:e";
 
   // Some ABIs have 32bit pointers.
   Ret += "-p:32:32";
 
   // Alignments for 64 bit integers.
-  Ret += "-i64:64";
+  Ret += "-i32:32";
 
   // On T8xxV9 128 floats are aligned to 128 bits, on others only to 64.
   // On T8xxV9 registers can hold 64 or 32 bits, on others only 32.
@@ -153,29 +153,5 @@ bool T8xxPassConfig::addInstSelector() {
 }
 
 void T8xxPassConfig::addPreEmitPass(){
-  //  addPass(createT8xxDelaySlotFillerPass());
-  /*
-  
-  if (this->getT8xxTargetMachine().getSubtargetImpl()->insertNOPLoad())
-  {
-    addPass(new InsertNOPLoad());
-  }
-  if (this->getT8xxTargetMachine().getSubtargetImpl()->detectRoundChange()) {
-    addPass(new DetectRoundChange());
-  }
-  if (this->getT8xxTargetMachine().getSubtargetImpl()->fixAllFDIVSQRT())
-  {
-    addPass(new FixAllFDIVSQRT());
-  }
-  */
 }
 
-void T8xxV8TargetMachine::anchor() { }
-
-T8xxV8TargetMachine::T8xxV8TargetMachine(const Target &T, const Triple &TT,
-                                           StringRef CPU, StringRef FS,
-                                           const TargetOptions &Options,
-                                           std::optional<Reloc::Model> RM,
-                                           std::optional<CodeModel::Model> CM,
-                                           CodeGenOpt::Level OL, bool JIT)
-    : T8xxTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT) {}

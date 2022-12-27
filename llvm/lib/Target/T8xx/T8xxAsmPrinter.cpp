@@ -1,4 +1,3 @@
-
 //===-- T8xxAsmPrinter.cpp - T8xx LLVM assembly writer ------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -52,6 +51,10 @@ namespace {
     void printOperand(const MachineInstr *MI, int opNum, raw_ostream &OS);
     void printMemOperand(const MachineInstr *MI, int opNum, raw_ostream &OS,
                          const char *Modifier = nullptr);
+
+    // Taken from LEG machine (TODO)
+    void printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
+			     raw_ostream &O);
 
     void emitFunctionBodyStart() override;
     void emitInstruction(const MachineInstr *MI) override;
@@ -109,7 +112,7 @@ static void EmitCall(MCStreamer &OutStreamer,
                      const MCSubtargetInfo &STI)
 {
   MCInst CallInst;
-  CallInst.setOpcode(T8::CALL);
+  CallInst.setOpcode(T8xx::CALL);
   CallInst.addOperand(Callee);
   OutStreamer.emitInstruction(CallInst, STI);
 }
@@ -119,7 +122,7 @@ static void EmitSETHI(MCStreamer &OutStreamer,
                       const MCSubtargetInfo &STI)
 {
   MCInst SETHIInst;
-  SETHIInst.setOpcode(T8::SETHIi);
+  SETHIInst.setOpcode(T8xx::SETHIi);
   SETHIInst.addOperand(RD);
   SETHIInst.addOperand(Imm);
   OutStreamer.emitInstruction(SETHIInst, STI);
@@ -140,19 +143,19 @@ static void EmitBinary(MCStreamer &OutStreamer, unsigned Opcode,
 static void EmitOR(MCStreamer &OutStreamer,
                    MCOperand &RS1, MCOperand &Imm, MCOperand &RD,
                    const MCSubtargetInfo &STI) {
-  EmitBinary(OutStreamer, T8::ORri, RS1, Imm, RD, STI);
+  EmitBinary(OutStreamer, T8xx::ORri, RS1, Imm, RD, STI);
 }
 
 static void EmitADD(MCStreamer &OutStreamer,
                     MCOperand &RS1, MCOperand &RS2, MCOperand &RD,
                     const MCSubtargetInfo &STI) {
-  EmitBinary(OutStreamer, T8::ADDrr, RS1, RS2, RD, STI);
+  EmitBinary(OutStreamer, T8xx::ADDrr, RS1, RS2, RD, STI);
 }
 
 static void EmitSHL(MCStreamer &OutStreamer,
                     MCOperand &RS1, MCOperand &Imm, MCOperand &RD,
                     const MCSubtargetInfo &STI) {
-  EmitBinary(OutStreamer, T8::SLLri, RS1, Imm, RD, STI);
+  EmitBinary(OutStreamer, T8xx::SLLri, RS1, Imm, RD, STI);
 }
 
 
@@ -178,7 +181,7 @@ void T8xxAsmPrinter::LowerGETPCXAndEmitMCInsts(const MachineInstr *MI,
 
   /*
   const MachineOperand &MO = MI->getOperand(0);
-  assert(MO.getReg() != T8::O7 &&
+  assert(MO.getReg() != T8xx::O7 &&
          "%o7 is assigned as destination for getpcx!");
   */
 
@@ -215,7 +218,7 @@ void T8xxAsmPrinter::LowerGETPCXAndEmitMCInsts(const MachineInstr *MI,
                                                                    OutContext));
       EmitSHL(*OutStreamer, MCRegOP, imm, MCRegOP, STI);
       // Use register %o7 to load the lower 32 bits.
-      MCOperand RegO7 = MCOperand::createReg(T8::O7);
+      MCOperand RegO7 = MCOperand::createReg(T8xx::O7);
       EmitHiLo(*OutStreamer, GOTLabel,
                T8xxMCExpr::VK_T8xx_HI, T8xxMCExpr::VK_T8xx_LO,
                RegO7, OutContext, STI);
@@ -229,7 +232,7 @@ void T8xxAsmPrinter::LowerGETPCXAndEmitMCInsts(const MachineInstr *MI,
   MCSymbol *EndLabel   = OutContext.createTempSymbol();
   MCSymbol *SethiLabel = OutContext.createTempSymbol();
 
-  MCOperand RegO7   = MCOperand::createReg(T8::O7);
+  MCOperand RegO7   = MCOperand::createReg(T8xx::O7);
 
   // <StartLabel>:
   //   call <EndLabel>
@@ -265,7 +268,7 @@ void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
   case TargetOpcode::DBG_VALUE:
     // FIXME: Debug Value.
     return;
-  case T8::GETPCX:
+  case T8xx::GETPCX:
     LowerGETPCXAndEmitMCInsts(MI, getSubtargetInfo());
     return;
   }
@@ -293,10 +296,10 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
 #ifndef NDEBUG
   // Verify the target flags.
   if (MO.isGlobal() || MO.isSymbol() || MO.isCPI()) {
-    if (MI->getOpcode() == T8::CALL)
+    if (MI->getOpcode() == T8xx::CALL)
       assert(TF == T8xxMCExpr::VK_T8xx_None &&
              "Cannot handle target flags on call address");
-    else if (MI->getOpcode() == T8::SETHIi || MI->getOpcode() == T8::SETHIXi)
+    else if (MI->getOpcode() == T8xx::SETHIi || MI->getOpcode() == T8xx::SETHIXi)
       assert((TF == T8xxMCExpr::VK_T8xx_HI
               || TF == T8xxMCExpr::VK_T8xx_H44
               || TF == T8xxMCExpr::VK_T8xx_HH
@@ -307,24 +310,24 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
               || TF == T8xxMCExpr::VK_T8xx_TLS_IE_HI22
               || TF == T8xxMCExpr::VK_T8xx_TLS_LE_HIX22) &&
              "Invalid target flags for address operand on sethi");
-    else if (MI->getOpcode() == T8::TLS_CALL)
+    else if (MI->getOpcode() == T8xx::TLS_CALL)
       assert((TF == T8xxMCExpr::VK_T8xx_None
               || TF == T8xxMCExpr::VK_T8xx_TLS_GD_CALL
               || TF == T8xxMCExpr::VK_T8xx_TLS_LDM_CALL) &&
              "Cannot handle target flags on tls call address");
-    else if (MI->getOpcode() == T8::TLS_ADDrr)
+    else if (MI->getOpcode() == T8xx::TLS_ADDrr)
       assert((TF == T8xxMCExpr::VK_T8xx_TLS_GD_ADD
               || TF == T8xxMCExpr::VK_T8xx_TLS_LDM_ADD
               || TF == T8xxMCExpr::VK_T8xx_TLS_LDO_ADD
               || TF == T8xxMCExpr::VK_T8xx_TLS_IE_ADD) &&
              "Cannot handle target flags on add for TLS");
-    else if (MI->getOpcode() == T8::TLS_LDrr)
+    else if (MI->getOpcode() == T8xx::TLS_LDrr)
       assert(TF == T8xxMCExpr::VK_T8xx_TLS_IE_LD &&
              "Cannot handle target flags on ld for TLS");
-    else if (MI->getOpcode() == T8::TLS_LDXrr)
+    else if (MI->getOpcode() == T8xx::TLS_LDXrr)
       assert(TF == T8xxMCExpr::VK_T8xx_TLS_IE_LDX &&
              "Cannot handle target flags on ldx for TLS");
-    else if (MI->getOpcode() == T8::XORri || MI->getOpcode() == T8::XORXri)
+    else if (MI->getOpcode() == T8xx::XORri || MI->getOpcode() == T8xx::XORXri)
       assert((TF == T8xxMCExpr::VK_T8xx_TLS_LDO_LOX10
               || TF == T8xxMCExpr::VK_T8xx_TLS_LE_LOX10) &&
              "Cannot handle target flags on xor for TLS");
@@ -388,7 +391,7 @@ void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
   }
 
   if (MI->getOperand(opNum+1).isReg() &&
-      MI->getOperand(opNum+1).getReg() == T8::R0)
+      MI->getOperand(opNum+1).getReg() == T8xx::R0)
     return;   // don't print "+%g0"
   if (MI->getOperand(opNum+1).isImm() &&
       MI->getOperand(opNum+1).getImm() == 0)
@@ -397,6 +400,25 @@ void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
   O << "+";
   printOperand(MI, opNum+1, O);
 }
+
+
+// Print a 'memsrc' operand which is a (Register, Offset) pair.
+void T8xxAsmPrinter::printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
+                                         raw_ostream &O) {
+  const MachineOperand &Op1 = MI->getOperand(OpNum);
+  const MachineOperand &Op2 = MI->getOperand(OpNum + 1);
+  O << "[";
+  //  printRegName(O, Op1.getReg());
+  //StringRef(getRegisterName(MO.getReg())).lower()
+  
+  unsigned Offset = Op2.getImm();
+  if (Offset) {
+    O << ", #" << Offset;
+  }
+  O << "]";
+}
+
+
 
 /// PrintAsmOperand - Print out an operand for an inline asm expression.
 ///

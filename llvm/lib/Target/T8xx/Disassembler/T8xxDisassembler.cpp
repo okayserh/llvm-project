@@ -54,10 +54,10 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxDisassembler() {
 }
 
 static const unsigned IntRegDecoderTable[] = {
-  T8::R0,  T8::R1,  T8::R2,  T8::R3,
-  T8::R4,  T8::R5,  T8::R6,  T8::R7,
-  T8::R8,  T8::R9,  T8::R10,  T8::R11,
-  T8::R12,  T8::R13,  T8::R14,  T8::R15};
+  T8xx::R0,  T8xx::R1,  T8xx::R2,  T8xx::R3,
+  T8xx::R4,  T8xx::R5,  T8xx::R6,  T8xx::R7,
+  T8xx::R8,  T8xx::R9,  T8xx::R10,  T8xx::R11,
+  T8xx::R12,  T8xx::R13,  T8xx::R14,  T8xx::R15};
 
 static DecodeStatus DecodeIntRegsRegisterClass(MCInst &Inst, unsigned RegNo,
                                                uint64_t Address,

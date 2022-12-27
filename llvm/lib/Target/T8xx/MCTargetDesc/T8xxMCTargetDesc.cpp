@@ -37,7 +37,7 @@ static MCAsmInfo *createT8xxMCAsmInfo(const MCRegisterInfo &MRI,
                                        const Triple &TT,
                                        const MCTargetOptions &Options) {
   MCAsmInfo *MAI = new T8xxELFMCAsmInfo(TT);
-  unsigned Reg = MRI.getDwarfRegNum(T8::R6, true); // TODO: Replace O6 with R6 to remove compiler error, but functionality is questionable
+  unsigned Reg = MRI.getDwarfRegNum(T8xx::R6, true); // TODO: Replace O6 with R6 to remove compiler error, but functionality is questionable
   MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 0);
   MAI->addInitialFrameState(Inst);
   return MAI;
@@ -47,7 +47,7 @@ static MCAsmInfo *createT8xxV9MCAsmInfo(const MCRegisterInfo &MRI,
                                          const Triple &TT,
                                          const MCTargetOptions &Options) {
   MCAsmInfo *MAI = new T8xxELFMCAsmInfo(TT);
-  unsigned Reg = MRI.getDwarfRegNum(T8::R6, true); // TODO: see above
+  unsigned Reg = MRI.getDwarfRegNum(T8xx::R6, true); // TODO: see above
   MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 2047);
   MAI->addInitialFrameState(Inst);
   return MAI;
@@ -61,7 +61,7 @@ static MCInstrInfo *createT8xxMCInstrInfo() {
 
 static MCRegisterInfo *createT8xxMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitT8xxMCRegisterInfo(X, T8::R7);  // TODO: see above
+  InitT8xxMCRegisterInfo(X, T8xx::R7);  // TODO: see above
   return X;
 }
 

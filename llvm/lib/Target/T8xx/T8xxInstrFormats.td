@@ -11,11 +11,11 @@ class T8Inst<dag outs, dag ins, string asmstr, list<dag> pattern,
    : Instruction {
   field bits<8> Inst;
 
-  let Namespace = "T8";
+  let Namespace = "T8xx";
   let Size = 0;
 
-  bits<4> op;
-  let Inst{7-4} = op;               // Top four bits are the 'op' field
+  bits<8> op;
+  let Inst = op;               // Top four bits are the 'op' field
 
   dag OutOperandList = outs;
   dag InOperandList = ins;
@@ -28,9 +28,8 @@ class T8Inst<dag outs, dag ins, string asmstr, list<dag> pattern,
   let Itinerary = itin;
 }
 
-class T8InstImm<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern,
+class T8InstImm<bits<8> opval, dag outs, dag ins, string asmstr, list<dag> pattern,
              InstrItinClass itin = NoItinerary>
    : T8Inst<outs, ins, asmstr, pattern, itin> {
   let op = opval;
 }
-
