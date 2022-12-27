@@ -20,7 +20,7 @@
 namespace llvm {
   class T8xxSubtarget;
 
-  namespace SPISD {
+  namespace T8xxISD {
   enum NodeType : unsigned {
     FIRST_NUMBER = ISD::BUILTIN_OP_END,
     CMPICC,    // Compare two GPR operands, set icc+xcc.
@@ -64,58 +64,15 @@ namespace llvm {
     const T8xxSubtarget *Subtarget;
   public:
     T8xxTargetLowering(const TargetMachine &TM, const T8xxSubtarget &STI);
-    //    SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+    SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+
+  /// getTargetNodeName - This method returns the name of a target specific
+  //  DAG node.
+  virtual const char *getTargetNodeName(unsigned Opcode) const override;
 
     bool useSoftFloat() const override;
 
-    /// computeKnownBitsForTargetNode - Determine which of the bits specified
-    /// in Mask are known to be either zero or one and return them in the
-    /// KnownZero/KnownOne bitsets.
-    void computeKnownBitsForTargetNode(const SDValue Op,
-                                       KnownBits &Known,
-                                       const APInt &DemandedElts,
-                                       const SelectionDAG &DAG,
-                                       unsigned Depth = 0) const override;
-
-    ConstraintType getConstraintType(StringRef Constraint) const override;
-    ConstraintWeight
-    getSingleConstraintMatchWeight(AsmOperandInfo &info,
-                                   const char *constraint) const override;
-    void LowerAsmOperandForConstraint(SDValue Op,
-                                      std::string &Constraint,
-                                      std::vector<SDValue> &Ops,
-                                      SelectionDAG &DAG) const override;
-
-    std::pair<unsigned, const TargetRegisterClass *>
-    getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
-                                 StringRef Constraint, MVT VT) const override;
-
-    bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
-    MVT getScalarShiftAmountTy(const DataLayout &, EVT) const override {
-      return MVT::i32;
-    }
-
-    Register getRegisterByName(const char* RegName, LLT VT,
-                               const MachineFunction &MF) const override;
-
-    /// If a physical register, this returns the register that receives the
-    /// exception address on entry to an EH pad.
-    Register
-    getExceptionPointerRegister(const Constant *PersonalityFn) const override {
-      return T8::R0;
-    }
-
-    /// If a physical register, this returns the register that receives the
-    /// exception typeid on entry to a landing pad.
-    Register
-    getExceptionSelectorRegister(const Constant *PersonalityFn) const override {
-      return T8::R1;
-    }
-
-    /// getSetCCResultType - Return the ISD::SETCC ValueType
-    EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
-                           EVT VT) const override;
-
+  private:
     SDValue
     LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
                          const SmallVectorImpl<ISD::InputArg> &Ins,
@@ -125,59 +82,24 @@ namespace llvm {
     SDValue
       LowerCall(TargetLowering::CallLoweringInfo &CLI,
                 SmallVectorImpl<SDValue> &InVals) const override;
-    SDValue LowerCall_32(TargetLowering::CallLoweringInfo &CLI,
-                         SmallVectorImpl<SDValue> &InVals) const;
+
+    SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
+                        const SmallVectorImpl<ISD::OutputArg> &Outs,
+                        const SmallVectorImpl<SDValue> &OutVals,
+                        const SDLoc &dl, SelectionDAG &DAG) const override;
+
+    SDValue LowerCallResult(SDValue Chain, SDValue InGlue,
+                          CallingConv::ID CallConv, bool isVarArg,
+                          const SmallVectorImpl<ISD::InputArg> &Ins, SDLoc dl,
+                          SelectionDAG &DAG,
+                          SmallVectorImpl<SDValue> &InVals) const;
 
     bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
                         bool isVarArg,
                         const SmallVectorImpl<ISD::OutputArg> &Outs,
                         LLVMContext &Context) const override;
 
-    SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
-                        const SmallVectorImpl<ISD::OutputArg> &Outs,
-                        const SmallVectorImpl<SDValue> &OutVals,
-                        const SDLoc &dl, SelectionDAG &DAG) const override;
-    SDValue LowerReturn_32(SDValue Chain, CallingConv::ID CallConv,
-                           bool IsVarArg,
-                           const SmallVectorImpl<ISD::OutputArg> &Outs,
-                           const SmallVectorImpl<SDValue> &OutVals,
-                           const SDLoc &DL, SelectionDAG &DAG) const;
-
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
-    SDValue LowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;
-    SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
-    SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
-
-    SDValue withTargetFlags(SDValue Op, unsigned TF, SelectionDAG &DAG) const;
-    SDValue makeHiLoPair(SDValue Op, unsigned HiTF, unsigned LoTF,
-                         SelectionDAG &DAG) const;
-    SDValue makeAddress(SDValue Op, SelectionDAG &DAG) const;
-
-    bool IsEligibleForTailCallOptimization(CCState &CCInfo,
-                                           CallLoweringInfo &CLI,
-                                           MachineFunction &MF) const;
-
-    bool ShouldShrinkFPConstant(EVT VT) const override {
-      // Do not shrink FP constpool if VT == MVT::f128.
-      // (ldd, call _Q_fdtoq) is more expensive than two ldds.
-      return VT != MVT::f128;
-    }
-
-    bool shouldInsertFencesForAtomic(const Instruction *I) const override {
-      // FIXME: We insert fences for each atomics and generate
-      // sub-optimal code for PSO/TSO. (Approximately nobody uses any
-      // mode but TSO, which makes this even more silly)
-      return true;
-    }
-
-    AtomicExpansionKind shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;
-
-    void ReplaceNodeResults(SDNode *N,
-                            SmallVectorImpl<SDValue>& Results,
-                            SelectionDAG &DAG) const override;
-
-    MachineBasicBlock *expandSelectCC(MachineInstr &MI, MachineBasicBlock *BB,
-                                      unsigned BROpcode) const;
   };
 } // end namespace llvm
 

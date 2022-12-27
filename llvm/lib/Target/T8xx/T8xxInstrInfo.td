@@ -38,147 +38,106 @@ def callseq_end   : SDNode<"ISD::CALLSEQ_END",   SDT_SPCallSeqEnd,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
 def SDT_SPCall    : SDTypeProfile<0, -1, [SDTCisVT<0, i32>]>;
-def call          : SDNode<"SPISD::CALL", SDT_SPCall,
+def call          : SDNode<"T8xxISD::CALL", SDT_SPCall,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                             SDNPVariadic]>;
 
-def tailcall      : SDNode<"SPISD::TAIL_CALL", SDT_SPCall,
+def tailcall      : SDNode<"T8xxSD::TAIL_CALL", SDT_SPCall,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                             SDNPVariadic]>;
 
 def SDT_SPRet     : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
-def retflag       : SDNode<"SPISD::RET_FLAG", SDT_SPRet,
+//def retflag       : SDNode<"T8xxISD::RET_FLAG", SDT_SPRet,
+//                           [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+//def retflag       : SDNode<"T8xxISD::RET_FLAG", SDTNone,
+//                           [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+def T8xxRetFlag     : SDNode<"T8xxISD::RET_FLAG", SDTNone,
                            [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 
-// Benutzt von LEGInstrInfo.cpp "copyPhysReg"
-def jump : T8InstImm<0x0,
+// Signed Operand
+def imm32
+: Operand<i32> {
+}
+
+// Address operand
+def mem : Operand<iPTR> {
+let PrintMethod = "printMemOperand";
+//let MIOperandInfo = (ops GPROut, simm16);
+let EncoderMethod = "getMemEncoding";
+}
+
+def memsrc : Operand<i32> {
+  let MIOperandInfo = (ops IntRegs, i32imm);
+  let PrintMethod = "printAddrModeMemSrc";
+  let EncoderMethod = "getMemSrcValue";
+}
+
+def ADDRrr : ComplexPattern<iPTR, 2, "SelectADDRrr", [], []>;
+
+// Pseudo Instructions
+
+def MOVimmr  : T8InstImm<0x10,
 		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"j $src",
-		[(set i32:$dst, i32:$src)]> {
+       	 	(ins imm32:$src),
+		"ldc $src ; stl $dst",
+		[(set i32:$dst, imm:$src)]> {
 		let isCodeGenOnly = 0;
 		}
 
-def ldlp : T8InstImm<0x1,
+def MOVrr  : T8InstImm<0x11,
 		(outs IntRegs:$dst),
        	 	(ins IntRegs:$src),
-		"ldlp $src",
-		[(set i32:$dst, i32:$src)]> {
+		"ldl $src ; stl $dst",
+		[/* No pattern */]> {
 		let isCodeGenOnly = 0;
 		}
 
-def pfix : T8InstImm<0x2,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"pfix $src",
-		[(set i32:$dst, i32:$src)]> {
+def ADD : T8Inst<(outs IntRegs:$dst),
+       	 	(ins IntRegs:$src1, IntRegs:$src2),
+		"ldl $src1 ; ldl $src2 ; add ; stl $dst",
+		[(set i32:$dst, (add i32:$src1, i32:$src2))]> {
 		let isCodeGenOnly = 0;
+		let op = 0x12;
 		}
 
-def ldnl : T8InstImm<0x3,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"ldnl $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
+// Benutzt von LEGInstrInfo.cpp "loadRegFromStackSlot"
+def LDR  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
+                   "ldl $addr ; tstl $val",
+                   [(set i32:$val, (load ADDRrr:$addr))]> {
+		   let isCodeGenOnly = 0;
+		   let op = 0x13;
+}
 
-def ldc : T8InstImm<0x4,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"ldc $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+def STR  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
+                   "ldl $val ; tstl $addr",
+                   [(store i32:$val, ADDRrr:$addr)]> {
+		   let isCodeGenOnly = 0;
+		   let op = 0x14;
+}
 
-def ldnlp : T8InstImm<0x5,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"ldnlp $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
 
-def nfix : T8InstImm<0x6,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"nfix $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
+//def MOVmemr  : T8InstImm<0xF,
+//		(outs),
+//       	 	(ins MEMrr:$addr, IntRegs:$src),
+//		"ldl %src; ldc $addr; stnl",
+//		[(store i32:$src, ADDRrr:$addr)]> {
+//		let isCodeGenOnly = 0;
+//		}
 
-def ldl : T8InstImm<0x7,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"ldl $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
 
-def adc : T8InstImm<0x8,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"adc $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
+//===----------------------------------------------------------------------===//
+// Return Instructions
+//===----------------------------------------------------------------------===//
 
-def cal : T8InstImm<0x9,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"cal $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
+let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R15] in {
+  def RET : T8Inst<(outs), (ins variable_ops),
+                    "bx lr",  [(T8xxRetFlag)]> {
+    let op  = 12;
+  }
+}
 
-def cj : T8InstImm<0xA,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"cj $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
-
-def ajw : T8InstImm<0xB,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"ajw $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
-
-def eqc : T8InstImm<0xC,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"eqc $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
-
-def stl : T8InstImm<0xD,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"stl $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
-
-def stnl : T8InstImm<0xE,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"stnl $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
-
-def opr : T8InstImm<0xF,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"opr $src",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 0;
-		}
 
 
 //===----------------------------------------------------------------------===//

@@ -38,16 +38,6 @@
 
 using namespace llvm;
 
-// The generated AsmMatcher T8xxGenAsmMatcher uses "T8xx" as the target
-// namespace. But T8xx backend uses "T8" as its namespace.
-namespace llvm {
-namespace T8xx {
-
-    using namespace T8;
-
-} // end namespace T8xx
-} // end namespace llvm
-
 namespace {
 
 class T8xxOperand;

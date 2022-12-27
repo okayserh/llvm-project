@@ -80,8 +80,6 @@ public:
                             const TargetRegisterClass *RC,
                             const TargetRegisterInfo *TRI) const override;
 
-  Register getGlobalBaseReg(MachineFunction *MF) const;
-
   // Lower pseudo instructions after register allocation.
   bool expandPostRAPseudo(MachineInstr &MI) const override;
 };

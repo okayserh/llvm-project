@@ -15,15 +15,20 @@
 //===----------------------------------------------------------------------===//
 
 def CC_T8xx32 : CallingConv<[
-  // Custom assign SRet to [sp+64].
-  CCIfSRet<CCCustom<"CC_T8xx_Assign_SRet">>,
   // i32 f32 arguments get passed in integer registers if there is space.
   CCIfType<[i32], CCAssignToReg<[R0, R1, R2, R3]>>,
 
   // Alternatively, they are assigned to the stack in 4-byte aligned units.
-  CCAssignToStack<4, 4>
+  CCIfType<[i32], CCAssignToStack<4, 4>>
 ]>;
 
 def RetCC_T8xx32 : CallingConv<[
+  // i32 are returned in registers R0, R1, R2, R3
   CCIfType<[i32], CCAssignToReg<[R0, R1, R2, R3]>>,
+
+  // Integer values get stored in stack slots that are 4 bytes in
+  // size and 4-byte aligned.
+  CCIfType<[i32], CCAssignToStack<4, 4>>
 ]>;
+
+def CC_Save : CalleeSavedRegs<(add R0, R1, R2, R3)>;

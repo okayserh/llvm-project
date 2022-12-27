@@ -43,42 +43,6 @@ public:
   }
 };
 
-/// T8xx 32-bit target machine
-///
-class T8xxV8TargetMachine : public T8xxTargetMachine {
-  virtual void anchor();
-
-public:
-  T8xxV8TargetMachine(const Target &T, const Triple &TT, StringRef CPU,
-                       StringRef FS, const TargetOptions &Options,
-                       std::optional<Reloc::Model> RM,
-                       std::optional<CodeModel::Model> CM, CodeGenOpt::Level OL,
-                       bool JIT);
-};
-
-/// T8xx 64-bit target machine
-///
-class T8xxV9TargetMachine : public T8xxTargetMachine {
-  virtual void anchor();
-
-public:
-  T8xxV9TargetMachine(const Target &T, const Triple &TT, StringRef CPU,
-                       StringRef FS, const TargetOptions &Options,
-                       std::optional<Reloc::Model> RM,
-                       std::optional<CodeModel::Model> CM, CodeGenOpt::Level OL,
-                       bool JIT);
-};
-
-class T8xxelTargetMachine : public T8xxTargetMachine {
-  virtual void anchor();
-
-public:
-  T8xxelTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
-                       StringRef FS, const TargetOptions &Options,
-                       std::optional<Reloc::Model> RM,
-                       std::optional<CodeModel::Model> CM, CodeGenOpt::Level OL,
-                       bool JIT);
-};
 
 } // end namespace llvm
 
