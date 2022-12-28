@@ -30,11 +30,14 @@ using namespace llvm;
 #include "T8xxGenRegisterInfo.inc"
 
 
-T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8xx::R15) {}
+T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8xx::R0, 0, 0, T8xx::IPTR) {}
 
 const MCPhysReg*
 T8xxRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-  static const uint16_t CalleeSavedRegs[] = { T8xx::R0, T8xx::R1, T8xx::R2,
+  // Note: These are the top 4 entries of the register stack.
+  // Hence the adjustment of the Workspace pointer will
+  // make these unaccessible by the short register accesses (ldl/stl).
+  static const uint16_t CalleeSavedRegs[] = { T8xx::R12, T8xx::R13, T8xx::R14, T8xx::R15,
                                               0 };
   return CalleeSavedRegs;
 }
@@ -72,6 +75,8 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineOperand &FIOp = MI.getOperand(FIOperandNum);
   unsigned FI = FIOp.getIndex();
 
+  printf ("eliminateFrameIndex\n");
+  
   // Determine if we can eliminate the index from this kind of instruction.
   unsigned ImmOpIdx = 0;
   switch (MI.getOpcode()) {
@@ -94,7 +99,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 }
 
 Register T8xxRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  return T8xx::R6;
+  return T8xx::R15;
 }
 
 // T8xx has no architectural need for stack realignment support,

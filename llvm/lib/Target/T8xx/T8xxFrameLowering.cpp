@@ -22,9 +22,17 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetOptions.h"
 
 using namespace llvm;
+
+// Copied from old version
+inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align,
+                                   uint64_t Skew = 0) {
+  Skew %= Align;
+  return (Value + Align - 1 - Skew) / Align * Align + Skew;
+}
 
 static cl::opt<bool>
 DisableLeafProc("disable-t8xx-leaf-proc",
@@ -87,32 +95,37 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
   */
 }
 
+
+uint64_t T8xxFrameLowering::computeStackSize(MachineFunction &MF) const {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  uint64_t StackSize = MFI.getStackSize();
+  unsigned StackAlign = getStackAlignment();
+  if (StackAlign > 0) {
+    StackSize = RoundUpToAlignment(StackSize, StackAlign);
+  }
+  return StackSize;
+}
+
+
 void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
-  T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
-
   printf ("emitPrologue\n");
   
-  assert(&MF.front() == &MBB && "Shrink-wrapping not yet supported");
-  MachineFrameInfo &MFI = MF.getFrameInfo();
-  const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
-  const T8xxInstrInfo &TII =
-      *static_cast<const T8xxInstrInfo *>(Subtarget.getInstrInfo());
-  const T8xxRegisterInfo &RegInfo =
-      *static_cast<const T8xxRegisterInfo *>(Subtarget.getRegisterInfo());
+  // Compute the stack size, to determine if we need a prologue at all.
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.begin();
-  // Debug location must be unknown since the first debug location is used
-  // to determine the end of the prologue.
-  DebugLoc dl;
-  bool NeedsStackRealignment = RegInfo.shouldRealignStack(MF);
+  DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
+  uint64_t StackSize = computeStackSize(MF);
+  if (!StackSize) {
+    return;
+  }
 
-  if (NeedsStackRealignment && !RegInfo.canRealignStack(MF))
-    report_fatal_error("Function \"" + Twine(MF.getName()) + "\" required "
-                       "stack re-alignment, but LLVM couldn't handle it "
-                       "(probably because it has a dynamic alloca).");
-
-  // Get the number of bytes to allocate from the FrameInfo
-  int NumBytes = (int) MFI.getStackSize();
+  // Adjust the stack pointer.
+  unsigned StackReg = T8xx::R15;
+  BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADDimmr), StackReg)
+        .addReg(StackReg)
+        .addImm(-StackSize)
+        .setMIFlag(MachineInstr::FrameSetup);
 }
 
 MachineBasicBlock::iterator T8xxFrameLowering::
@@ -139,28 +152,17 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   DebugLoc dl = MBBI->getDebugLoc();
-  //  uint64_t StackSize = computeStackSize(MF);
-  uint64_t StackSize = 4;
+  uint64_t StackSize = computeStackSize(MF);
   if (!StackSize) {
     return;
   }
 
   // Restore the stack pointer to what it was at the beginning of the function.
   unsigned StackReg = T8xx::R15;
-  //unsigned OffsetReg = materializeOffset(MF, MBB, MBBI, (unsigned)StackSize);
-  unsigned OffsetReg = 0;
-
-  if (OffsetReg) {
-    BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADDrr), StackReg)
-        .addReg(StackReg)
-        .addReg(OffsetReg)
-        .setMIFlag(MachineInstr::FrameSetup);
-  } else {
-    BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADDimmr), StackReg)
+  BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADDimmr), StackReg)
         .addReg(StackReg)
         .addImm(StackSize)
         .setMIFlag(MachineInstr::FrameSetup);
-  }
 
   printf ("emitEpilogue End\n");
 }

@@ -139,7 +139,7 @@ def STR  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
 // Return Instructions
 //===----------------------------------------------------------------------===//
 
-let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R15] in {
+let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R14] in {
   def RET : T8Inst<(outs), (ins variable_ops),
                     "bx lr",  [(T8xxRetFlag)]> {
     let op  = 12;

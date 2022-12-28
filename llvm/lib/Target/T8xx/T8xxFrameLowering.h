@@ -54,6 +54,7 @@ private:
   // Returns true if MF is a leaf procedure.
   bool isLeafProc(MachineFunction &MF) const;
 
+  uint64_t computeStackSize(MachineFunction &MF) const;
 
   // Emits code for adjusting SP in function prologue/epilogue.
   void emitSPAdjustment(MachineFunction &MF,
