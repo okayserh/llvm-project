@@ -37,6 +37,8 @@ def AREG : T8xxReg<0, "AREG">, DwarfRegNum<[16]>;
 def BREG : T8xxReg<1, "BREG">, DwarfRegNum<[17]>;
 def CREG : T8xxReg<2, "CREG">, DwarfRegNum<[18]>;
 
+def IPTR : T8xxReg<3, "IPTR">, DwarfRegNum<[19]>;
+
 // Register classes.
 //
 // FIXME: the register order should be defined in terms of the preferred
@@ -46,7 +48,7 @@ def CREG : T8xxReg<2, "CREG">, DwarfRegNum<[18]>;
 // register class for that. The i64 type is included here to allow i64 patterns
 // using the integer instructions.
 def IntRegs : RegisterClass<"T8xx", [i32], 32,
-                            (add (sequence "R%u", 0, 15))>;
+                            (add (sequence "R%u", 1, 15))>;
 
 //def StackRegs : RegisterClass<"T8xx", [i32], 32,
 //    	      	    (add (AREG BREG CREG))>;
