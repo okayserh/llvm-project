@@ -133,6 +133,7 @@ public:
 
   void addIRPasses() override;
   bool addInstSelector() override;
+  void addPostRegAlloc() override;
   void addPreEmitPass() override;
 };
 } // namespace
@@ -151,6 +152,11 @@ bool T8xxPassConfig::addInstSelector() {
   addPass(createT8xxISelDag(getT8xxTargetMachine()));
   return false;
 }
+
+void T8xxPassConfig::addPostRegAlloc() {
+  addPass(createT8xxStackifyIntPass());
+}
+
 
 void T8xxPassConfig::addPreEmitPass(){
 }

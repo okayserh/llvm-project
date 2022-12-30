@@ -39,6 +39,8 @@ def CREG : T8xxReg<2, "CREG">, DwarfRegNum<[18]>;
 
 def IPTR : T8xxReg<3, "IPTR">, DwarfRegNum<[19]>;
 
+def OREG : T8xxReg<4, "OREG">, DwarfRegNum<[20]>;
+
 // Register classes.
 //
 // FIXME: the register order should be defined in terms of the preferred
@@ -50,6 +52,15 @@ def IPTR : T8xxReg<3, "IPTR">, DwarfRegNum<[19]>;
 def IntRegs : RegisterClass<"T8xx", [i32], 32,
                             (add (sequence "R%u", 1, 15))>;
 
+//def OReg : RegisterClass<"T8xx", [i32], 32,
+//    	   		(add OREG)>;
+
+
+let isAllocatable = 0 in {
+    def ARegC : RegisterClass<"T8xx", [i32], 32,
+    		   		(add AREG)>;
+}
+
 //def StackRegs : RegisterClass<"T8xx", [i32], 32,
-//    	      	    (add (AREG BREG CREG))>;
+//    	      	    (add AREG, BREG, CREG)>;
 
