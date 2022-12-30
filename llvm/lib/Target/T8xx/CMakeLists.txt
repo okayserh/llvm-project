@@ -26,7 +26,8 @@ add_llvm_target(T8xxCodeGen
   T8xxTargetMachine.cpp
   T8xxMCInstLower.cpp
   T8xxTargetObjectFile.cpp
-
+  T8xxStackifyInt.cpp
+  
   LINK_COMPONENTS
   AsmPrinter
   CodeGen
