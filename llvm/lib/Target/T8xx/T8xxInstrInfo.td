@@ -37,7 +37,13 @@ def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_SPCallSeqStart,
 def callseq_end   : SDNode<"ISD::CALLSEQ_END",   SDT_SPCallSeqEnd,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
+
+// SDTCisVT is a type constraint. I.e. has exactly that type.
+
 def SDT_SPCall    : SDTypeProfile<0, -1, [SDTCisVT<0, i32>]>;
+
+// This is the ISD representation of a call. This is later
+// matched by the concrete CALL instruction defined below.
 def call          : SDNode<"T8xxISD::CALL", SDT_SPCall,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                             SDNPVariadic]>;
@@ -225,22 +231,27 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R14] in {
 // Call Instructions
 //===----------------------------------------------------------------------===//
 
-let isCall = 1, Uses = [R15] in {
-  def CALL : T8Inst<(outs), (ins IntRegs:$addr),
-                      "call $addr",
-                      [(call i32:$addr)]> {
-    let op = 0x22;
-  }
-}
+// This is inherently linked to the method "LowerCall", where
+// the corresponding call is created in the DAG.
 
-
+// Working version (passed through register)
 //let isCall = 1, Uses = [R15] in {
-//  def CALL : T8Inst<(outs), (ins i32imm:$addr),
+//  def CALL : T8Inst<(outs), (ins IntRegs:$addr),
 //                      "call $addr",
-//                      [(call globaladdr:$addr)]> {
+//                      [(call i32:$addr)]> {
 //    let op = 0x22;
 //  }
 //}
+
+
+// Working version, passed directly
+let isCall = 1, Uses = [R15] in {
+  def CALL : T8Inst<(outs), (ins i32imm:$addr),
+                      "call $addr",
+                      [(call tglobaladdr:$addr)]> {
+    let op = 0x22;
+  }
+}
 
 def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(MOVimmr $addr)]>;
 
