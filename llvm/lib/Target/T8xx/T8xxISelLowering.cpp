@@ -198,12 +198,20 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   DAG.dump ();
   
   // We only support calling global addresses.
+  /* Original code
   GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee);
   assert(G && "We only support the calling of global addresses");
 
   EVT PtrVT = getPointerTy(DAG.getDataLayout());
   Callee = DAG.getGlobalAddress(G->getGlobal(), Loc, PtrVT, 0);
+  */
 
+  // This works with a call instruction that directly takes
+  // the address as parameter
+  if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
+    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0);
+
+  
   std::vector<SDValue> Ops;
   Ops.push_back(Chain);
   Ops.push_back(Callee);
