@@ -27,9 +27,14 @@ namespace llvm {
 
   FunctionPass *createT8xxISelDag(T8xxTargetMachine &TM);
 
+  FunctionPass *createT8xxStackifyIntPass();
+  
   void LowerT8xxMachineInstrToMCInst(const MachineInstr *MI,
                                       MCInst &OutMI,
                                       AsmPrinter &AP);
+
+  //  void initializeT8xxStackPass(PassRegistry &);
+  
 } // end namespace llvm;
 
 #endif

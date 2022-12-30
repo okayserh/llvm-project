@@ -37,8 +37,7 @@ T8xxRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   // Note: These are the top 4 entries of the register stack.
   // Hence the adjustment of the Workspace pointer will
   // make these unaccessible by the short register accesses (ldl/stl).
-  static const uint16_t CalleeSavedRegs[] = { T8xx::R12, T8xx::R13, T8xx::R14, T8xx::R15,
-                                              0 };
+  static const uint16_t CalleeSavedRegs[] = { 0 };
   return CalleeSavedRegs;
 }
 
@@ -76,6 +75,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   unsigned FI = FIOp.getIndex();
 
   printf ("eliminateFrameIndex\n");
+  MI.dump ();
   
   // Determine if we can eliminate the index from this kind of instruction.
   unsigned ImmOpIdx = 0;
@@ -95,6 +95,9 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   FIOp.ChangeToRegister(T8xx::R15, false);  // TODO: Just a fix to make it compile
   ImmOp.setImm(Offset);
   
+  printf ("After eliminateFrameIndex\n");
+  MI.dump ();
+
   return false;
 }
 

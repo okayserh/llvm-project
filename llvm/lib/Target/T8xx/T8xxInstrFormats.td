@@ -12,24 +12,34 @@ class T8Inst<dag outs, dag ins, string asmstr, list<dag> pattern,
   field bits<8> Inst;
 
   let Namespace = "T8xx";
-  let Size = 0;
-
-  bits<8> op;
-  let Inst = op;               // Top four bits are the 'op' field
+  let DecoderNamespace = "T8xx";
 
   dag OutOperandList = outs;
   dag InOperandList = ins;
   let AsmString   = asmstr;
   let Pattern = pattern;
+  let Size = 4;
 
-  let DecoderNamespace = "T8xx";
-  field bits<32> SoftFail = 0;
+  bits<8> op;
+  let Inst = op;               // Top four bits are the 'op' field
+
+//  let Inst = 0;               // Top four bits are the 'op' field
 
   let Itinerary = itin;
+}
+
+
+// LEG pseudo instructions format
+class T8xxPseudoInst<dag outs, dag ins, string asmstr, list<dag> pattern>
+    : T8Inst<outs, ins, asmstr, pattern> {
+  let isPseudo = 1;
 }
 
 class T8InstImm<bits<8> opval, dag outs, dag ins, string asmstr, list<dag> pattern,
              InstrItinClass itin = NoItinerary>
    : T8Inst<outs, ins, asmstr, pattern, itin> {
-  let op = opval;
+//  let Inst{31-16} = opval;
+    let op = opval;
 }
+
+

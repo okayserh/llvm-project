@@ -122,4 +122,12 @@ void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
 }
 
 
+// Print a 'memsrc' operand which is a (Register, Offset) pair.
+/*
+void T8xxInstPrinter::printAddrModeStack(const MCInst *MI, int OpNum,
+					  const MCSubtargetInfo &STI,
+					  raw_ostream &O) {
+  O << "Stack";
+}
+*/
 
