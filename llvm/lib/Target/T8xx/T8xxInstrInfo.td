@@ -75,7 +75,7 @@ def ADDRrr : ComplexPattern<iPTR, 2, "SelectADDRrr", [], []>;
 // is difficult to combine with the "constructed" registers that
 // are located in the workspace.
 
-def stl : T8InstImm<0xD,
+def STL : T8InstImm<0xD,
 		(outs IntRegs:$dst),
        	 	(ins),
 		"stl $dst",
@@ -83,7 +83,7 @@ def stl : T8InstImm<0xD,
 		let isCodeGenOnly = 0;
 		}
 
-def ldl : T8InstImm<0x7,
+def LDL : T8InstImm<0x7,
 		(outs),
        	 	(ins IntRegs:$src),
 		"ldl $src",
@@ -91,7 +91,7 @@ def ldl : T8InstImm<0x7,
 		let isCodeGenOnly = 0;
 		}
 
-def stnl : T8InstImm<0xE,
+def STNL : T8InstImm<0xE,
 		(outs),
        	 	(ins i32imm:$src),
 		"stnl $src",
@@ -99,7 +99,7 @@ def stnl : T8InstImm<0xE,
 		let isCodeGenOnly = 0;
 		}
 
-def ldnl : T8InstImm<0x3,
+def LDNL : T8InstImm<0x3,
 		(outs),
        	 	(ins i32imm:$src),
 		"ldnl $src",
@@ -107,7 +107,7 @@ def ldnl : T8InstImm<0x3,
 		let isCodeGenOnly = 0;
 		}
 
-def ldc : T8InstImm<0x4,
+def LDC : T8InstImm<0x4,
 		(outs),
        	 	(ins i32imm:$src),
 		"ldc $src",
@@ -126,9 +126,10 @@ def ADD : T8Inst<(outs),
 def ADDimmr  : T8InstImm<0x12,
 		(outs IntRegs:$dst),
        	 	(ins IntRegs:$src1, i32imm:$src2),
-		"ldl $src1 ; adc $src2 ; stl $dst",
+		"adc $src2",
 		[(set i32:$dst, (add i32:$src1, imm:$src2))]> {
 		let isCodeGenOnly = 0;
+		let isPseudo = 1;
 		}
 
 
@@ -142,7 +143,8 @@ multiclass TopStackOp<string opstr, SDNode opnode>{
 def regimmop : T8xxPseudoInst<
 		(outs IntRegs:$dst),
        	 	(ins IntRegs:$src1, i32imm:$src2),
-		!strconcat ("ldl $src1 ; ldc $src2 ;", opstr, " ; stl $dst"),
+//		!strconcat ("ldl $src1 ; ldc $src2 ;", opstr, " ; stl $dst"),
+		opstr,
 		[(set i32:$dst, (opnode i32:$src1, imm:$src2))]> {
 		let isCodeGenOnly = 0;
 		let isPseudo = 1;
@@ -164,11 +166,25 @@ def regregop : T8xxPseudoInst<
 		let isPseudo = 1;
 		}
 
+def memmemop : T8xxPseudoInst<
+                (outs IntRegs:$dst),
+       	 	(ins memsrc:$addr1, memsrc:$addr2),
+		!strconcat ("ldnl $addr1 ; ldnl $addr2 ;", opstr, " ; stl $dst"),
+//		opstr,
+//		[(set i32:$dst, (opnode ADDRrr:$addr1, ADDRrr:$addr2))]> {
+		[(set i32:$dst, (opnode (load ADDRrr:$addr1), (load ADDRrr:$addr2)))]> {
+		let isCodeGenOnly = 0;
+		let isPseudo = 1;
+		}
+
+
 }
 
 defm ADD : TopStackOp<"add", add>;  // #05
 defm SUB : TopStackOp<"sub", sub>;  // #05
 defm MUL : TopStackOp<"mul", mul>;  // #53
+defm SHL : TopStackOp<"shl", shl>;  // #53
+defm SHR : TopStackOp<"shr", srl>;  // #53
 
 
 // Pseudo Instructions
@@ -193,6 +209,7 @@ def LDR  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
                    "ldc $addr ; ldnl ; stl $val",
                    [(set i32:$val, (load ADDRrr:$addr))]> {
 		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
 		   let op = 0x14;
 }
 
@@ -204,15 +221,6 @@ def STR  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
 		   let isPseudo = 1;
 		   let op = 0x15;
 }
-
-
-//def MOVmemr  : T8InstImm<0xF,
-//		(outs),
-//       	 	(ins MEMrr:$addr, IntRegs:$src),
-//		"ldl %src; ldc $addr; stnl",
-//		[(store i32:$src, ADDRrr:$addr)]> {
-//		let isCodeGenOnly = 0;
-//		}
 
 
 //===----------------------------------------------------------------------===//
@@ -247,7 +255,7 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R14] in {
 // Working version, passed directly
 let isCall = 1, Uses = [R15] in {
   def CALL : T8Inst<(outs), (ins i32imm:$addr),
-                      "call $addr",
+                      "ldl %r1 ; ldl %r2 ; ldl %r3; call $addr",
                       [(call tglobaladdr:$addr)]> {
     let op = 0x22;
   }
