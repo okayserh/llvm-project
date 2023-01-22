@@ -31,5 +31,4 @@ def RetCC_T8xx32 : CallingConv<[
   CCIfType<[i32], CCAssignToStack<4, 4>>
 ]>;
 
-//def CC_Save : CalleeSavedRegs<(add R0, R1, R2, R3)>;
-def CC_Save : CalleeSavedRegs<(add R12, R13, R14, R15)>;
+def CC_Save : CalleeSavedRegs<(add R0, R1, R2, R3)>;
