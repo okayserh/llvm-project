@@ -62,12 +62,18 @@ def memsrc : Operand<i32> {
   let EncoderMethod = "getMemSrcValue";
 }
 
+def stacksrc : Operand<i32> {
+  let MIOperandInfo = (ops WPRegs, i32imm);
+  let PrintMethod = "printAddrModeMemSrc";
+  let EncoderMethod = "getMemSrcValue";
+}
+
 
 
 // This relates to a method in T8xxISelDAGtoDAG.cpp
 // It implements a function, where indices relative to the stack pointer
 // can be automatically emitted in one statement
-def ADDRrr : ComplexPattern<iPTR, 2, "SelectADDRrr", [], []>;
+// def ADDRrr : ComplexPattern<iPTR, 2, "SelectADDRrr", [], []>;
 
 
 // The real hardware assembler codes. Cannot directly be used in the
@@ -83,10 +89,27 @@ def STL : T8InstImm<0xD,
 		let isCodeGenOnly = 0;
 		}
 
+def STL_stack : T8InstImm<0xD,
+		(outs),
+       	 	(ins i32imm:$dst),
+		"stl_s $dst",
+		[]> {
+		let isCodeGenOnly = 0;
+		}
+
+
 def LDL : T8InstImm<0x7,
 		(outs),
        	 	(ins IntRegs:$src),
 		"ldl $src",
+		[]> {
+		let isCodeGenOnly = 0;
+		}
+
+def LDL_stack : T8InstImm<0x7,
+		(outs),
+       	 	(ins i32imm:$src),
+		"ldl_s $src",
 		[]> {
 		let isCodeGenOnly = 0;
 		}
@@ -107,6 +130,14 @@ def LDNL : T8InstImm<0x3,
 		let isCodeGenOnly = 0;
 		}
 
+def LDNLP : T8InstImm<0x3,
+		(outs),
+       	 	(ins i32imm:$offs),
+		"ldnlp $offs; stl $dst",
+		[]> {
+		let isCodeGenOnly = 0;
+		}
+
 def LDC : T8InstImm<0x4,
 		(outs),
        	 	(ins i32imm:$src),
@@ -122,6 +153,24 @@ def ADD : T8Inst<(outs),
 		let isCodeGenOnly = 0;
 		let op = 0x13;
 		}
+
+def AJW : T8Inst<(outs),
+       	 	(ins i32imm:$src),
+		"ajw $src",
+		[]> {
+		let isCodeGenOnly = 0;
+		let op = 0x13;
+		}
+
+
+def REV : T8Inst<(outs),
+       	 	(ins),
+		"rev",
+		[]> {
+		let isCodeGenOnly = 0;
+		let op = 0x13;
+		}
+
 
 def ADDimmr  : T8InstImm<0x12,
 		(outs IntRegs:$dst),
@@ -143,7 +192,6 @@ multiclass TopStackOp<string opstr, SDNode opnode>{
 def regimmop : T8xxPseudoInst<
 		(outs IntRegs:$dst),
        	 	(ins IntRegs:$src1, i32imm:$src2),
-//		!strconcat ("ldl $src1 ; ldc $src2 ;", opstr, " ; stl $dst"),
 		opstr,
 		[(set i32:$dst, (opnode i32:$src1, imm:$src2))]> {
 		let isCodeGenOnly = 0;
@@ -159,25 +207,20 @@ def regimmop : T8xxPseudoInst<
 def regregop : T8xxPseudoInst<
                 (outs IntRegs:$dst),
        	 	(ins IntRegs:$src1, IntRegs:$src2),
-//		!strconcat ("ldl $src1 ; ldl $src2 ;", opstr, " ; stl $dst"),
 		opstr,
 		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]> {
 		let isCodeGenOnly = 0;
 		let isPseudo = 1;
 		}
 
-def memmemop : T8xxPseudoInst<
-                (outs IntRegs:$dst),
-       	 	(ins memsrc:$addr1, memsrc:$addr2),
-		!strconcat ("ldnl $addr1 ; ldnl $addr2 ;", opstr, " ; stl $dst"),
-//		opstr,
-//		[(set i32:$dst, (opnode ADDRrr:$addr1, ADDRrr:$addr2))]> {
-		[(set i32:$dst, (opnode (load ADDRrr:$addr1), (load ADDRrr:$addr2)))]> {
-		let isCodeGenOnly = 0;
-		let isPseudo = 1;
-		}
-
-
+//def memmemop : T8xxPseudoInst<
+//                (outs IntRegs:$dst),
+//                       (ins memsrc:$addr1, memsrc:$addr2),
+//             opstr,
+//               [(set i32:$dst, (opnode (load ADDRrr:$addr1), (load ADDRrr:$addr2)))]> {
+//               let isCodeGenOnly = 0;
+//               let isPseudo = 1;
+//               }
 }
 
 defm ADD : TopStackOp<"add", add>;  // #05
@@ -186,48 +229,139 @@ defm MUL : TopStackOp<"mul", mul>;  // #53
 defm SHL : TopStackOp<"shl", shl>;  // #53
 defm SHR : TopStackOp<"shr", srl>;  // #53
 
+defm XOR : TopStackOp<"xor", xor>;  // #53
+defm OR : TopStackOp<"or", or>;  // #53
+defm AND : TopStackOp<"and", and>;  // #53
+
 
 // Pseudo Instructions
 
 def MOVimmr  : T8xxPseudoInst<(outs IntRegs:$dst),
        	 	(ins i32imm:$src),
-		"ldc $src ; stl $dst",
+		"ldc $src",
 		[(set i32:$dst, imm:$src)]> {
 		let isCodeGenOnly = 1;
 		}
 
+/*
 def MOVrr  : T8xxPseudoInst<(outs IntRegs:$dst),
        	 	(ins IntRegs:$src),
 		"ldl $src ; stl $dst",
 		[/* No pattern */]> {
 		let isCodeGenOnly = 1;
 		}
+*/
+
+
+
+// Attempt to get access to framepointer?
+def LDR_wp  : T8Inst<(outs IntRegs:$val), (ins WPRegs:$addr),
+                   "ldlp 0 ; stl $val",
+                   [(set i32:$val, frameindex:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x65;
+}
+
+
 
 
 // Benutzt von LEGInstrInfo.cpp "loadRegFromStackSlot"
-def LDR  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
-                   "ldc $addr ; ldnl ; stl $val",
-                   [(set i32:$val, (load ADDRrr:$addr))]> {
+def LDR  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
+                   "ldl $val; ldl $addr ; stnl",
+//                   [(set i32:$val, (load ADDRrr:$addr))]> {
+                   [(set i32:$val, (load i32:$addr))]> {
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
 		   let op = 0x14;
 }
 
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STR  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
-                   "ldl $val ; ldc $addr ; stnl 0",
-                   [(store i32:$val, ADDRrr:$addr)]> {
+def STRg  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
+                   "ldl $val ; ldl $addr ; stnl 0",
+//                   [(store i32:$val, ADDRrr:$addr)]> {
+                   [(store i32:$val, i32:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+def STR  : T8Inst<(outs), (ins IntRegs:$val, WPRegs:$addr),
+                   "ldl $val ; stl 0",
+                   [(store i32:$val, i32:$addr)]> {
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
 		   let op = 0x15;
 }
 
 
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+/*
+def STRi8  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
+                   "ldl $val ; ldc $addr ; sb",
+                   [(truncstorei8 i32:$val, ADDRrr:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+*/
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+def STRri8  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
+                   "ldl $val ; ldl $addr ; sb",
+                   [(truncstorei8 i32:$val, i32:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+/*
+def LDRri8  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
+                   "ldl $addr ; lb; stl $val",
+                   [(set i32:$val, (extloadi8 i32:$addr))]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+*/
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+/*
+def LDRi8  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
+                   "ldc $addr ; lb; stl $val",
+                   [(set i32:$val, (extloadi8 ADDRrr:$addr))]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+*/
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+// Note: Irgendwie muss noch die Extension auf ein Word stattfinden
+// Vermutlich ldc #0; ldc $addr; lb; xword; stl $val
+
+/*
+def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
+                   "ldc $addr ; lb; stl $val",
+                   [(set i32:$val, (sextloadi8 ADDRrr:$addr))]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+*/
+
+
+
+
 //===----------------------------------------------------------------------===//
 // Return Instructions
 //===----------------------------------------------------------------------===//
 
-let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R14] in {
+//let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R15] in {
+let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : T8Inst<(outs), (ins variable_ops),
                     "ret",  [(T8xxRetFlag)]> {
     let op  = 0x20;
@@ -253,7 +387,8 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R14] in {
 
 
 // Working version, passed directly
-let isCall = 1, Uses = [R15] in {
+//let isCall = 1, Uses = [R15] in {
+let isCall = 1 in {
   def CALL : T8Inst<(outs), (ins i32imm:$addr),
                       "ldl %r1 ; ldl %r2 ; ldl %r3; call $addr",
                       [(call tglobaladdr:$addr)]> {

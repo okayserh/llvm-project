@@ -15,7 +15,7 @@ class T8xxReg<bits<16> Enc, string n> : Register<n> {
   let Namespace = "T8xx";
 }
 
-// Integer registers
+// Integer (pseudo) registers
 def R0 : T8xxReg< 0, "R0">, DwarfRegNum<[0]>;
 def R1 : T8xxReg< 1, "R1">, DwarfRegNum<[1]>;
 def R2 : T8xxReg< 2, "R2">, DwarfRegNum<[2]>;
@@ -36,10 +36,10 @@ def R15 : T8xxReg<15, "R15">, DwarfRegNum<[15]>;
 def AREG : T8xxReg<0, "AREG">, DwarfRegNum<[16]>;
 def BREG : T8xxReg<1, "BREG">, DwarfRegNum<[17]>;
 def CREG : T8xxReg<2, "CREG">, DwarfRegNum<[18]>;
+def OREG : T8xxReg<3, "OREG">, DwarfRegNum<[19]>;
 
-def IPTR : T8xxReg<3, "IPTR">, DwarfRegNum<[19]>;
-
-def OREG : T8xxReg<4, "OREG">, DwarfRegNum<[20]>;
+def IPTR : T8xxReg<4, "IPTR">, DwarfRegNum<[20]>;
+def WPTR : T8xxReg<5, "WPTR">, DwarfRegNum<[21]>;
 
 // Register classes.
 //
@@ -52,15 +52,9 @@ def OREG : T8xxReg<4, "OREG">, DwarfRegNum<[20]>;
 def IntRegs : RegisterClass<"T8xx", [i32], 32,
                             (add (sequence "R%u", 1, 15))>;
 
-//def OReg : RegisterClass<"T8xx", [i32], 32,
-//    	   		(add OREG)>;
-
-
-let isAllocatable = 0 in {
-    def ARegC : RegisterClass<"T8xx", [i32], 32,
-    		   		(add AREG)>;
+def WPRegs : RegisterClass<"T8xx", [i32], 32, (add WPTR)> {
+    let isAllocatable = 0;
+      let CopyCost = -1;  // Don't allow copying of WPTR registers
 }
 
-//def StackRegs : RegisterClass<"T8xx", [i32], 32,
-//    	      	    (add AREG, BREG, CREG)>;
 

@@ -307,7 +307,9 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
       EVT RegVT = VA.getLocVT();
       assert(RegVT.getSimpleVT().SimpleTy == MVT::i32 &&
              "Only support MVT::i32 register passing");
+
       const unsigned VReg = RegInfo.createVirtualRegister(&T8xx::IntRegsRegClass);
+
       RegInfo.addLiveIn(VA.getLocReg(), VReg);
       SDValue ArgIn = DAG.getCopyFromReg(Chain, DL, VReg, RegVT);
 

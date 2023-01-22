@@ -62,12 +62,17 @@ void T8xxInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator I,
                                  const DebugLoc &DL, MCRegister DestReg,
                                  MCRegister SrcReg, bool KillSrc) const {
-  /*
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::MOVrr), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc));
-  */
-  BuildMI(MBB, I, DL, get(T8xx::LDL)).addReg(SrcReg, getKillRegState(KillSrc));
-  BuildMI(MBB, I, DL, get(T8xx::STL), DestReg);
+  if (SrcReg == T8xx::WPTR)
+    {
+      BuildMI(MBB, I, DL, get(T8xx::LDNLP)).addImm(0);
+      BuildMI(MBB, I, DL, get(T8xx::STL), DestReg);
+    }
+  else
+    {
+      /* 16 Register in Workspace approach */
+      BuildMI(MBB, I, DL, get(T8xx::LDL)).addReg(SrcReg, getKillRegState(KillSrc));
+      BuildMI(MBB, I, DL, get(T8xx::STL), DestReg);
+    }
 }
 
 void T8xxInstrInfo::
@@ -75,14 +80,10 @@ storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                     Register SrcReg, bool isKill, int FI,
                     const TargetRegisterClass *RC,
                     const TargetRegisterInfo *TRI) const {
-  /*
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STR))
-    .addReg(SrcReg, getKillRegState(isKill))
-    .addFrameIndex(FI).addImm(0);
-  */
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL)).addReg(SrcReg); // SrcReg to BREG
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL)).addReg(T8xx::R15); // Stack Addr to AREG
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STNL)).addImm(FI);  // Stack Offset goes via OREG
+
+  /* With Stack relative to WPTR */
+  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL)).addReg(SrcReg);
+  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL_stack)).addImm(FI);
 }
 
 void T8xxInstrInfo::
@@ -90,19 +91,16 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                      Register DestReg, int FI,
                      const TargetRegisterClass *RC,
                      const TargetRegisterInfo *TRI) const {
-  /*
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDR), DestReg)
-      .addFrameIndex(FI).addImm(0);
-  */
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL)).addReg(T8xx::R15); // Stack Addr to AREG
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDNL)).addImm(FI);  // Offset via ORGE, Result is in AREG
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL), DestReg);  // Save AREG to DstReg
+
+  /* With Stack relative to WPTR */
+  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL_stack)).addImm(FI);
+  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL),DestReg);
 }
 
 
 bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 {
-  printf ("expandPostRAPseudo %i %i %i\n", MI.getOpcode (), T8xx::MOVimmr, T8xx::MOVrr);
+  printf ("expandPostRAPseudo %i %i %i\n", MI.getOpcode (), T8xx::MOVimmr);
 
   switch (MI.getOpcode())
   {
@@ -117,10 +115,9 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     const unsigned AddBaseReg = MI.getOperand(1).getReg();
     const unsigned FI = MI.getOperand(2).getImm();
 
-    // BuildMI inserts before "MI"
+    /* With stack relative to WPTR */
     BuildMI(MBB, MI, DL, get(T8xx::LDL)).addReg(SrcReg); // SrcReg to BREG
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addReg(T8xx::R15); // Stack Addr to AREG
-    BuildMI(MBB, MI, DL, get(T8xx::STNL)).addImm(FI);  // Stack Offset goes via OREG
+    BuildMI(MBB, MI, DL, get(T8xx::STL_stack)).addImm(FI);  // Stack Offset goes via OREG
     MBB.erase(MI);
     return true;
   }
@@ -136,9 +133,8 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     const unsigned FI = MI.getOperand(2).getImm();
 
     // BuildMI inserts before "MI"
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addReg(T8xx::R15); // Stack Addr to AREG
-    BuildMI(MBB, MI, DL, get(T8xx::LDNL)).addImm(FI);  // Stack Offset goes via OREG
-    BuildMI(MBB, MI, DL, get(T8xx::STL),DstReg); // AREG to DstReg
+    BuildMI(MBB, MI, DL, get(T8xx::LDL_stack)).addImm(FI);
+    BuildMI(MBB, MI, DL, get(T8xx::STL),DstReg);
     MBB.erase(MI);
     return true;
   }
@@ -163,7 +159,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   }
     break;
 
-    
   case T8xx::ADDregregop:
   case T8xx::SUBregregop:
   case T8xx::MULregregop:
@@ -215,28 +210,5 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   }
     break;
 
-    
-  case T8xx::MOVrr: {
-    DebugLoc DL = MI.getDebugLoc();
-    MachineBasicBlock &MBB = *MI.getParent();
-
-    // Destination register (outs!?)
-    const unsigned DstReg = MI.getOperand(0).getReg();
-    const bool DstIsDead = MI.getOperand(0).isDead();
-
-    const unsigned SrcReg = MI.getOperand(1).getReg();
-
-    // Input operand (ins, immediate)
-    const MachineOperand &MO = MI.getOperand(1);
-
-    printf ("MOVimmr PostRAP\n");
-    MI.dump();
-    
-    auto LDL = BuildMI(MBB, MI, DL, get(T8xx::LDL), SrcReg);
-    auto STL = BuildMI(MBB, MI, DL, get(T8xx::STL), DstReg);
-
-    MBB.erase(MI);
-    return true;
-  }
   }
 }

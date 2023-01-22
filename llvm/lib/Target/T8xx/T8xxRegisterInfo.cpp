@@ -29,7 +29,7 @@ using namespace llvm;
 #define GET_REGINFO_TARGET_DESC
 #include "T8xxGenRegisterInfo.inc"
 
-
+// The first parameter is RAReg (MCRegisterInfo.h -> "Return address register"!?)
 T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8xx::R0, 0, 0, T8xx::IPTR) {}
 
 const MCPhysReg*
@@ -60,6 +60,7 @@ const TargetRegisterClass*
 T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
                                       unsigned Kind) const {
   const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
+  //  return &T8xx::IntRegsRegClass;
   return &T8xx::IntRegsRegClass;
 }
 
@@ -74,8 +75,26 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineOperand &FIOp = MI.getOperand(FIOperandNum);
   unsigned FI = FIOp.getIndex();
 
-  printf ("eliminateFrameIndex\n");
+  printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %i\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
   MI.dump ();
+
+  // To be verified if this code is needed at this place, or if there's build in functionality for this
+  const MachineRegisterInfo &RI = MF.getRegInfo ();
+  const TargetRegisterInfo *TRI = RI.getTargetRegisterInfo ();
+  int max_reg_id = 0;
+  int used_regs = 0;
+  
+  for (TargetRegisterInfo::regclass_iterator ri = TRI->regclass_begin (); ri != TRI->regclass_end (); ++ri)
+    {
+      const TargetRegisterClass *rc = (*ri);
+      for (int j = 0; j < (*ri)->getNumRegs (); ++j)
+	{
+	  unsigned reg_id = (*ri)->getRegister(j).id();
+	  if (!RI.reg_empty (reg_id))
+	    used_regs++;
+	}
+    }
+  printf ("Function uses %i regs\n", used_regs);
   
   // Determine if we can eliminate the index from this kind of instruction.
   unsigned ImmOpIdx = 0;
@@ -83,6 +102,10 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   default:
     // Not supported yet.
     return false;
+    //  case T8xx::STRi8:  // Test to get stop endless loop
+
+
+
   case T8xx::LDR:
   case T8xx::STR:
     ImmOpIdx = FIOperandNum + 1;
@@ -91,8 +114,8 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   // FIXME: check the size of offset.
   MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
-  int Offset = MFI.getObjectOffset(FI) + MFI.getStackSize() + ImmOp.getImm();
-  FIOp.ChangeToRegister(T8xx::R15, false);  // TODO: Just a fix to make it compile
+  int Offset = MFI.getObjectOffset(FI) + MFI.getStackSize() + ImmOp.getImm() + used_regs * 4;  // Instead of 4 = Sizeof(register)
+  FIOp.ChangeToRegister(T8xx::WPTR, false);  // TODO: Just a fix to make it compile
   ImmOp.setImm(Offset);
   
   printf ("After eliminateFrameIndex\n");

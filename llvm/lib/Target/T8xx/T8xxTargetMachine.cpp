@@ -10,7 +10,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "T8xxTargetMachine.h"
-#include "LeonPasses.h"
 #include "T8xx.h"
 #include "T8xxTargetObjectFile.h"
 #include "TargetInfo/T8xxTargetInfo.h"

@@ -64,35 +64,6 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
     return;
   }
 
-  /*
-  // Emit this the hard way.  This clobbers G1 which we always know is
-  // available here.
-  if (NumBytes >= 0) {
-    // Emit nonnegative numbers with sethi + or.
-    // sethi %hi(NumBytes), %g1
-    // or %g1, %lo(NumBytes), %g1
-    // add %sp, %g1, %sp
-    BuildMI(MBB, MBBI, dl, TII.get(T8xx::SETHIi), T8xx::G1)
-      .addImm(HI22(NumBytes));
-    BuildMI(MBB, MBBI, dl, TII.get(T8xx::ORri), T8xx::G1)
-      .addReg(T8xx::G1).addImm(LO10(NumBytes));
-    BuildMI(MBB, MBBI, dl, TII.get(ADDrr), T8xx::O6)
-      .addReg(T8xx::O6).addReg(T8xx::G1);
-    return ;
-  }
-
-  // Emit negative numbers with sethi + xor.
-  // sethi %hix(NumBytes), %g1
-  // xor %g1, %lox(NumBytes), %g1
-  // add %sp, %g1, %sp
-  BuildMI(MBB, MBBI, dl, TII.get(T8xx::SETHIi), T8xx::G1)
-    .addImm(HIX22(NumBytes));
-  BuildMI(MBB, MBBI, dl, TII.get(T8xx::XORri), T8xx::G1)
-    .addReg(T8xx::G1).addImm(LOX10(NumBytes));
-  BuildMI(MBB, MBBI, dl, TII.get(ADDrr), T8xx::O6)
-    .addReg(T8xx::O6).addReg(T8xx::G1);
-
-  */
 }
 
 
@@ -120,12 +91,52 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
     return;
   }
 
+  // First write down all registers
+  MachineRegisterInfo &RI = MF.getRegInfo ();
+  const TargetRegisterInfo *TRI = RI.getTargetRegisterInfo ();
+
+  int max_reg_id = 0;
+  int used_regs = 0;
+  
+  printf ("No Reg Classes %i\n", TRI->getNumRegClasses ());
+  for (TargetRegisterInfo::regclass_iterator ri = TRI->regclass_begin (); ri != TRI->regclass_end (); ++ri)
+    {
+      const TargetRegisterClass *rc = (*ri);
+      printf ("Regs %i\n", (*ri)->getNumRegs ());
+      for (int j = 0; j < (*ri)->getNumRegs (); ++j)
+	{
+	  unsigned reg_id = (*ri)->getRegister(j).id();
+	  printf ("Register %i, ID = %i\n", j, reg_id);
+	  if (reg_id > max_reg_id)
+	    max_reg_id = reg_id;
+
+	  if (!RI.reg_empty (reg_id))
+	    used_regs++;
+	}
+    }
+  printf ("Function uses %i regs\n", used_regs);
+  
+  // Try to evaluate used registers
+#if 0
+  printf ("Virt Regs %i\n", RI.getNumVirtRegs ());
+  for (int i = 1; i <= max_reg_id; ++i)
+    {
+      printf ("Reg %i Used %s\n", i, RI.reg_empty (i) ? "No" : "Yes");
+      /*
+      const TargetRegisterClass *rc = RI.getRegClassOrNull(i);
+      if (rc != NULL)
+	printf ("Class ID %i  Num Regs %i\n", rc->getID (), rc->getNumRegs ());
+      */
+      RI.dumpUses (i);
+    }
+#endif
+  
   // Adjust the stack pointer.
-  unsigned StackReg = T8xx::R15;
-  BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADDimmr), StackReg)
-        .addReg(StackReg)
-        .addImm(-StackSize)
+  /* Real adjustment via AJW */
+  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+    .addImm(-(StackSize + used_regs * 4))
         .setMIFlag(MachineInstr::FrameSetup);
+
 }
 
 MachineBasicBlock::iterator T8xxFrameLowering::
@@ -157,11 +168,37 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
     return;
   }
 
+
+  // First write down all registers
+  MachineRegisterInfo &RI = MF.getRegInfo ();
+  const TargetRegisterInfo *TRI = RI.getTargetRegisterInfo ();
+
+  int max_reg_id = 0;
+  int used_regs = 0;
+  
+  printf ("No Reg Classes %i\n", TRI->getNumRegClasses ());
+  for (TargetRegisterInfo::regclass_iterator ri = TRI->regclass_begin (); ri != TRI->regclass_end (); ++ri)
+    {
+      const TargetRegisterClass *rc = (*ri);
+      printf ("Regs %i\n", (*ri)->getNumRegs ());
+      for (int j = 0; j < (*ri)->getNumRegs (); ++j)
+	{
+	  unsigned reg_id = (*ri)->getRegister(j).id();
+	  printf ("Register %i, ID = %i\n", j, reg_id);
+	  if (reg_id > max_reg_id)
+	    max_reg_id = reg_id;
+
+	  if (!RI.reg_empty (reg_id))
+	    used_regs++;
+	}
+    }
+  printf ("Function uses %i regs\n", used_regs);
+
+  
   // Restore the stack pointer to what it was at the beginning of the function.
-  unsigned StackReg = T8xx::R15;
-  BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADDimmr), StackReg)
-        .addReg(StackReg)
-        .addImm(StackSize)
+  /* Real stack adjustment */
+  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+        .addImm(StackSize + used_regs * 4)
         .setMIFlag(MachineInstr::FrameSetup);
 
   printf ("emitEpilogue End\n");
