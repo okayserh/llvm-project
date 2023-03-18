@@ -104,10 +104,10 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     return false;
     //  case T8xx::STRi8:  // Test to get stop endless loop
 
-
-
   case T8xx::LDR:
-  case T8xx::STR:
+  case T8xx::STRi:
+  case T8xx::STRi8:
+  case T8xx::STRimm8:
     ImmOpIdx = FIOperandNum + 1;
     break;
   }
@@ -115,7 +115,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // FIXME: check the size of offset.
   MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
   int Offset = MFI.getObjectOffset(FI) + MFI.getStackSize() + ImmOp.getImm() + used_regs * 4;  // Instead of 4 = Sizeof(register)
-  FIOp.ChangeToRegister(T8xx::WPTR, false);  // TODO: Just a fix to make it compile
+  FIOp.ChangeToRegister(T8xx::R15, false);  // TODO: Just a fix to make it compile
   ImmOp.setImm(Offset);
   
   printf ("After eliminateFrameIndex\n");
