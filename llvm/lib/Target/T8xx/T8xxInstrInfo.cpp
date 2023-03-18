@@ -69,9 +69,17 @@ void T8xxInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     }
   else
     {
-      /* 16 Register in Workspace approach */
-      BuildMI(MBB, I, DL, get(T8xx::LDL)).addReg(SrcReg, getKillRegState(KillSrc));
-      BuildMI(MBB, I, DL, get(T8xx::STL), DestReg);
+      if (DestReg == T8xx::WPTR)
+	{
+	  BuildMI(MBB, I, DL, get(T8xx::LDL)).addReg(SrcReg, getKillRegState(KillSrc));
+	  BuildMI(MBB, I, DL, get(T8xx::GAJW));
+	}
+      else
+	{
+	  /* 16 Register in Workspace approach */
+	  BuildMI(MBB, I, DL, get(T8xx::LDL)).addReg(SrcReg, getKillRegState(KillSrc));
+	  BuildMI(MBB, I, DL, get(T8xx::STL), DestReg);
+	}
     }
 }
 
