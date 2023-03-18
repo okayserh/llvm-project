@@ -39,7 +39,7 @@ public:
   void Select(SDNode *N) override;
 
   // Complex Pattern Selectors.
-  bool SelectADDRrr(SDValue Addr, SDValue &Base, SDValue &Offset);
+  bool SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset);
 
   StringRef getPassName() const override {
     return "T8xx DAG->DAG Pattern Instruction Selection";
@@ -55,7 +55,58 @@ private:
 }  // end anonymous namespace
 
 
-bool T8xxDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &Base, SDValue &Offset) {
+bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset) {
+  if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
+    EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
+    Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
+    return true;
+  }
+  if (Addr.getOpcode() == ISD::TargetExternalSymbol ||
+      Addr.getOpcode() == ISD::TargetGlobalAddress ||
+      Addr.getOpcode() == ISD::TargetGlobalTLSAddress) {
+    return false; // direct calls.
+  }
+
+  if (Addr.getOpcode() == ISD::ADD) {
+    if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
+      // TODO: Check, whether there is a limitation to 13 bit offsets
+      if (isInt<13>(CN->getSExtValue())) {
+        if (FrameIndexSDNode *FIN =
+                dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
+          // Constant offset from frame ref.
+          Base = CurDAG->getTargetFrameIndex(
+              FIN->getIndex(), TLI->getPointerTy(CurDAG->getDataLayout()));
+        } else {
+          Base = Addr.getOperand(0);
+        }
+        Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
+                                           MVT::i32);
+        return true;
+      }
+    }
+
+    /* TODO: Find out what this does
+    if (Addr.getOperand(0).getOpcode() == SPISD::Lo) {
+      Base = Addr.getOperand(1);
+      Offset = Addr.getOperand(0).getOperand(0);
+      return true;
+    }
+    if (Addr.getOperand(1).getOpcode() == SPISD::Lo) {
+      Base = Addr.getOperand(0);
+      Offset = Addr.getOperand(1).getOperand(0);
+      return true;
+    }
+    */
+  }
+  
+  Base = Addr;
+  Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
+  return true;
+}
+
+/*
+bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset) {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
     EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
     Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
@@ -72,7 +123,7 @@ bool T8xxDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &Base, SDValue &Offset
   Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
   return true;
 }
-
+*/
 
 SDNode *T8xxDAGToDAGISel::SelectMoveImmediate(SDNode *N) {
   // Make sure the immediate size is supported.
