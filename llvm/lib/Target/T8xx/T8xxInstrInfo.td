@@ -56,24 +56,64 @@ def T8xxRetFlag     : SDNode<"T8xxISD::RET_FLAG", SDTNone,
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
-def memsrc : Operand<i32> {
+def MemSrc : Operand<i32> {
   let MIOperandInfo = (ops IntRegs, i32imm);
   let PrintMethod = "printAddrModeMemSrc";
   let EncoderMethod = "getMemSrcValue";
 }
 
+// Branch targets have OtherVT type.
+def brtarget : Operand<OtherVT> {
+  let EncoderMethod = "getMemSrcValue";
+}
 
-//def stacksrc : Operand<i32> {
-//  let MIOperandInfo = (ops WPRegs, i32imm);
-//  let PrintMethod = "printAddrModeMemSrc";
-//  let EncoderMethod = "getMemSrcValue";
-//}
+// From LEGOperators.td
+def bl_target : Operand<i32>;
 
+def b_target : Operand<OtherVT>;
+
+def cc_val : Operand<i32> {
+  let PrintMethod = "printCondCode";
+}
+// End LEGOperators.td
+
+/* Note: Operands are related to machine instructions!
+Pattern matching works on a different level (i.e. types etc.)
+*/
+
+
+/*
+class MxOperand<ValueType vt, MxSize size, string letter, RegisterClass rc, dag pat = (null_frag)> {
+  ValueType VT = vt;
+  string Letter = letter;
+  MxSize Size = size;
+  RegisterClass RC = rc;
+  dag Pat = pat;
+}
+
+class MxMemOp<dag ops, MxSize size, string letter,
+              string printMethod = "printOperand",
+              AsmOperandClass parserMatchClass = ImmAsmOperand>
+    : Operand<iPTR>, MxOperand<iPTR, size, letter, ?> {
+  let PrintMethod = printMethod;
+  let MIOperandInfo = ops;
+  let ParserMatchClass = parserMatchClass;
+  let OperandType = "OPERAND_MEMORY";
+}
+*/
+
+def jumpdst : Operand<iPTR> {
+  let MIOperandInfo = (ops iPTR);
+  let PrintMethod = "printAddrModeMemSrc";
+  let EncoderMethod = "getMemSrcValue";
+}
 
 
 // This relates to a method in T8xxISelDAGtoDAG.cpp
 // It implements a function, where indices relative to the stack pointer
 // can be automatically emitted in one statement
+// (From RISCVInstrInfo: "Necessary because a frameindex can't be matched
+// directly in a pattern.")
 def ADDRri : ComplexPattern<iPTR, 2, "SelectADDRri", [frameindex], []>;
 
 
@@ -232,7 +272,7 @@ def regregop : T8xxPseudoInst<
 
 //def memmemop : T8xxPseudoInst<
 //                (outs IntRegs:$dst),
-//                       (ins memsrc:$addr1, memsrc:$addr2),
+//                       (ins MemSrc:$addr1, MemSrc:$addr2),
 //             opstr,
 //               [(set i32:$dst, (opnode (load ADDRrr:$addr1), (load ADDRrr:$addr2)))]> {
 //               let isCodeGenOnly = 0;
@@ -249,6 +289,12 @@ defm SHR : TopStackOp<"shr", srl>;  // #53
 defm XOR : TopStackOp<"xor", xor>;  // #53
 defm OR : TopStackOp<"or", or>;  // #53
 defm AND : TopStackOp<"and", and>;  // #53
+
+
+def CMP : T8xxPseudoInst<(outs), (ins IntRegs:$lhs, IntRegs:$rhs),
+                    "cmp $lhs, $rhs", []> {
+  let Defs = [CPSR];
+}
 
 
 // Pseudo Instructions
@@ -271,7 +317,6 @@ def MOVrr  : T8xxPseudoInst<(outs IntRegs:$dst),
 // Benutzt von LEGInstrInfo.cpp "loadRegFromStackSlot"
 def LDR  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
                    "ldl $val; ldl $addr ; stnl",
-//                   [(set i32:$val, (load ADDRrr:$addr))]> {
                    [(set i32:$val, (load i32:$addr))]> {
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
@@ -281,7 +326,6 @@ def LDR  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
 def STRg  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
                    "ldl $val ; ldl $addr ; stnl 0",
-//                   [(store i32:$val, ADDRrr:$addr)]> {
                    [(store i32:$val, i32:$addr)]> {
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
@@ -297,9 +341,8 @@ def STR  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
 		   let op = 0x15;
 }
 
-
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STRi  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
+def STRi  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
                    "ldl $val ; stl $addr",
                    [(store i32:$val, ADDRri:$addr)]> {
 		   let isCodeGenOnly = 1;
@@ -308,9 +351,8 @@ def STRi  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
 }
 
 
-
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STRi8  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
+def STRi8  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
                    "ldl $val ; ldlp $addr ; sb",
                    [(truncstorei8 i32:$val, ADDRri:$addr)]> {
 		   let isCodeGenOnly = 1;
@@ -320,7 +362,7 @@ def STRi8  : T8Inst<(outs), (ins IntRegs:$val, memsrc:$addr),
 
 
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STRimm8  : T8Inst<(outs), (ins i32imm:$val, memsrc:$addr),
+def STRimm8  : T8Inst<(outs), (ins i32imm:$val, MemSrc:$addr),
                    "ldc $val ; ldlp $addr ; sb",
                    [(truncstorei8 imm:$val, ADDRri:$addr)]> {
 		   let isCodeGenOnly = 1;
@@ -338,9 +380,7 @@ def STRri8  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
 		   let op = 0x15;
 }
 
-
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-/*
 def LDRri8  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
                    "ldl $addr ; lb; stl $val",
                    [(set i32:$val, (extloadi8 i32:$addr))]> {
@@ -348,25 +388,32 @@ def LDRri8  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
 		   let isPseudo = 1;
 		   let op = 0x15;
 }
-*/
 
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-/*
-def LDRi8  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
+def LDRi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
                    "ldc $addr ; lb; stl $val",
                    [(set i32:$val, (extloadi8 ADDRri:$addr))]> {
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
 		   let op = 0x15;
 }
-*/
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
+                   "ldc $addr ; lb; stl $val",
+                   [(set i32:$val, (sextloadi8 ADDRri:$addr))]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
 
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
 // Note: Irgendwie muss noch die Extension auf ein Word stattfinden
 // Vermutlich ldc #0; ldc $addr; lb; xword; stl $val
 
 /*
-def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
+def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
                    "ldc $addr ; lb; stl $val",
                    [(set i32:$val, (sextloadi8 ADDRri:$addr))]> {
 		   let isCodeGenOnly = 1;
@@ -374,7 +421,6 @@ def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins memsrc:$addr),
 		   let op = 0x15;
 }
 */
-
 
 
 
@@ -419,6 +465,52 @@ let isCall = 1 in {
 }
 
 def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(MOVimmr $addr)]>;
+
+
+
+//===----------------------------------------------------------------------===//
+// Branch Instructions
+//===----------------------------------------------------------------------===//
+
+/*
+def BRdir  : T8Inst<(outs), (ins jumpdst:$dst),
+                   "j $dst",
+                   [(br iPTR:$dst)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let isBranch = 1;
+		   let op = 0x15;
+}
+*/
+
+// Compiles at least
+def BRimm  : T8Inst<(outs), (ins i32imm:$addr),
+                   "j $addr",
+                   [(brind tglobaladdr:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let isBranch = 1;
+		   let op = 0x15;
+}
+
+
+def BRimm2  : T8Inst<(outs), (ins brtarget:$addr),
+                   "j $addr",
+                   [(br bb:$addr)]> {
+		   let isTerminator = 1;
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let isBranch = 1;
+		   let op = 0x15;
+}
+
+
+let isTerminator = 1, isBranch = 1, Uses = [CPSR] in {
+  def Bcc : T8Inst<(outs), (ins cc_val:$cc, brtarget:$dst),
+                    "b$cc $dst",  []> {
+		let op = 0x33;
+  }
+}
 
 
 //===----------------------------------------------------------------------===//
