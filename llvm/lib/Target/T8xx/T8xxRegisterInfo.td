@@ -41,6 +41,8 @@ def OREG : T8xxReg<3, "OREG">, DwarfRegNum<[19]>;
 def IPTR : T8xxReg<4, "IPTR">, DwarfRegNum<[20]>;
 def WPTR : T8xxReg<5, "WPTR">, DwarfRegNum<[21]>;
 
+def CPSR  : T8xxReg<16, "cpsr">;
+
 // Register classes.
 //
 // FIXME: the register order should be defined in terms of the preferred

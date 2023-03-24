@@ -38,6 +38,9 @@ public:
 
   void Select(SDNode *N) override;
 
+
+  SDNode *SelectConditionalBranch(SDNode *N);
+
   // Complex Pattern Selectors.
   bool SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset);
 
@@ -57,6 +60,7 @@ private:
 
 bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset) {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
+    printf ("FrameIndexSDNode\n");
     EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
     Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
     Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
@@ -69,6 +73,7 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
   }
 
   if (Addr.getOpcode() == ISD::ADD) {
+    printf ("ISD:ADD\n");
     if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
       // TODO: Check, whether there is a limitation to 13 bit offsets
       if (isInt<13>(CN->getSExtValue())) {
@@ -149,6 +154,28 @@ SDNode *T8xxDAGToDAGISel::SelectMoveImmediate(SDNode *N) {
     }
 }
 
+SDNode *T8xxDAGToDAGISel::SelectConditionalBranch(SDNode *N) {
+  SDValue Chain = N->getOperand(0);
+  SDValue Cond = N->getOperand(1);
+  SDValue LHS = N->getOperand(2);
+  SDValue RHS = N->getOperand(3);
+  SDValue Target = N->getOperand(4);
+
+  // Generate a comparison instruction.
+  EVT CompareTys[] = { MVT::Other, MVT::Glue };
+  SDVTList CompareVT = CurDAG->getVTList(CompareTys);
+  SDValue CompareOps[] = {LHS, RHS, Chain};
+  SDNode *Compare = CurDAG->getMachineNode(T8xx::CMP, N, CompareVT, CompareOps);
+  
+  // Generate a predicated branch instruction.
+  CondCodeSDNode *CC = cast<CondCodeSDNode>(Cond.getNode());
+  SDValue CCVal = CurDAG->getTargetConstant(CC->get(), N, MVT::i32);
+  SDValue BranchOps[] = {CCVal, Target, SDValue(Compare, 0),
+                         SDValue(Compare, 1)};
+  //  return CurDAG->getMachineNode(T8xx::Bcc, N, MVT::Other, BranchOps);
+  CurDAG->SelectNodeTo(N, T8xx::Bcc, MVT::Other, BranchOps);
+}
+
 
 void T8xxDAGToDAGISel::Select(SDNode *N) {
   printf ("T8xxDAGToDAGIsel  %i\n", N->getOpcode());
@@ -158,10 +185,17 @@ void T8xxDAGToDAGISel::Select(SDNode *N) {
   case ISD::Constant:
     SelectMoveImmediate(N);
     break;
-    /*
   case ISD::BR_CC:
-    return SelectConditionalBranch(N);
+    printf ("BR_CC\n");
+    SelectConditionalBranch(N);
+    break;
+
+    /* Note: SelectCode is a function defined defined in the generated file
+       T8xxGenDAGISel.inc. The generated function essentially defines the
+       MatcherTable and then call
+       SelectCodeCommon from the base class "SelectionDAGISel".
     */
+
   default:
     SelectCode(N);
   }
@@ -172,7 +206,7 @@ void T8xxDAGToDAGISel::Select(SDNode *N) {
 
 
 /// createT8xxISelDag - This pass converts a legalized DAG into a
-/// SPARC-specific DAG, ready for instruction scheduling.
+/// T8xx-specific DAG, ready for instruction scheduling.
 ///
 FunctionPass *llvm::createT8xxISelDag(T8xxTargetMachine &TM) {
   return new T8xxDAGToDAGISel(TM);
