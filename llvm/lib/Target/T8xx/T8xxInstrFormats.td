@@ -38,8 +38,12 @@ class T8xxPseudoInst<dag outs, dag ins, string asmstr, list<dag> pattern>
 class T8InstImm<bits<8> opval, dag outs, dag ins, string asmstr, list<dag> pattern,
              InstrItinClass itin = NoItinerary>
    : T8Inst<outs, ins, asmstr, pattern, itin> {
-//  let Inst{31-16} = opval;
     let op = opval;
 }
 
+class T8InstDirect<bits<8> opval, string asmstr,
+             InstrItinClass itin = NoItinerary>
+   : T8InstImm<opval, (outs), (ins i32imm:$imm), !strconcat(asmstr, " $imm"), [], itin> {
+   let isCodeGenOnly = 0;
+}
 
