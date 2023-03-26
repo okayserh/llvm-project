@@ -36,12 +36,17 @@ def R15 : T8xxReg<15, "R15">, DwarfRegNum<[15]>;
 def AREG : T8xxReg<0, "AREG">, DwarfRegNum<[16]>;
 def BREG : T8xxReg<1, "BREG">, DwarfRegNum<[17]>;
 def CREG : T8xxReg<2, "CREG">, DwarfRegNum<[18]>;
+
 def OREG : T8xxReg<3, "OREG">, DwarfRegNum<[19]>;
 
 def IPTR : T8xxReg<4, "IPTR">, DwarfRegNum<[20]>;
 def WPTR : T8xxReg<5, "WPTR">, DwarfRegNum<[21]>;
 
 def CPSR  : T8xxReg<16, "cpsr">;
+
+// The processor stack register. For informational
+// purpose to flag instructions that modify the processor stack.
+def PSTACK  : T8xxReg<17, "PSTACK">;
 
 // Register classes.
 //
@@ -53,10 +58,4 @@ def CPSR  : T8xxReg<16, "cpsr">;
 // using the integer instructions.
 def IntRegs : RegisterClass<"T8xx", [i32], 32,
                             (add (sequence "R%u", 1, 15))>;
-
-def WPRegs : RegisterClass<"T8xx", [i32], 32, (add WPTR)> {
-    let isAllocatable = 0;
-      let CopyCost = -1;  // Don't allow copying of WPTR registers
-}
-
 
