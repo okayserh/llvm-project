@@ -39,6 +39,13 @@ class T8xxInstrInfo : public T8xxGenInstrInfo {
   const T8xxRegisterInfo RI;
   const T8xxSubtarget& Subtarget;
   virtual void anchor();
+
+  void loadRegStack (MachineInstr &MI, const unsigned int OpNum) const;
+
+  void createComparison(MachineInstr &MI, const unsigned int OpX,
+			const unsigned int OpY,
+			const bool negate, const bool diff) const;
+
 public:
   explicit T8xxInstrInfo(T8xxSubtarget &ST);
 

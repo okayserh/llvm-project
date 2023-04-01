@@ -106,8 +106,9 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   case T8xx::LDR:
   case T8xx::LDRi:
-    //  case T8xx::LDRi8:
-    //  case T8xx::LDRsi8:
+  case T8xx::LDRi8:
+  case T8xx::LDRzi8:
+  case T8xx::LDRsi8:
   case T8xx::STRi:
   case T8xx::STRi8:
   case T8xx::STRimm8:

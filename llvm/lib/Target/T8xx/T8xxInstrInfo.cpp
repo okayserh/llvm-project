@@ -105,7 +105,7 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
         TBB = TargetBB;
       }
     } else if (MI.getOpcode() == T8xx::Bcc) {
-      MachineBasicBlock *TargetBB = MI.getOperand(1).getMBB();
+      MachineBasicBlock *TargetBB = MI.getOperand(0).getMBB();
       TBB = TargetBB;
       Cond.push_back(MI.getOperand(0));
       HasCondBranch = true;
@@ -159,17 +159,21 @@ unsigned T8xxInstrInfo::insertBranch(MachineBasicBlock &MBB,
   printf ("T8xx::insertBranch\n");
   
   // Insert any conditional branch.
-  // TOOD: addImm(Cond[0]) is jsut a quick fix! Needs to be checked anyway
-  if (Cond.size() > 0) {
-    BuildMI(MBB, MBB.end(), DL, get(T8xx::Bcc)).addImm(Cond[0].getImm()).addMBB(TBB);
-    NumInserted++;
-  }
-  
-  // Insert any unconditional branch.
-  if (Cond.empty() || FBB) {
-    BuildMI(MBB, MBB.end(), DL, get(T8xx::BRimm2)).addMBB(Cond.empty() ? TBB : FBB);
-    NumInserted++;
-  }
+  // TODO: Quick fix. Need to figure right way to do this
+  if (!Cond.empty ())
+    {
+      //    BuildMI(MBB, MBB.end(), DL, get(T8xx::Bcc)).addImm(Cond[0].getImm()).addMBB(TBB);
+      BuildMI(MBB, MBB.end(), DL, get(T8xx::Bcc)).addMBB(TBB);
+      NumInserted++;
+    }
+  else
+    {
+      // Insert any unconditional branch.
+      if (Cond.empty() || FBB) {
+	BuildMI(MBB, MBB.end(), DL, get(T8xx::BRimm2)).addMBB(Cond.empty() ? TBB : FBB);
+	NumInserted++;
+      }
+    }
   return NumInserted;
 }
 
@@ -209,9 +213,51 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 }
 
 
+void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum) const
+{
+  DebugLoc DL = MI.getDebugLoc();
+  MachineBasicBlock &MBB = *MI.getParent();
+  const MachineFunction *MF = MBB.getParent();
+  const MachineRegisterInfo &MRI = MF->getRegInfo();
+  const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
+
+  const MachineOperand::MachineOperandType MOT = MI.getOperand(OpNum).getType ();  // X
+  switch (MOT)
+    {
+    case MachineOperand::MO_Register:
+      BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(MI.getOperand(OpNum).getReg().asMCReg()));
+      break;
+    case MachineOperand::MO_Immediate:
+      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(MI.getOperand(OpNum).getImm());
+      break;
+    }
+}
+
+void T8xxInstrInfo::createComparison(MachineInstr &MI, const unsigned int OpX, const unsigned int OpY,
+				     const bool negate, const bool diff) const
+{
+  DebugLoc DL = MI.getDebugLoc();
+  MachineBasicBlock &MBB = *MI.getParent();
+  const MachineFunction *MF = MBB.getParent();
+  const MachineRegisterInfo &MRI = MF->getRegInfo();
+  const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
+
+  loadRegStack (MI, OpX);
+  loadRegStack (MI, OpY);
+  if (diff)
+    BuildMI(MBB, MI, DL, get(T8xx::DIFF)); // Difference
+  if (diff && negate)
+    BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(0); // logical NOT
+  BuildMI(MBB, MI, DL, get(T8xx::GT));
+  if (negate && (~diff))
+    BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(0); // logical NOT
+  MBB.erase(MI);
+}
+
+
 bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 {
-  printf ("expandPostRAPseudo %i %i %i\n", MI.getOpcode (), T8xx::MOVimmr);
+  printf ("expandPostRAPseudo %i %i\n", MI.getOpcode (), T8xx::MOVimmr);
 
   MachineBasicBlock &MBB = *MI.getParent();
   const MachineFunction *MF = MBB.getParent();
@@ -223,6 +269,82 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   default:
     return false;
 
+    // This is based on section 5.6.3 in the T8xx compiler writers guide
+  case T8xx::CMP:
+    {
+      DebugLoc DL = MI.getDebugLoc();
+
+      // Destination register (outs!?)
+      const ISD::CondCode CC = (ISD::CondCode)MI.getOperand(0).getImm();
+      const MachineOperand::MachineOperandType MOT_LHS = MI.getOperand(1).getType ();  // X
+      const MachineOperand::MachineOperandType MOT_RHS = MI.getOperand(2).getType ();  // Y
+
+      /* With stack relative to WPTR */
+      switch (CC)
+	{
+	case ISD::SETLT:
+	  createComparison(MI, 2, 1, true, false);
+	  break;
+	case ISD::SETLE:
+	  createComparison(MI, 1, 2, false, false);
+	  break;
+	  
+	case ISD::SETGT:
+	  createComparison(MI, 1, 2, true, false);
+	  break;
+	case ISD::SETGE:
+	  createComparison(MI, 2, 1, false, false);
+	  break;
+	  
+	case ISD::SETEQ:
+	  if (MOT_LHS == MachineOperand::MO_Immediate)
+	    {
+	      loadRegStack (MI, 2);
+	      BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(MI.getOperand(1).getImm());
+	    }
+	  else
+	    {
+	      if (MOT_RHS == MachineOperand::MO_Immediate)
+		{
+		  loadRegStack (MI, 1);
+		  BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(MI.getOperand(2).getImm());
+		}
+	      else
+		{
+		  createComparison(MI, 1, 2, true, true);
+		}
+	    }
+	  BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(0); // logical NOT	  
+	  MBB.erase(MI);
+	  break;
+	      
+	case ISD::SETNE:
+	  if (MOT_LHS == MachineOperand::MO_Immediate)
+	    {
+	      loadRegStack (MI, 2);
+	      BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(MI.getOperand(1).getImm());
+	    }
+	  else
+	    {
+	      if (MOT_RHS == MachineOperand::MO_Immediate)
+		{
+		  loadRegStack (MI, 1);
+		  BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(MI.getOperand(2).getImm());
+		}
+	      else
+		{
+		  createComparison(MI, 1, 2, true, true);
+		}
+	    }
+	  MBB.erase(MI);
+	  break;
+	}
+
+      return true;
+    }
+    break;
+
+    
   case T8xx::STRi:
     {
       DebugLoc DL = MI.getDebugLoc();
@@ -314,49 +436,30 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   case T8xx::MULregregop:
   case T8xx::SHLregregop:
   case T8xx::SHRregregop:
-    {
-    DebugLoc DL = MI.getDebugLoc();
-
-    // Destination register (outs!?)
-    const Register DstReg = MI.getOperand(0).getReg();
-    const Register SrcReg1 = MI.getOperand(1).getReg();
-    const Register SrcReg2 = MI.getOperand(2).getReg();
-
-    // BuildMI inserts before "MI"
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue (SrcReg1.asMCReg())); // SrcReg1 to BREG
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue (SrcReg2.asMCReg())); // SrcReg2 to AREG
-
-    // Inserts after MI
-    MachineBasicBlock::iterator MBBI = MI;
-    BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));
-    return true;
-  }
-    break;
-
-
+  case T8xx::XORregregop:
+  case T8xx::ORregregop:
+  case T8xx::ANDregregop:
   case T8xx::ADDregimmop:
   case T8xx::SUBregimmop:
   case T8xx::MULregimmop:
   case T8xx::SHLregimmop:
   case T8xx::SHRregimmop:
+  case T8xx::XORregimmop:
+  case T8xx::ORregimmop:
+  case T8xx::ANDregimmop:
     {
-    DebugLoc DL = MI.getDebugLoc();
+      DebugLoc DL = MI.getDebugLoc();
 
-    // Destination register (outs!?)
-    const Register DstReg = MI.getOperand(0).getReg();
-    const Register SrcReg1 = MI.getOperand(1).getReg();
-    const unsigned SrcImm2 = MI.getOperand(2).getImm();
-
-    // BuildMI inserts before "MI"
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue (SrcReg1.asMCReg())); // SrcReg1 to BREG
-    BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(SrcImm2); // SrcImm2 to AREG
-
-    // Inserts after MI
-    MachineBasicBlock::iterator MBBI = MI;
-    BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));
-    return true;
-  }
+      loadRegStack (MI, 1);
+      loadRegStack (MI, 2);
+      
+      // Destination register (outs!?)
+      const Register DstReg = MI.getOperand(0).getReg();
+      MachineBasicBlock::iterator MBBI = MI;
+      // Inserts after MI
+      BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));
+      return true;
+    }
     break;
-
   }
 }
