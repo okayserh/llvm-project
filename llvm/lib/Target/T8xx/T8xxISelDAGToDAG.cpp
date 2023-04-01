@@ -161,18 +161,17 @@ SDNode *T8xxDAGToDAGISel::SelectConditionalBranch(SDNode *N) {
   SDValue RHS = N->getOperand(3);
   SDValue Target = N->getOperand(4);
 
-  // Generate a comparison instruction.
+  // Generate a predicated comparison instruction.
   EVT CompareTys[] = { MVT::Other, MVT::Glue };
+  CondCodeSDNode *CC = cast<CondCodeSDNode>(Cond.getNode());
+  SDValue CCVal = CurDAG->getTargetConstant(CC->get(), N, MVT::i32);
   SDVTList CompareVT = CurDAG->getVTList(CompareTys);
-  SDValue CompareOps[] = {LHS, RHS, Chain};
+  SDValue CompareOps[] = {CCVal, LHS, RHS, Chain};
   SDNode *Compare = CurDAG->getMachineNode(T8xx::CMP, N, CompareVT, CompareOps);
   
   // Generate a predicated branch instruction.
-  CondCodeSDNode *CC = cast<CondCodeSDNode>(Cond.getNode());
-  SDValue CCVal = CurDAG->getTargetConstant(CC->get(), N, MVT::i32);
-  SDValue BranchOps[] = {CCVal, Target, SDValue(Compare, 0),
+  SDValue BranchOps[] = {Target, SDValue(Compare, 0),
                          SDValue(Compare, 1)};
-  //  return CurDAG->getMachineNode(T8xx::Bcc, N, MVT::Other, BranchOps);
   CurDAG->SelectNodeTo(N, T8xx::Bcc, MVT::Other, BranchOps);
 }
 
