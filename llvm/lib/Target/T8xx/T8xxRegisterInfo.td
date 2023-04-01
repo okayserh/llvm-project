@@ -56,6 +56,11 @@ def PSTACK  : T8xxReg<17, "PSTACK">;
 // This register class should not be used to hold i64 values, use the I64Regs
 // register class for that. The i64 type is included here to allow i64 patterns
 // using the integer instructions.
+
 def IntRegs : RegisterClass<"T8xx", [i32], 32,
                             (add (sequence "R%u", 1, 15))>;
-
+/*
+// Test with only two registers ...
+def IntRegs : RegisterClass<"T8xx", [i32], 32,
+                            (add (sequence "R%u", 0, 1))>;
+*/

@@ -129,23 +129,48 @@ def LDL   : T8InstDirect<0x7, "ldl">;
 /* Call 0x9 */
 /* CJ 0xA */
 def AJW   : T8InstDirect<0xB, "ajw">;
-/* EQC 0xC */
+def EQC   : T8InstDirect<0xC, "eqc">;
 def STL   : T8InstDirect<0xD, "stl">;
 def STNL  : T8InstDirect<0xE, "stnl">;
 /* OPR 0xF */
 
+
+def DIFF : T8Inst<(outs),
+       	 	(ins),
+		"diff",
+		[]> {
+		let isCodeGenOnly = 0;
+		let op = 0xF4;
+		}
 
 def ADD : T8Inst<(outs),
        	 	(ins),
 		"add",
 		[]> {
 		let isCodeGenOnly = 0;
-		let op = 0x13;
+		let op = 0xF5;
 		}
+
+def GT : T8Inst<(outs),
+       	 	(ins),
+		"gt",
+		[]> {
+		let isCodeGenOnly = 0;
+		let op = 0xF9;
+		}
+
 
 def REV : T8Inst<(outs),
        	 	(ins),
 		"rev",
+		[]> {
+		let isCodeGenOnly = 0;
+		let op = 0x13;
+		}
+
+def NOT : T8Inst<(outs),
+       	 	(ins),
+		"not",
 		[]> {
 		let isCodeGenOnly = 0;
 		let op = 0x13;
@@ -222,8 +247,8 @@ defm OR  : TopStackOp<"or", or>;  // #53
 defm AND : TopStackOp<"and", and>;  // #53
 
 
-def CMP : T8xxPseudoInst<(outs), (ins IntRegs:$lhs, IntRegs:$rhs),
-                    "cmp $lhs, $rhs", []> {
+def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, IntRegs:$lhs, IntRegs:$rhs),
+                    "cmp$cc $lhs, $rhs", []> {
   let Defs = [CPSR];
 }
 
@@ -320,7 +345,6 @@ def STRri8  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
 		   let op = 0x15;
 }
 
-/*
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
 def LDRri8  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
                    "ldl $addr ; lb; stl $val",
@@ -340,20 +364,17 @@ def LDRi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
 }
 
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
+def LDRzi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
                    "ldc $addr ; lb; stl $val",
-                   [(set i32:$val, (sextloadi8 ADDRri:$addr))]> {
+                   [(set i32:$val, (zextloadi8 ADDRri:$addr))]> {
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
 		   let op = 0x15;
 }
-*/
 
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
 // Note: Irgendwie muss noch die Extension auf ein Word stattfinden
 // Vermutlich ldc #0; ldc $addr; lb; xword; stl $val
-
-/*
 def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
                    "ldc $addr ; lb; stl $val",
                    [(set i32:$val, (sextloadi8 ADDRri:$addr))]> {
@@ -361,15 +382,12 @@ def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
 		   let isPseudo = 1;
 		   let op = 0x15;
 }
-*/
-
 
 
 //===----------------------------------------------------------------------===//
 // Return Instructions
 //===----------------------------------------------------------------------===//
 
-//let isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [R15] in {
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : T8Inst<(outs), (ins variable_ops),
                     "ret",  [(T8xxRetFlag)]> {
@@ -437,8 +455,8 @@ def BRimm2  : T8Inst<(outs), (ins brtarget:$addr),
 
 
 let isTerminator = 1, isBranch = 1, Uses = [CPSR] in {
-  def Bcc : T8Inst<(outs), (ins cc_val:$cc, brtarget:$dst),
-                    "b$cc $dst",  []> {
+  def Bcc : T8Inst<(outs), (ins brtarget:$dst),
+                    "cj $dst",  []> {
 		let op = 0x33;
   }
 }
