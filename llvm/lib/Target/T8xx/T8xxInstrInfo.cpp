@@ -378,41 +378,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   }
     break;
 
-    // Currently never selected!?
-  case T8xx::STR:
-    {
-    DebugLoc DL = MI.getDebugLoc();
-    
-    // Destination register (outs!?)
-    const Register SrcReg = MI.getOperand(0).getReg();
-    const unsigned AddBaseReg = MI.getOperand(1).getReg();  // TODO: Clarify whether that's always the frameindex?
-    const unsigned FI = MI.getOperand(2).getImm();
-
-    /* With stack relative to WPTR */
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(SrcReg.asMCReg())); // SrcReg to BREG
-    BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(FI);  // Stack Offset goes via OREG
-    MBB.erase(MI);
-    return true;
-  }
-    break;
-
-    // Never selected?
-  case T8xx::LDR: {
-    DebugLoc DL = MI.getDebugLoc();
-
-    // Destination register (outs!?)
-    const Register DstReg = MI.getOperand(0).getReg();
-    const unsigned AddBaseReg = MI.getOperand(1).getReg();
-    const unsigned FI = MI.getOperand(2).getImm();
-
-    // BuildMI inserts before "MI"
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(FI);
-    BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));
-    MBB.erase(MI);
-    return true;
-  }
-    break;
-
   case T8xx::ADDimmr:
     {
     DebugLoc DL = MI.getDebugLoc();

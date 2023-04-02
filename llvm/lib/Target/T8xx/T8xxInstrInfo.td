@@ -73,33 +73,6 @@ def cc_val : Operand<i32> {
 }
 
 
-/* Note: Operands are related to machine instructions!
-Pattern matching works on a different level (i.e. types etc.)
-*/
-
-/* Attempt to see, if this removes the need for separate
-sextload / zextload instructions */
-
-def Mxloadi8         : PatFrag<(ops node:$ptr), (i8  (load node:$ptr))>;
-
-def MxSExtLoadi16i8  : PatFrag<(ops node:$ptr), (i16 (sextloadi8 node:$ptr))>;
-def MxSExtLoadi32i8  : PatFrag<(ops node:$ptr), (i32 (sextloadi8 node:$ptr))>;
-def MxSExtLoadi32i16 : PatFrag<(ops node:$ptr), (i32 (sextloadi16 node:$ptr))>;
-
-def MxZExtLoadi8i1   : PatFrag<(ops node:$ptr), (i8  (zextloadi1 node:$ptr))>;
-def MxZExtLoadi16i1  : PatFrag<(ops node:$ptr), (i16 (zextloadi1 node:$ptr))>;
-def MxZExtLoadi32i1  : PatFrag<(ops node:$ptr), (i32 (zextloadi1 node:$ptr))>;
-def MxZExtLoadi16i8  : PatFrag<(ops node:$ptr), (i16 (zextloadi8 node:$ptr))>;
-def MxZExtLoadi32i8  : PatFrag<(ops node:$ptr), (i32 (zextloadi8 node:$ptr))>;
-def MxZExtLoadi32i16 : PatFrag<(ops node:$ptr), (i32 (zextloadi16 node:$ptr))>;
-
-def MxExtLoadi8i1    : PatFrag<(ops node:$ptr), (i8  (extloadi1 node:$ptr))>;
-def MxExtLoadi16i1   : PatFrag<(ops node:$ptr), (i16 (extloadi1 node:$ptr))>;
-def MxExtLoadi32i1   : PatFrag<(ops node:$ptr), (i32 (extloadi1 node:$ptr))>;
-def MxExtLoadi16i8   : PatFrag<(ops node:$ptr), (i16 (extloadi8 node:$ptr))>;
-def MxExtLoadi32i8   : PatFrag<(ops node:$ptr), (i32 (extloadi8 node:$ptr))>;
-def MxExtLoadi32i16  : PatFrag<(ops node:$ptr), (i32 (extloadi16 node:$ptr))>;
-
 /*
 * Complex patterns
 */
@@ -257,28 +230,19 @@ def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, IntRegs:$lhs, IntRegs:$rhs),
 
 def MOVimmr  : T8xxPseudoInst<(outs IntRegs:$dst),
        	 	(ins i32imm:$src),
-		"ldc $src",
+		"MOVimmr; ldc $src",
 		[(set i32:$dst, imm:$src)]> {
 		let isCodeGenOnly = 1;
 		}
 
 def MOVrr  : T8xxPseudoInst<(outs IntRegs:$dst),
        	 	(ins IntRegs:$src),
-		"ldl $src ; stl $dst",
+		"MOVrr; ldl $src ; stl $dst",
 		[/* No pattern */]> {
 		let isCodeGenOnly = 1;
 		}
 
-
-// Benutzt von LEGInstrInfo.cpp "loadRegFromStackSlot"
-def LDR  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
-                   "ldl $val; ldl $addr ; stnl",
-                   [(set i32:$val, (load i32:$addr))]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op = 0x14;
-}
-
+// Load instruction
 def LDRi  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
                    "LDRi $val; ldl $addr ; stnl",
                    [(set i32:$val, (load ADDRri:$addr))]> {
@@ -287,73 +251,7 @@ def LDRi  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
 		   let op = 0x14;
 }
 
-
-// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STRg  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
-                   "ldl $val ; ldl $addr ; stnl 0",
-                   [(store i32:$val, i32:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op = 0x15;
-}
-
-// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STR  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
-                   "ldl $val ; stnl 0",
-                   [(store i32:$val, i32:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op = 0x15;
-}
-
-// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STRi  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
-                   "ldl $val ; stl $addr",
-                   [(store i32:$val, ADDRri:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op = 0x15;
-}
-
-
-// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STRi8  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
-                   "ldl $val ; ldlp $addr ; sb",
-                   [(truncstorei8 i32:$val, ADDRri:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op = 0x15;
-}
-
-
-// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STRimm8  : T8Inst<(outs), (ins i32imm:$val, MemSrc:$addr),
-                   "ldc $val ; ldlp $addr ; sb",
-                   [(truncstorei8 imm:$val, ADDRri:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op = 0x15;
-}
-
-
-// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def STRri8  : T8Inst<(outs), (ins IntRegs:$val, IntRegs:$addr),
-                   "ldl $val ; ldl $addr ; sb",
-                   [(truncstorei8 i32:$val, i32:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op = 0x15;
-}
-
-// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
-def LDRri8  : T8Inst<(outs IntRegs:$val), (ins IntRegs:$addr),
-                   "ldl $addr ; lb; stl $val",
-                   [(set i32:$val, (extloadi8 i32:$addr))]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op = 0x15;
-}
-
+// i8 load instructions
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
 def LDRi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
                    "ldc $addr ; lb; stl $val",
@@ -382,6 +280,78 @@ def LDRsi8  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
 		   let isPseudo = 1;
 		   let op = 0x15;
 }
+
+
+// i16 load instructions
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+def LDRi16  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
+                   "ldc $addr ; lb; stl $val",
+                   [(set i32:$val, (extloadi16 ADDRri:$addr))]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+def LDRzi16  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
+                   "ldc $addr ; lb; stl $val",
+                   [(set i32:$val, (zextloadi16 ADDRri:$addr))]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+// Note: Irgendwie muss noch die Extension auf ein Word stattfinden
+// Vermutlich ldc #0; ldc $addr; lb; xword; stl $val
+def LDRsi16  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
+                   "ldc $addr ; lb; stl $val",
+                   [(set i32:$val, (sextloadi16 ADDRri:$addr))]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
+
+// Store instructions
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+def STRi  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
+                   "ldl $val ; stl $addr",
+                   [(store i32:$val, ADDRri:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
+
+def STRi8  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
+                   "ldl $val ; ldlp $addr ; sb",
+                   [(truncstorei8 i32:$val, ADDRri:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
+
+def STRi16  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
+                   "ldl $val ; ldlp $addr ; sw",
+                   [(truncstorei16 i32:$val, ADDRri:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
+
+// Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
+def STRimm8  : T8Inst<(outs), (ins i32imm:$val, MemSrc:$addr),
+                   "ldc $val ; ldlp $addr ; sb",
+                   [(truncstorei8 imm:$val, ADDRri:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+
 
 
 //===----------------------------------------------------------------------===//
