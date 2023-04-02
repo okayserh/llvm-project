@@ -107,39 +107,24 @@ def STL   : T8InstDirect<0xD, "stl">;
 def STNL  : T8InstDirect<0xE, "stnl">;
 /* OPR 0xF */
 
+// Instructions with 1 byte length
+def REV :     T8InstShort<0xF0, "rev">;
+def LB :      T8InstShort<0xF1, "lb">;
+def BSUB :    T8InstShort<0xF2, "bsub">;
+def ENDP :    T8InstShort<0xF3, "endp">;
+def DIFF :    T8InstShort<0xF4, "diff">;
+def ADD :     T8InstShort<0xF5, "add">;
+def GCALL :   T8InstShort<0xF6, "gcall">;
+def IN :      T8InstShort<0xF7, "in">;
+def PROD :    T8InstShort<0xF8, "prod">;
+def GT :      T8InstShort<0xF9, "gt">;
+def WSUB :    T8InstShort<0xFA, "wsub">;
+def OUT :     T8InstShort<0xFB, "out">;
+def SUB :     T8InstShort<0xFC, "sub">;
+def STARTP :  T8InstShort<0xFD, "startp">;
+def OUTBYTE : T8InstShort<0xFE, "outbyte">;
+def OUTWORD : T8InstShort<0xFF, "outword">;
 
-def DIFF : T8Inst<(outs),
-       	 	(ins),
-		"diff",
-		[]> {
-		let isCodeGenOnly = 0;
-		let op = 0xF4;
-		}
-
-def ADD : T8Inst<(outs),
-       	 	(ins),
-		"add",
-		[]> {
-		let isCodeGenOnly = 0;
-		let op = 0xF5;
-		}
-
-def GT : T8Inst<(outs),
-       	 	(ins),
-		"gt",
-		[]> {
-		let isCodeGenOnly = 0;
-		let op = 0xF9;
-		}
-
-
-def REV : T8Inst<(outs),
-       	 	(ins),
-		"rev",
-		[]> {
-		let isCodeGenOnly = 0;
-		let op = 0x13;
-		}
 
 def NOT : T8Inst<(outs),
        	 	(ins),
@@ -156,7 +141,6 @@ def GAJW : T8Inst<(outs),
 		let isCodeGenOnly = 0;
 		let op = 0x3C;
 		}
-
 
 def ADDimmr  : T8InstImm<0x12,
 		(outs IntRegs:$dst),
@@ -214,6 +198,24 @@ defm SUB : TopStackOp<"sub", sub>;  // #05
 defm MUL : TopStackOp<"mul", mul>;  // #53
 defm SHL : TopStackOp<"shl", shl>;  // #53
 defm SHR : TopStackOp<"shr", srl>;  // #53
+
+defm SRA : TopStackOp<"sra", sra>;  // #53   (Pseudo Code, needs transformation)
+defm ROTR : TopStackOp<"rotr", rotr>;
+defm ROTL : TopStackOp<"rotl", rotl>;
+
+/*
+sra (P29 Compiler writing guide)
+ldl X; xdble; ldl Y; lshr; stl X  (right)
+
+sla
+ldl X; xdble; ldl Y; lshr; csngl; stl X  (left)
+
+rotr (P30 Compilter writing guide)
+ldl X; ldc 0; ldl Y; lshr; or; stl X   (rotate X by Y places right)
+
+rotl
+ldc 0; ldl X; ldl Y; lshl; or; stl X   (rotate X by Y places left)
+*/
 
 defm XOR : TopStackOp<"xor", xor>;  // #53
 defm OR  : TopStackOp<"or", or>;  // #53

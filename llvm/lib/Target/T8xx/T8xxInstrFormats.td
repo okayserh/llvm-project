@@ -47,3 +47,9 @@ class T8InstDirect<bits<8> opval, string asmstr,
    let isCodeGenOnly = 0;
 }
 
+
+class T8InstShort<bits<8> opval, string asmstr,
+             InstrItinClass itin = NoItinerary>
+   : T8InstImm<opval, (outs), (ins), asmstr, [], itin> {
+   let isCodeGenOnly = 0;
+}
