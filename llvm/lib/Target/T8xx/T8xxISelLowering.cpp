@@ -63,6 +63,11 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   // Nodes that require custom lowering
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
+
+  // T8xx doesn't have sext_inreg, replace them with shl/sra
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
 }
 
 bool T8xxTargetLowering::useSoftFloat() const {
