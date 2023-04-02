@@ -102,9 +102,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   default:
     // Not supported yet.
     return false;
-    //  case T8xx::STRi8:  // Test to get stop endless loop
-
-  case T8xx::LDR:
   case T8xx::LDRi:
   case T8xx::LDRi8:
   case T8xx::LDRzi8:
