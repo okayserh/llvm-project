@@ -182,7 +182,7 @@ def regregop : T8xxPseudoInst<
 		let isCodeGenOnly = 0;
 		let isPseudo = 1;
 		}
-
+/*
 def memmemop : T8xxPseudoInst<
                 (outs IntRegs:$dst),
                        (ins IntRegs:$src1, MemSrc:$addr2),
@@ -191,6 +191,7 @@ def memmemop : T8xxPseudoInst<
                let isCodeGenOnly = 0;
                let isPseudo = 1;
                }
+	       */
 }
 
 defm ADD : TopStackOp<"add", add>;  // #05
@@ -354,6 +355,17 @@ def STRimm8  : T8Inst<(outs), (ins i32imm:$val, MemSrc:$addr),
 		   let op = 0x15;
 }
 
+
+// Taken from SparcInstrInfo.td
+// "LEA" forms of add (patterns to make tblgen happy)
+
+def LEA_ADDri   : T8Inst<(outs IntRegs:$rd),
+      		    (ins (MemSrc $rs1, $imm):$addr),
+                     "add $addr, $rd",
+                     [(set iPTR:$rd, ADDRri:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let op = 0x99;
+}
 
 
 //===----------------------------------------------------------------------===//
