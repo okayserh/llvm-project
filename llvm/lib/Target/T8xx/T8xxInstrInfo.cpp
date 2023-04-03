@@ -42,7 +42,14 @@ T8xxInstrInfo::T8xxInstrInfo(T8xxSubtarget &ST)
 /// any side effects other than loading from the stack slot.
 unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
-  assert(0 && "Unimplemented");
+  if (MI.getOpcode() == T8xx::LDRi || MI.getOpcode() == T8xx::LDRi8 ||
+      MI.getOpcode() == T8xx::LDRzi8 || MI.getOpcode() == T8xx::LDRsi8) {
+    if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
+        MI.getOperand(2).getImm() == 0) {
+      FrameIndex = MI.getOperand(1).getIndex();
+      return MI.getOperand(0).getReg();
+    }
+  }
   return 0;
 }
 
@@ -53,7 +60,14 @@ unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 /// any side effects other than storing to the stack slot.
 unsigned T8xxInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                             int &FrameIndex) const {
-  assert(0 && "Unimplemented");
+  if (MI.getOpcode() == T8xx::STRi || MI.getOpcode() == T8xx::STRi8 ||
+      MI.getOpcode() == T8xx::STRi16) {
+    if (MI.getOperand(0).isFI() && MI.getOperand(1).isImm() &&
+        MI.getOperand(1).getImm() == 0) {
+      FrameIndex = MI.getOperand(0).getIndex();
+      return MI.getOperand(2).getReg();
+    }
+  }
   return 0;
 }
 
@@ -350,12 +364,11 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       DebugLoc DL = MI.getDebugLoc();
     
       // Destination register (outs!?)
-      const Register SrcReg = MI.getOperand(0).getReg();
       const Register AddBaseReg = MI.getOperand(1).getReg();  // TODO: Clarify whether that's always the frameindex?
       const unsigned FI = MI.getOperand(2).getImm();
 
       /* With stack relative to WPTR */
-      BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(SrcReg.asMCReg())); // SrcReg to BREG
+      loadRegStack (MI, 0);
       BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(FI);  // Stack Offset goes via OREG
       MBB.erase(MI);
       return true;

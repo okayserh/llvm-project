@@ -153,7 +153,10 @@ bool T8xxPassConfig::addInstSelector() {
 }
 
 void T8xxPassConfig::addPostRegAlloc() {
-  addPass(createT8xxStackifyIntPass());
+  // TODO: Initially intended to do an allocation of the
+  // processor stack registers.
+  // Not working and seems to lead to problems.
+  //  addPass(createT8xxStackifyIntPass());
 }
 
 
