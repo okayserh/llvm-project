@@ -57,6 +57,10 @@ def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
 // Taken from LEG, matched by ComplexPattern ADDRri
+
+// The parameter MIOperandInfo defines the contribution for the
+// MIOperandInfo. It is a register and an immediate.
+
 def MemSrc : Operand<i32> {
   let MIOperandInfo = (ops IntRegs, i32imm);
   let PrintMethod = "printAddrModeMemSrc";
@@ -182,7 +186,7 @@ def regregop : T8xxPseudoInst<
 		let isCodeGenOnly = 0;
 		let isPseudo = 1;
 		}
-/*
+
 def memmemop : T8xxPseudoInst<
                 (outs IntRegs:$dst),
                        (ins IntRegs:$src1, MemSrc:$addr2),
@@ -191,7 +195,6 @@ def memmemop : T8xxPseudoInst<
                let isCodeGenOnly = 0;
                let isPseudo = 1;
                }
-	       */
 }
 
 defm ADD : TopStackOp<"add", add>;  // #05
@@ -360,7 +363,7 @@ def STRimm8  : T8Inst<(outs), (ins i32imm:$val, MemSrc:$addr),
 // "LEA" forms of add (patterns to make tblgen happy)
 
 def LEA_ADDri   : T8Inst<(outs IntRegs:$rd),
-      		    (ins (MemSrc $rs1, $imm):$addr),
+      		    (ins MemSrc:$addr),
                      "add $addr, $rd",
                      [(set iPTR:$rd, ADDRri:$addr)]> {
 		   let isCodeGenOnly = 1;

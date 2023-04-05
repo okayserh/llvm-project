@@ -76,7 +76,7 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
     printf ("ISD:ADD\n");
     if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
       // TODO: Check, whether there is a limitation to 13 bit offsets
-      if (isInt<13>(CN->getSExtValue())) {
+      if (isInt<32>(CN->getSExtValue())) {
         if (FrameIndexSDNode *FIN =
                 dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
           // Constant offset from frame ref.
@@ -90,19 +90,6 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
         return true;
       }
     }
-
-    /* TODO: Find out what this does
-    if (Addr.getOperand(0).getOpcode() == SPISD::Lo) {
-      Base = Addr.getOperand(1);
-      Offset = Addr.getOperand(0).getOperand(0);
-      return true;
-    }
-    if (Addr.getOperand(1).getOpcode() == SPISD::Lo) {
-      Base = Addr.getOperand(0);
-      Offset = Addr.getOperand(1).getOperand(0);
-      return true;
-    }
-    */
   }
   
   Base = Addr;
