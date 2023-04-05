@@ -227,6 +227,10 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 }
 
 
+/*
+ * Load the operand to the processor register stack
+ */
+
 void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum) const
 {
   DebugLoc DL = MI.getDebugLoc();
@@ -277,6 +281,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   const MachineFunction *MF = MBB.getParent();
   const MachineRegisterInfo &MRI = MF->getRegInfo();
   const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
+  DebugLoc DL = MI.getDebugLoc();
 
   switch (MI.getOpcode())
   {
@@ -286,8 +291,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     // This is based on section 5.6.3 in the T8xx compiler writers guide
   case T8xx::CMP:
     {
-      DebugLoc DL = MI.getDebugLoc();
-
       // Destination register (outs!?)
       const ISD::CondCode CC = (ISD::CondCode)MI.getOperand(0).getImm();
       const MachineOperand::MachineOperandType MOT_LHS = MI.getOperand(1).getType ();  // X
@@ -361,12 +364,10 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     
   case T8xx::STRi:
     {
-      DebugLoc DL = MI.getDebugLoc();
-    
       // Destination register (outs!?)
       const Register AddBaseReg = MI.getOperand(1).getReg();  // TODO: Clarify whether that's always the frameindex?
       const unsigned FI = MI.getOperand(2).getImm();
-
+      
       /* With stack relative to WPTR */
       loadRegStack (MI, 0);
       BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(FI);  // Stack Offset goes via OREG
@@ -375,40 +376,65 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
-  case T8xx::LDRi: {
-    DebugLoc DL = MI.getDebugLoc();
+  case T8xx::LDRi:
+    {
+      // Destination register (outs!?)
+      const Register DstReg = MI.getOperand(0).getReg();
+      const unsigned AddBaseReg = MI.getOperand(1).getReg();
+      const unsigned FI = MI.getOperand(2).getImm();
 
-    // Destination register (outs!?)
-    const Register DstReg = MI.getOperand(0).getReg();
-    const unsigned AddBaseReg = MI.getOperand(1).getReg();
-    const unsigned FI = MI.getOperand(2).getImm();
-
-    // BuildMI inserts before "MI"
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(FI);
-    BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));
-    MBB.erase(MI);
-    return true;
-  }
+      // BuildMI inserts before "MI"
+      BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(FI);
+      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));
+      MBB.erase(MI);
+      return true;
+    }
     break;
 
   case T8xx::ADDimmr:
     {
-    DebugLoc DL = MI.getDebugLoc();
+      // Destination register (outs!?)
+      const Register DstReg = MI.getOperand(0).getReg();
+      const Register SrcReg1 = MI.getOperand(1).getReg();
 
-    // Destination register (outs!?)
-    const Register DstReg = MI.getOperand(0).getReg();
-    const Register SrcReg1 = MI.getOperand(1).getReg();
-
-    // BuildMI inserts before "MI"
-    BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(SrcReg1.asMCReg())); // SrcReg1 to BREG
-
-    // Inserts after MI
-    MachineBasicBlock::iterator MBBI = MI;
-    BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));  // Stack Offset goes via OREG
-    return true;
-  }
+      // BuildMI inserts before "MI"
+      BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(SrcReg1.asMCReg())); // SrcReg1 to BREG
+      
+      // Inserts after MI
+      MachineBasicBlock::iterator MBBI = MI;
+      BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));  // Stack Offset goes via OREG
+      return true;
+    }
     break;
 
+  case T8xx::ADDmemmemop:
+    {
+      // DstReg = 0
+      // Src1 = 1 (Reg/Imm)
+      // FI = 2 (Reg), Offset = 3 (Imm)
+      /*
+	printf ("ADDmemmemop OpNum %i\n", MI.getNumOperands ());
+	for (unsigned int i = 0; i < MI.getNumOperands(); ++i)
+	printf ("Op %i  Type %i\n", i, (int) MI.getOperand(i).getType ());
+      */
+      // Destination register (outs!?)
+      const Register DstReg = MI.getOperand(0).getReg();
+      const unsigned AddBaseReg = MI.getOperand(2).getReg();
+      const unsigned FI = MI.getOperand(3).getImm();
+
+      // BuildMI inserts before "MI"
+      // TODO: Deal with unaligned frame indices!!!
+      BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(FI);  // B register
+      loadRegStack (MI,1);  // A register
+      
+      // Destination register
+      MachineBasicBlock::iterator MBBI = MI;
+      // Inserts after MI
+      BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));
+      return true;
+    }
+    break;
+    
   case T8xx::ADDregregop:
   case T8xx::SUBregregop:
   case T8xx::MULregregop:
@@ -426,8 +452,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   case T8xx::ORregimmop:
   case T8xx::ANDregimmop:
     {
-      DebugLoc DL = MI.getDebugLoc();
-
       loadRegStack (MI, 1);
       loadRegStack (MI, 2);
       
