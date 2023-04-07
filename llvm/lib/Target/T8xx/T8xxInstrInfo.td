@@ -129,22 +129,99 @@ def STARTP :  T8InstShort<0xFD, "startp">;
 def OUTBYTE : T8InstShort<0xFE, "outbyte">;
 def OUTWORD : T8InstShort<0xFF, "outword">;
 
+// Instructions with 2 byte length
+def SETERR : T8InstOnePFix<0x21, 0xF0, "seterr">;
+def RESETCH : T8InstOnePFix<0x21, 0xF2, "resetch">;
+def CSUB0 : T8InstOnePFix<0x21, 0xF3, "csub0">;
+def STOPP : T8InstOnePFix<0x21, 0xF5, "stopp">;
+def LADD : T8InstOnePFix<0x21, 0xF6, "ladd">;
+def STLB : T8InstOnePFix<0x21, 0xF7, "stlb">;
+def STHF : T8InstOnePFix<0x21, 0xF8, "sthf">;
+def NORM : T8InstOnePFix<0x21, 0xF9, "norm">;
+def LDIV : T8InstOnePFix<0x21, 0xFA, "ldiv">;
+def LDPI : T8InstOnePFix<0x21, 0xFB, "ldpi">;
+def STLF : T8InstOnePFix<0x21, 0xFC, "stlf">;
+def XDBLE : T8InstOnePFix<0x21, 0xFD, "xdble">;
+def LDPRI : T8InstOnePFix<0x21, 0xFE, "ldpri">;
+def REM : T8InstOnePFix<0x21, 0xFF, "rem">;
 
-def NOT : T8Inst<(outs),
-       	 	(ins),
-		"not",
-		[]> {
-		let isCodeGenOnly = 0;
-		let op = 0x13;
-		}
+// TODO: Machine definition vs. return instruction
+//def RET : T8InstOnePFix<0x22, 0xF0, "ret">;
+def LEND : T8InstOnePFix<0x22, 0xF1, "lend">;
+def LDTIMER : T8InstOnePFix<0x22, 0xF2, "ltimer">;
+def TESTERR : T8InstOnePFix<0x22, 0xF9, "testerr">;
+def TESTPRANAL : T8InstOnePFix<0x22, 0xFA, "testpranal">;
+def TIN : T8InstOnePFix<0x22, 0xFB, "tin">;
+def DIV : T8InstOnePFix<0x22, 0xFC, "div">;
+def DIST : T8InstOnePFix<0x22, 0xFE, "dist">;
+def DISC : T8InstOnePFix<0x22, 0xFF, "disc">;
 
-def GAJW : T8Inst<(outs),
-       	 	(ins),
-		"gajw",
-		[]> {
-		let isCodeGenOnly = 0;
-		let op = 0x3C;
-		}
+def DISS : T8InstOnePFix<0x23, 0xF0, "diss">;
+def LMUL : T8InstOnePFix<0x23, 0xF1, "lmul">;
+def NOT : T8InstOnePFix<0x23, 0xF2, "not">;
+def XOR : T8InstOnePFix<0x23, 0xF3, "xor">;
+def BCNT : T8InstOnePFix<0x23, 0xF4, "bcnt">;
+def LSHR : T8InstOnePFix<0x23, 0xF5, "lshr">;
+def LSHL : T8InstOnePFix<0x23, 0xF6, "lshl">;
+def LSUM : T8InstOnePFix<0x23, 0xF7, "lsum">;
+def LSUB : T8InstOnePFix<0x23, 0xF8, "lsub">;
+def RUNP : T8InstOnePFix<0x23, 0xF9, "runp">;
+def XWORD : T8InstOnePFix<0x23, 0xFA, "xword">;
+def SB : T8InstOnePFix<0x23, 0xFB, "sb">;
+def GAJW : T8InstOnePFix<0x23, 0xFC, "gajw">;
+def SAVEL : T8InstOnePFix<0x23, 0xFD, "savel">;
+def SAVEH : T8InstOnePFix<0x23, 0xFE, "saveh">;
+def WCNT : T8InstOnePFix<0x23, 0xFF, "wcnt">;
+
+def SHR : T8InstOnePFix<0x24, 0xF0, "shr">;
+def SHL : T8InstOnePFix<0x24, 0xF1, "shl">;
+def MINT : T8InstOnePFix<0x24, 0xF2, "mint">;
+def ALT : T8InstOnePFix<0x24, 0xF3, "alt">;
+def ALTWT : T8InstOnePFix<0x24, 0xF4, "altwt">;
+def ALTEND : T8InstOnePFix<0x24, 0xF5, "altend">;
+def AND : T8InstOnePFix<0x24, 0xF6, "and">;
+def ENBT : T8InstOnePFix<0x24, 0xF7, "enbt">;
+def ENBC : T8InstOnePFix<0x24, 0xF8, "enbc">;
+def ENBS : T8InstOnePFix<0x24, 0xF9, "enbs">;
+def MOVE : T8InstOnePFix<0x24, 0xFA, "move">;
+def OR : T8InstOnePFix<0x24, 0xFB, "or">;
+def CSNGL : T8InstOnePFix<0x24, 0xFC, "csgnl">;
+def CCNT1 : T8InstOnePFix<0x24, 0xFD, "ccnt1">;
+def TALT : T8InstOnePFix<0x24, 0xFE, "talt">;
+def LDIFF : T8InstOnePFix<0x24, 0xFF, "ldiff">;
+
+def STHB : T8InstOnePFix<0x25, 0xF0, "sthb">;
+def TALTWT : T8InstOnePFix<0x25, 0xF1, "taltwt">;
+def SUM : T8InstOnePFix<0x25, 0xF2, "sum">;
+def MUL : T8InstOnePFix<0x25, 0xF3, "mul">;
+def STTIMER : T8InstOnePFix<0x25, 0xF4, "sttimer">;
+def STOPERR : T8InstOnePFix<0x25, 0xF5, "stoperr">;
+def CWORD : T8InstOnePFix<0x25, 0xF6, "cword">;
+def CLRHALTERR : T8InstOnePFix<0x25, 0xF7, "clrhalterr">;
+def SETHALTERR : T8InstOnePFix<0x25, 0xF8, "sethalterr">;
+def TESTHALTERR : T8InstOnePFix<0x25, 0xF9, "testhalterr">;
+def DUP : T8InstOnePFix<0x25, 0xFA, "dup">;
+def MOVE2DINIT : T8InstOnePFix<0x25, 0xFB, "move2dinit">;
+def MOVE2DALL : T8InstOnePFix<0x25, 0xFC, "move2dall">;
+def MOVE2DNONZERO : T8InstOnePFix<0x25, 0xFD, "move2dnonzero">;
+def MOVE2DZERO : T8InstOnePFix<0x25, 0xFE, "move2dzero">;
+
+def UNPACKSN : T8InstOnePFix<0x26, 0xF3, "unpacksn">;
+def POSTNORMSN : T8InstOnePFix<0x26, 0xFC, "postnormsn">;
+def ROUNDSN : T8InstOnePFix<0x26, 0xFD, "roundsn">;
+
+def LDINF : T8InstOnePFix<0x27, 0xF1, "ldinf">;
+def FMUL : T8InstOnePFix<0x27, 0xF2, "fmul">;
+def CFLERR : T8InstOnePFix<0x27, 0xF3, "cflerr">;
+def CRCWORD : T8InstOnePFix<0x27, 0xF4, "crcword">;
+def CRCBYTE : T8InstOnePFix<0x27, 0xF5, "crcbyte">;
+def BITCNT : T8InstOnePFix<0x27, 0xF6, "bitcnt">;
+def BITREVWORD : T8InstOnePFix<0x27, 0xF7, "bitrevword">;
+def BITREVNBITS : T8InstOnePFix<0x27, 0xF8, "bitrevnbits">;
+
+def WSUBDB : T8InstOnePFix<0x28, 0xF1, "wsubdb">;
+def FPLDNLDBI : T8InstOnePFix<0x28, 0xF2, "fpldnldbi">;
+
 
 def ADDimmr  : T8InstImm<0x12,
 		(outs IntRegs:$dst),

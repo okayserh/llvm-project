@@ -121,7 +121,61 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   // FIXME: check the size of offset.
   MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
-  int Offset = MFI.getObjectOffset(FI) + MFI.getStackSize() + ImmOp.getImm() + used_regs * 4;  // Instead of 4 = Sizeof(register)
+
+  // TODO: Somehow the stack references seem not to be correct.
+  /*
+Function uses 3 regs
+emitEpilogue End
+eliminateFrameIndex  FI: 0  OpNum: 1   SPAdj: 0  StackSize 17
+  STRi renamable $r1, %stack.0, 0 :: (store (s32) into %ir.3)
+Function uses 3 regs
+After eliminateFrameIndex
+  STRi renamable $r1, $wptr, 25 :: (store (s32) into %ir.3)
+eliminateFrameIndex  FI: 1  OpNum: 1   SPAdj: 0  StackSize 17
+  STRi renamable $r2, %stack.1, 0 :: (store (s32) into %ir.4)
+Function uses 3 regs
+After eliminateFrameIndex
+  STRi renamable $r2, $wptr, 21 :: (store (s32) into %ir.4)
+eliminateFrameIndex  FI: 2  OpNum: 1   SPAdj: 0  StackSize 17
+  STRi16 renamable $r2, %stack.2, 0 :: (store (s16) into %ir.5, align 4)
+Function uses 3 regs
+After eliminateFrameIndex
+  STRi16 renamable $r2, $wptr, 17 :: (store (s16) into %ir.5, align 4)
+eliminateFrameIndex  FI: 3  OpNum: 1   SPAdj: 0  StackSize 17
+  STRi killed renamable $r3, %stack.3, 0 :: (store (s32) into %ir.6)
+Function uses 3 regs
+After eliminateFrameIndex
+  STRi killed renamable $r3, $wptr, 13 :: (store (s32) into %ir.6)
+eliminateFrameIndex  FI: 4  OpNum: 1   SPAdj: 0  StackSize 17
+  STRi8 killed renamable $r2, %stack.4, 0 :: (store (s8) into %ir.7)
+Function uses 3 regs
+After eliminateFrameIndex
+  STRi8 killed renamable $r2, $wptr, 12 :: (store (s8) into %ir.7)
+
+Frame Objects:
+  fi#0: size=4, align=4, at location [SP-4]  -> R1 (erste Parameter)   16
+  fi#1: size=4, align=4, at location [SP-8]  -> R2 (zweiter Parameter) 20
+  fi#2: size=4, align=4, at location [SP-12] -> short i   24
+  fi#3: size=4, align=4, at location [SP-16] -> int buf   28
+  fi#4: size=1, align=1, at location [SP-17] -> char abc  29
+
+  12 + 17 = 29
+
+  frame-setup AJW -36
+  LDL 1
+  STL 25
+  LDL 2
+  STL 21
+  LDL 1
+  LDC 17
+  renamable $r3 = SHLregimmop renamable $r1, 17
+  STL 3
+  renamable $r3 = SRAregimmop killed renamable $r3, 16
+  LDL 3
+  LDL 2
+  */
+  
+  int Offset = -MFI.getObjectOffset(FI) + used_regs * 4 + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
 
   // Note: There was erroneous behavior in the initial version
   // Since the R15 was "used", the next call to eliminateFrameIndex

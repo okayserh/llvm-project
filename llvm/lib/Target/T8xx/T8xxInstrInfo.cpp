@@ -408,6 +408,13 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     break;
 
   case T8xx::ADDmemmemop:
+  case T8xx::SUBmemmemop:
+  case T8xx::MULmemmemop:
+  case T8xx::SHLmemmemop:
+  case T8xx::SHRmemmemop:
+  case T8xx::XORmemmemop:
+  case T8xx::ORmemmemop:
+  case T8xx::ANDmemmemop:
     {
       // DstReg = 0
       // Src1 = 1 (Reg/Imm)
@@ -432,6 +439,23 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       // Inserts after MI
       BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));
       return true;
+    }
+    break;
+
+  case T8xx::SRAregregop:
+  case T8xx::SRAregimmop:
+    {
+      // Section 5.7.3 from compiler writers guide (Single length arithmetic shifts)
+      const Register DstReg = MI.getOperand(0).getReg();
+
+      loadRegStack (MI, 1);  // X (value to be shifted)
+      BuildMI(MBB, MI, DL, get(T8xx::XDBLE));
+      loadRegStack (MI, 2);  // Y (number of bits to be shifted)
+      BuildMI(MBB, MI, DL, get(T8xx::LSHR));
+      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));  // Stack Offset goes via OREG
+
+      MBB.erase(MI);
+      return (true);
     }
     break;
     
