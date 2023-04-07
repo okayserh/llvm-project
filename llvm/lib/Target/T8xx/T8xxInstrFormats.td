@@ -53,3 +53,12 @@ class T8InstShort<bits<8> opval, string asmstr,
    : T8InstImm<opval, (outs), (ins), asmstr, [], itin> {
    let isCodeGenOnly = 0;
 }
+
+
+class T8InstOnePFix<bits<8> pfix1, bits<8> opval, string asmstr,
+             InstrItinClass itin = NoItinerary>
+   : T8InstImm<opval, (outs), (ins), asmstr, [], itin> {
+   field bits<8> PFix1;
+   let isCodeGenOnly = 0;
+   let PFix1 = pfix1;
+}
