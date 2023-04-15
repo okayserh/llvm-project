@@ -240,6 +240,7 @@ void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum) co
   const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
 
   const MachineOperand::MachineOperandType MOT = MI.getOperand(OpNum).getType ();  // X
+  printf ("loadRegStack TYPE: %i\n", (int) MOT);
   switch (MOT)
     {
     case MachineOperand::MO_Register:
@@ -247,6 +248,12 @@ void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum) co
       break;
     case MachineOperand::MO_Immediate:
       BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(MI.getOperand(OpNum).getImm());
+      break;
+    case MachineOperand::MO_ExternalSymbol:
+      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addSym(MI.getOperand(OpNum).getMCSymbol());
+      break;
+    case MachineOperand::MO_GlobalAddress:
+      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addGlobalAddress(MI.getOperand(OpNum).getGlobal());
       break;
     }
 }
@@ -386,6 +393,53 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       // BuildMI inserts before "MI"
       BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(FI);
       BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+
+  case T8xx::LDRi8:
+  case T8xx::LDRsi8:
+  case T8xx::LDRzi8:
+    {
+      // Destination register (outs!?)
+      const Register DstReg = MI.getOperand(0).getReg();
+      const Register AddBaseReg = MI.getOperand(1).getReg();
+      const unsigned FI = MI.getOperand(2).getImm();
+
+      // BuildMI inserts before "MI"
+      if (AddBaseReg == T8xx::WPTR)
+	BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(0);
+      else
+	BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(AddBaseReg.asMCReg()));
+
+      // When the offset is an immediate, use ADC, else ADD
+      if (MI.getOperand(2).isImm() && (MI.getOperand(2).getImm() != 0))
+	BuildMI(MBB, MI, DL, get(T8xx::ADC)).addImm(MI.getOperand(2).getImm());
+      if (MI.getOperand(2).isReg())
+	{
+	  BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(MI.getOperand(2).getReg().asMCReg()));
+	  BuildMI(MBB, MI, DL, get(T8xx::ADD));
+	}
+      BuildMI(MBB, MI, DL, get(T8xx::LB));
+
+      // TODO: For the sext / zext cases add some for sign extension or zero extension
+
+      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));  // Stack Offset goes via OREG
+
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+
+  case T8xx::MOVimmr:
+    {
+      // Destination register (outs!?)
+      const Register DstReg = MI.getOperand(0).getReg();
+
+      // BuildMI inserts before "MI"
+      loadRegStack (MI,1);
+      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));  // Stack Offset goes via OREG
       MBB.erase(MI);
       return true;
     }

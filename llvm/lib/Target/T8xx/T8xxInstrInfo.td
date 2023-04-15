@@ -102,7 +102,7 @@ def LDC   : T8InstDirect<0x4, "ldc">;
 def LDNLP : T8InstDirect<0x5, "ldnlp">;
 /* NFIX 0x6 is left out */
 def LDL   : T8InstDirect<0x7, "ldl">;
-/* ADC 0x8 */
+def ADC   : T8InstDirect<0x8, "adc">;
 /* Call 0x9 */
 /* CJ 0xA */
 def AJW   : T8InstDirect<0xB, "ajw">;
