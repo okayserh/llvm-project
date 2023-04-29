@@ -38,8 +38,8 @@ static MCAsmInfo *createT8xxMCAsmInfo(const MCRegisterInfo &MRI,
                                        const MCTargetOptions &Options) {
   MCAsmInfo *MAI = new T8xxELFMCAsmInfo(TT);
   unsigned Reg = MRI.getDwarfRegNum(T8xx::R6, true); // TODO: Replace O6 with R6 to remove compiler error, but functionality is questionable
-  MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 0);
-  MAI->addInitialFrameState(Inst);
+  //  MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 0);
+  //  MAI->addInitialFrameState(Inst);
   return MAI;
 }
 

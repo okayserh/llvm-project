@@ -40,7 +40,13 @@ class T8xxInstrInfo : public T8xxGenInstrInfo {
   const T8xxSubtarget& Subtarget;
   virtual void anchor();
 
-  void loadRegStack (MachineInstr &MI, const unsigned int OpNum) const;
+  void loadRegStack (MachineInstr &MI, const unsigned int OpNum,
+		     const unsigned int OReg = 0) const;
+
+  void addAddrOffset (MachineInstr &MI, const unsigned int OpNum) const;
+
+  void storeRegStack (MachineInstr &MI, const unsigned int OpNum,
+		      const bool InsertPostMI = false) const;
 
   void createComparison(MachineInstr &MI, const unsigned int OpX,
 			const unsigned int OpY,

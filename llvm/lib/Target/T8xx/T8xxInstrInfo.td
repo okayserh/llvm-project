@@ -95,7 +95,7 @@ def ADDRri : ComplexPattern<iPTR, 2, "SelectADDRri", [frameindex], []>;
 // are located in the workspace.
 
 /* J 0x0 is left out */
-def LDLP  : T8InstDirect<0x1, "ldnlp">;
+def LDLP  : T8InstDirect<0x1, "ldlp">;
 /* PFIX 0x2 is left out */
 def LDNL  : T8InstDirect<0x3, "ldnl">;
 def LDC   : T8InstDirect<0x4, "ldc">;
@@ -239,7 +239,6 @@ multiclass TopStackOp<string opstr, SDNode opnode>{
 // ldc imm
 // op
 // stl dstreg
-
 def regimmop : T8xxPseudoInst<
 		(outs IntRegs:$dst),
        	 	(ins IntRegs:$src1, i32imm:$src2),
@@ -324,6 +323,35 @@ def MOVrr  : T8xxPseudoInst<(outs IntRegs:$dst),
 		[/* No pattern */]> {
 		let isCodeGenOnly = 1;
 		}
+
+/*
+def SEXT8rr  : T8xxPseudoInst<(outs IntRegs:$dst),
+       	 	(ins IntRegs:$src),
+		"SEXT8; ldl $src ; stl $dst",
+		[(set i32:$dst, (sext_inreg i32:$src, i8))]> {
+		let isCodeGenOnly = 1;
+		}
+
+def SEXT16rr  : T8xxPseudoInst<(outs IntRegs:$dst),
+       	 	(ins IntRegs:$src),
+		"SEXT16; ldl $src ; stl $dst",
+		[(set i32:$dst, (sext_inreg i32:$src, i16))]> {
+		let isCodeGenOnly = 1;
+		}
+*/
+
+/* Does not work this way, since the hardware does not
+* provide any 8 or 16 bit registers
+def TRUNCrr  : T8xxPseudoInst<(outs unknown:$dst),
+       	 	(ins unknown:$src),
+		"TRUNC ldl $src ; stl $dst",
+		[]> {
+		let isCodeGenOnly = 1;
+		}
+// `trunc`
+def : Pat<(i8(trunc i32 : $src)), (TRUNCrr i32 : $src)>;
+def : Pat<(i16(trunc i32 : $src)), (TRUNCrr i32 : $src)>;
+*/
 
 // Load instruction
 def LDRi  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
@@ -416,7 +444,6 @@ def STRi8  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
 		   let op = 0x15;
 }
 
-
 def STRi16  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
                    "ldl $val ; ldlp $addr ; sw",
                    [(truncstorei16 i32:$val, ADDRri:$addr)]> {
@@ -424,7 +451,6 @@ def STRi16  : T8Inst<(outs), (ins IntRegs:$val, MemSrc:$addr),
 		   let isPseudo = 1;
 		   let op = 0x15;
 }
-
 
 // Benutzt von LEGInstrInfo.cpp "storeRegToStackSlot"
 def STRimm8  : T8Inst<(outs), (ins i32imm:$val, MemSrc:$addr),
@@ -444,6 +470,7 @@ def LEA_ADDri   : T8Inst<(outs IntRegs:$rd),
                      "add $addr, $rd",
                      [(set iPTR:$rd, ADDRri:$addr)]> {
 		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
 		   let op = 0x99;
 }
 
