@@ -35,7 +35,7 @@ T8xxELFMCAsmInfo::T8xxELFMCAsmInfo(const Triple &TheTriple) {
   // .xword is only supported by V9.
   Data64bitsDirective = (isV9) ? "\t.xword\t" : nullptr;
   ZeroDirective = "\t.skip\t";
-  CommentString = "!";
+  CommentString = "//";
   SupportsDebugInformation = true;
 
   ExceptionsType = ExceptionHandling::DwarfCFI;
