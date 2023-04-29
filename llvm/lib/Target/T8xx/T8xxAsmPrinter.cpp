@@ -44,7 +44,7 @@ namespace {
   public:
     explicit T8xxAsmPrinter(TargetMachine &TM,
                              std::unique_ptr<MCStreamer> Streamer)
-        : AsmPrinter(TM, std::move(Streamer)) {}
+      : AsmPrinter(TM, std::move(Streamer)) {}
 
     StringRef getPassName() const override { return "T8xx Assembly Printer"; }
 
@@ -293,58 +293,6 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
   const DataLayout &DL = getDataLayout();
   const MachineOperand &MO = MI->getOperand (opNum);
   T8xxMCExpr::VariantKind TF = (T8xxMCExpr::VariantKind) MO.getTargetFlags();
-
-  /*
-#ifndef NDEBUG
-  // Verify the target flags.
-  if (MO.isGlobal() || MO.isSymbol() || MO.isCPI()) {
-    if (MI->getOpcode() == T8xx::CALL)
-      assert(TF == T8xxMCExpr::VK_T8xx_None &&
-             "Cannot handle target flags on call address");
-    else if (MI->getOpcode() == T8xx::SETHIi || MI->getOpcode() == T8xx::SETHIXi)
-      assert((TF == T8xxMCExpr::VK_T8xx_HI
-              || TF == T8xxMCExpr::VK_T8xx_H44
-              || TF == T8xxMCExpr::VK_T8xx_HH
-              || TF == T8xxMCExpr::VK_T8xx_LM
-              || TF == T8xxMCExpr::VK_T8xx_TLS_GD_HI22
-              || TF == T8xxMCExpr::VK_T8xx_TLS_LDM_HI22
-              || TF == T8xxMCExpr::VK_T8xx_TLS_LDO_HIX22
-              || TF == T8xxMCExpr::VK_T8xx_TLS_IE_HI22
-              || TF == T8xxMCExpr::VK_T8xx_TLS_LE_HIX22) &&
-             "Invalid target flags for address operand on sethi");
-    else if (MI->getOpcode() == T8xx::TLS_CALL)
-      assert((TF == T8xxMCExpr::VK_T8xx_None
-              || TF == T8xxMCExpr::VK_T8xx_TLS_GD_CALL
-              || TF == T8xxMCExpr::VK_T8xx_TLS_LDM_CALL) &&
-             "Cannot handle target flags on tls call address");
-    else if (MI->getOpcode() == T8xx::TLS_ADDrr)
-      assert((TF == T8xxMCExpr::VK_T8xx_TLS_GD_ADD
-              || TF == T8xxMCExpr::VK_T8xx_TLS_LDM_ADD
-              || TF == T8xxMCExpr::VK_T8xx_TLS_LDO_ADD
-              || TF == T8xxMCExpr::VK_T8xx_TLS_IE_ADD) &&
-             "Cannot handle target flags on add for TLS");
-    else if (MI->getOpcode() == T8xx::TLS_LDrr)
-      assert(TF == T8xxMCExpr::VK_T8xx_TLS_IE_LD &&
-             "Cannot handle target flags on ld for TLS");
-    else if (MI->getOpcode() == T8xx::TLS_LDXrr)
-      assert(TF == T8xxMCExpr::VK_T8xx_TLS_IE_LDX &&
-             "Cannot handle target flags on ldx for TLS");
-    else if (MI->getOpcode() == T8xx::XORri || MI->getOpcode() == T8xx::XORXri)
-      assert((TF == T8xxMCExpr::VK_T8xx_TLS_LDO_LOX10
-              || TF == T8xxMCExpr::VK_T8xx_TLS_LE_LOX10) &&
-             "Cannot handle target flags on xor for TLS");
-    else
-      assert((TF == T8xxMCExpr::VK_T8xx_LO
-              || TF == T8xxMCExpr::VK_T8xx_M44
-              || TF == T8xxMCExpr::VK_T8xx_L44
-              || TF == T8xxMCExpr::VK_T8xx_HM
-              || TF == T8xxMCExpr::VK_T8xx_TLS_GD_LO10
-              || TF == T8xxMCExpr::VK_T8xx_TLS_LDM_LO10
-              || TF == T8xxMCExpr::VK_T8xx_TLS_IE_LO10 ) &&
-             "Invalid target flags for small address operand");
-  }
-#endif
-  */
 
   bool CloseParen = T8xxMCExpr::printVariantKind(O, TF);
 

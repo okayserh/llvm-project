@@ -59,8 +59,3 @@ def PSTACK  : T8xxReg<17, "PSTACK">;
 
 def IntRegs : RegisterClass<"T8xx", [i32], 32,
                             (add (sequence "R%u", 1, 15))>;
-/*
-// Test with only two registers ...
-def IntRegs : RegisterClass<"T8xx", [i32], 32,
-                            (add (sequence "R%u", 0, 1))>;
-*/

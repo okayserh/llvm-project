@@ -64,7 +64,7 @@ void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
   }
 
   if (MO.isImm()) {
-    O << "#" << (int)MO.getImm();
+    O << (int)MO.getImm();
     return;
   }
 

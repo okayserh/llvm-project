@@ -115,6 +115,13 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::STRimm8:
   case T8xx::LEA_ADDri:
   case T8xx::ADDmemmemop:
+  case T8xx::SUBmemmemop:
+  case T8xx::MULmemmemop:
+  case T8xx::SHLmemmemop:
+  case T8xx::SHRmemmemop:
+  case T8xx::XORmemmemop:
+  case T8xx::ORmemmemop:
+  case T8xx::ANDmemmemop:
     ImmOpIdx = FIOperandNum + 1;
     break;
   }
@@ -175,7 +182,13 @@ Frame Objects:
   LDL 2
   */
   
-  int Offset = -MFI.getObjectOffset(FI) + used_regs * 4 + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
+  //  int Offset = -MFI.getObjectOffset(FI) + used_regs * 4 + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
+
+  // This approach gets the direction right, but does not work when the
+  // later objects are not properly aligned
+  // int Offset = (MFI.getStackSize() + (used_regs + 1) * 4)+MFI.getObjectOffset(FI) + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
+
+  int Offset = -MFI.getObjectOffset(FI) -MFI.getObjectSize(FI) + (used_regs + 1) * 4 + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
 
   // Note: There was erroneous behavior in the initial version
   // Since the R15 was "used", the next call to eliminateFrameIndex
