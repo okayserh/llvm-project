@@ -601,6 +601,8 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   case T8xx::ADDmemmemop:
   case T8xx::SUBmemmemop:
   case T8xx::MULmemmemop:
+  case T8xx::SDIVmemmemop:
+  case T8xx::SREMmemmemop:
   case T8xx::SHLmemmemop:
   case T8xx::SHRmemmemop:
   case T8xx::XORmemmemop:
@@ -640,6 +642,8 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   case T8xx::SRAregimmop:
     {
       // Section 5.7.3 from compiler writers guide (Single length arithmetic shifts)
+      // sra (P29 Compiler writing guide)
+      // ldl X; xdble; ldl Y; lshr; stl X  (right)
       const Register DstReg = MI.getOperand(0).getReg();
 
       loadRegStack (MI, 1);  // X (value to be shifted)
@@ -653,9 +657,77 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
+    // sla
+    // ldl X; xdble; ldl Y; lshr; csngl; stl X  (left)
+    
+  case T8xx::ROTRregregop:
+  case T8xx::ROTRregimmop:
+    {
+      // Section 5.7.3 from compiler writers guide (Single length arithmetic shifts)
+      // rotr (P30 Compilter writing guide)
+      // ldl X; ldc 0; ldl Y; lshr; or; stl X   (rotate X by Y places right)
+      const Register DstReg = MI.getOperand(0).getReg();
+
+      loadRegStack (MI, 1);  // X (value to be shifted)
+      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0);
+      loadRegStack (MI, 2);  // Y (number of bits to be shifted)
+      BuildMI(MBB, MI, DL, get(T8xx::LSHR));
+      BuildMI(MBB, MI, DL, get(T8xx::OR));
+      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));  // Stack Offset goes via OREG
+
+      MBB.erase(MI);
+      return (true);
+    }
+    break;
+
+  case T8xx::ROTLregregop:
+  case T8xx::ROTLregimmop:
+    {
+      // Section 5.7.3 from compiler writers guide (Single length arithmetic shifts)
+      // rotl
+      // ldc 0; ldl X; ldl Y; lshl; or; stl X   (rotate X by Y places left)
+      const Register DstReg = MI.getOperand(0).getReg();
+
+      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0);
+      loadRegStack (MI, 1);  // X (value to be shifted)
+      loadRegStack (MI, 2);  // Y (number of bits to be shifted)
+      BuildMI(MBB, MI, DL, get(T8xx::LSHL));
+      BuildMI(MBB, MI, DL, get(T8xx::OR));
+      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));  // Stack Offset goes via OREG
+
+      MBB.erase(MI);
+      return (true);
+    }
+    break;
+
+  case T8xx::UDIVregregop:
+  case T8xx::UDIVregimmop:
+  case T8xx::UREMregregop:
+  case T8xx::UREMregimmop:
+    {
+      // Section 5.7.2, P28 top from compiler writers guide (Multiple length multiplication and division)
+      const Register DstReg = MI.getOperand(0).getReg();
+
+      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0);  // Most significant word (0)
+      loadRegStack (MI, 1);  // X (value to be divided)
+      loadRegStack (MI, 2);  // Y (divisor)
+      BuildMI(MBB, MI, DL, get(T8xx::LDIV));
+      // Result is in A, Remainder in B. If Remainder is requested, swap results.
+      if ((MI.getOpcode() == T8xx::UREMregregop) ||
+	  (MI.getOpcode() == T8xx::UREMregimmop))
+	BuildMI(MBB, MI, DL, get(T8xx::REV));
+      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));  // Stack Offset goes via OREG
+
+      MBB.erase(MI);
+      return (true);
+    }
+    break;
+    
   case T8xx::ADDregregop:
   case T8xx::SUBregregop:
   case T8xx::MULregregop:
+  case T8xx::SDIVregregop:
+  case T8xx::SREMregregop:
   case T8xx::SHLregregop:
   case T8xx::SHRregregop:
   case T8xx::XORregregop:
@@ -664,6 +736,8 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   case T8xx::ADDregimmop:
   case T8xx::SUBregimmop:
   case T8xx::MULregimmop:
+  case T8xx::SDIVregimmop:
+  case T8xx::SREMregimmop:
   case T8xx::SHLregimmop:
   case T8xx::SHRregimmop:
   case T8xx::XORregimmop:

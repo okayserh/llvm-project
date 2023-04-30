@@ -279,23 +279,15 @@ defm MUL : TopStackOp<"mul", mul>;  // #53
 defm SHL : TopStackOp<"shl", shl>;  // #53
 defm SHR : TopStackOp<"shr", srl>;  // #53
 
+defm SDIV : TopStackOp<"div", sdiv>; 
+defm SREM : TopStackOp<"rem", srem>; 
+
+defm UDIV : TopStackOp<"udiv", udiv>;   // Pseudo code, ldiv (Section 5.7.2 Compiler writer guide)
+defm UREM : TopStackOp<"urem", urem>;   // Pseudo code, ldiv
+
 defm SRA : TopStackOp<"sra", sra>;  // #53   (Pseudo Code, needs transformation)
 defm ROTR : TopStackOp<"rotr", rotr>;
 defm ROTL : TopStackOp<"rotl", rotl>;
-
-/*
-sra (P29 Compiler writing guide)
-ldl X; xdble; ldl Y; lshr; stl X  (right)
-
-sla
-ldl X; xdble; ldl Y; lshr; csngl; stl X  (left)
-
-rotr (P30 Compilter writing guide)
-ldl X; ldc 0; ldl Y; lshr; or; stl X   (rotate X by Y places right)
-
-rotl
-ldc 0; ldl X; ldl Y; lshl; or; stl X   (rotate X by Y places left)
-*/
 
 defm XOR : TopStackOp<"xor", xor>;  // #53
 defm OR  : TopStackOp<"or", or>;  // #53
@@ -324,34 +316,6 @@ def MOVrr  : T8xxPseudoInst<(outs IntRegs:$dst),
 		let isCodeGenOnly = 1;
 		}
 
-/*
-def SEXT8rr  : T8xxPseudoInst<(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"SEXT8; ldl $src ; stl $dst",
-		[(set i32:$dst, (sext_inreg i32:$src, i8))]> {
-		let isCodeGenOnly = 1;
-		}
-
-def SEXT16rr  : T8xxPseudoInst<(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src),
-		"SEXT16; ldl $src ; stl $dst",
-		[(set i32:$dst, (sext_inreg i32:$src, i16))]> {
-		let isCodeGenOnly = 1;
-		}
-*/
-
-/* Does not work this way, since the hardware does not
-* provide any 8 or 16 bit registers
-def TRUNCrr  : T8xxPseudoInst<(outs unknown:$dst),
-       	 	(ins unknown:$src),
-		"TRUNC ldl $src ; stl $dst",
-		[]> {
-		let isCodeGenOnly = 1;
-		}
-// `trunc`
-def : Pat<(i8(trunc i32 : $src)), (TRUNCrr i32 : $src)>;
-def : Pat<(i16(trunc i32 : $src)), (TRUNCrr i32 : $src)>;
-*/
 
 // Load instruction
 def LDRi  : T8Inst<(outs IntRegs:$val), (ins MemSrc:$addr),
