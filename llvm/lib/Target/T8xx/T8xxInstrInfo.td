@@ -425,6 +425,15 @@ def STRimm8  : T8Inst<(outs), (ins i32imm:$val, MemSrc:$addr),
 		   let op = 0x15;
 }
 
+/*
+def STRimm32  : T8Inst<(outs), (ins i32imm:$val, MemSrc:$addr),
+                   "STRimm32; ldc $val ; ldlp $addr ; stnl",
+                   [(store imm:$val, ADDRri:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op = 0x15;
+}
+*/
 
 // Taken from SparcInstrInfo.td
 // "LEA" forms of add (patterns to make tblgen happy)
@@ -472,8 +481,10 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 //let isCall = 1, Uses = [R15] in {
 let isCall = 1 in {
   def CALL : T8Inst<(outs), (ins i32imm:$addr),
-                      "ldl %r1 ; ldl %r2 ; ldl %r3; call $addr",
+//                      "call $addr",
+                      "ldc $addr \n\tldpi \n\tgcall \n",
                       [(call tglobaladdr:$addr)]> {
+    let isCodeGenOnly = 1;
     let op = 0x22;
   }
 }
@@ -525,13 +536,15 @@ let isTerminator = 1, isBranch = 1, Uses = [CPSR] in {
 class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
    : T8Inst<outs, ins, asmstr, pattern> {
   let isCodeGenOnly = 1;
-  let isPseudo = 1;
+//  let isPseudo = 1;
+    let op = 0x66;
 }
 
+let Defs = [WPTR], Uses = [WPTR] in {
 def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
-                               "!ADJCALLSTACKDOWN $amt1, $amt2",
+                               "ADJCALLSTACKDOWN $amt1, $amt2",
                                [(callseq_start timm:$amt1, timm:$amt2)]>;
 def ADJCALLSTACKUP : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
-                            "!ADJCALLSTACKUP $amt1",
+                            "ADJCALLSTACKUP $amt1",
                             [(callseq_end timm:$amt1, timm:$amt2)]>;
-
+}

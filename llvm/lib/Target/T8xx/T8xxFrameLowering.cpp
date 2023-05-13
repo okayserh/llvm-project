@@ -134,7 +134,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   // Adjust the stack pointer.
   /* Real adjustment via AJW */
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-    .addImm(-(StackSize + used_regs * 4))
+    .addImm(-(StackSize + (used_regs + 1) * 4))
         .setMIFlag(MachineInstr::FrameSetup);
 
 }
@@ -151,7 +151,8 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
     /*    if (Size)
 	  emitSPAdjustment(MF, MBB, I, Size, T8xx::ADDrr, T8xx::ADDri); */
   }
-  return MBB.erase(I);
+  //  return MBB.erase(I);
+  return MBB.end ();
 }
 
 
@@ -198,7 +199,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   // Restore the stack pointer to what it was at the beginning of the function.
   /* Real stack adjustment */
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-        .addImm(StackSize + used_regs * 4)
+    .addImm(StackSize + (used_regs + 1) * 4)
         .setMIFlag(MachineInstr::FrameSetup);
 
   printf ("emitEpilogue End\n");
@@ -261,7 +262,7 @@ T8xxFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     FrameReg = RegInfo->getFrameRegister(MF);
     return StackOffset::getFixed(FrameOffset);
   } else {
-    FrameReg = T8xx::R6; // %sp
+    FrameReg = T8xx::WPTR; // %sp
     return StackOffset::getFixed(FrameOffset + MF.getFrameInfo().getStackSize());
   }
 }
