@@ -57,6 +57,9 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   computeRegisterProperties(Subtarget->getRegisterInfo());
 
+  // Was used in LEG architecture. Unclear what it does ...
+  //  setSchedulingPreference (Sched::Source);
+
   for (auto VT : MVT::integer_valuetypes()) {
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
@@ -177,15 +180,24 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     assert(VA.getLocInfo() == CCValAssign::Full && "Unhandled loc info");
 
     if (VA.isRegLoc()) {
+      printf ("VA %i is Reg\n", i);
+      
       RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
       continue;
     }
 
+    printf ("VA %i is Mem\n", i);
+    
     assert(VA.isMemLoc() &&
            "Only support passing arguments through registers or via the stack");
 
-    SDValue StackPtr = DAG.getRegister(T8xx::R15, MVT::i32);
-    SDValue PtrOff = DAG.getIntPtrConstant(VA.getLocMemOffset(), Loc);
+    // TODO: Since the "registers" are actually on the stack, at this
+    // point it is not feasible to adjust the framepointer.
+    // Instead negative indices should be used for function parameters that should
+    // be put on the stack
+
+    SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
+    SDValue PtrOff = DAG.getIntPtrConstant(-VA.getLocMemOffset(), Loc);
     PtrOff = DAG.getNode(ISD::ADD, Loc, MVT::i32, StackPtr, PtrOff);
     /* LEG Original
     MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
@@ -207,11 +219,11 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // Build a sequence of copy-to-reg nodes chained together with token chain
   // and flag operands which copy the outgoing args into the appropriate regs.
   SDValue InFlag;
-  for (auto &Reg : RegsToPass) {
-    Chain = DAG.getCopyToReg(Chain, Loc, Reg.first, Reg.second, InFlag);
+  for (unsigned i = 0, e = RegsToPass.size(); i != e; ++i) {
+    Chain = DAG.getCopyToReg(Chain, Loc, RegsToPass[i].first,
+			     RegsToPass[i].second, InFlag);
     InFlag = Chain.getValue(1);
   }
-
   printf ("After RegsToPass\n");
   DAG.dump ();
   
@@ -319,8 +331,11 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
                  *DAG.getContext());
   CCInfo.AnalyzeFormalArguments(Ins, CC_T8xx32);
 
+  int i = 0;
+  
   for (auto &VA : ArgLocs) {
     if (VA.isRegLoc()) {
+      printf ("VA %i is Reg\n", i++);
       // Arguments passed in registers
       EVT RegVT = VA.getLocVT();
       assert(RegVT.getSimpleVT().SimpleTy == MVT::i32 &&
@@ -335,6 +350,8 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
       continue;
     }
 
+    printf ("VA %i is Mem\n", i++);
+    
     assert(VA.isMemLoc() &&
            "Can only pass arguments as either registers or via the stack");
 

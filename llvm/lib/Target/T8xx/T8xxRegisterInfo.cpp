@@ -113,6 +113,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::STRi8:
   case T8xx::STRi16:
   case T8xx::STRimm8:
+    //  case T8xx::STRimm32:
   case T8xx::LEA_ADDri:
   case T8xx::ADDmemmemop:
   case T8xx::SUBmemmemop:
@@ -204,7 +205,7 @@ Frame Objects:
 }
 
 Register T8xxRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  return T8xx::R15;
+  return T8xx::WPTR;
 }
 
 // T8xx has no architectural need for stack realignment support,
