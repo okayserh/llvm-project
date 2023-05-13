@@ -168,9 +168,11 @@ void T8xxDAGToDAGISel::Select(SDNode *N) {
   N->dump ();
 
   switch (N->getOpcode()) {
+    /*
   case ISD::Constant:
     SelectMoveImmediate(N);
     break;
+    */
   case ISD::BR_CC:
     printf ("BR_CC\n");
     SelectConditionalBranch(N);
