@@ -11,9 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "BreakpointPrinter.h"
 #include "NewPMDriver.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Analysis/CallGraphSCCPass.h"
 #include "llvm/Analysis/LoopPass.h"
@@ -43,7 +41,6 @@
 #include "llvm/Remarks/HotnessThresholdParser.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Host.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/PluginLoader.h"
 #include "llvm/Support/SourceMgr.h"
@@ -52,6 +49,8 @@
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/YAMLTraits.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/Transforms/IPO/WholeProgramDevirt.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Debugify.h"
@@ -68,12 +67,12 @@ static codegen::RegisterCodeGenFlags CFG;
 static cl::list<const PassInfo *, bool, PassNameParser> PassList(cl::desc(
     "Optimizations available (use '-passes=' for the new pass manager)"));
 
-static cl::opt<bool> EnableNewPassManager(
-    "enable-new-pm",
-    cl::desc("Enable the new pass manager, translating "
-             "'opt -foo' to 'opt -passes=foo'. This is strictly for the new PM "
-             "migration, use '-passes=' when possible."),
-    cl::init(true));
+static cl::opt<bool> EnableLegacyPassManager(
+    "bugpoint-enable-legacy-pm",
+    cl::desc(
+        "Enable the legacy pass manager. This is strictly for bugpoint "
+        "due to it not working with the new PM, please do not use otherwise."),
+    cl::init(false));
 
 // This flag specifies a textual description of the optimization pass pipeline
 // to run over the module. This flag switches opt to use the new pass manager
@@ -86,12 +85,6 @@ static cl::opt<std::string> PassPipeline(
         "available before a certain pass, add 'require<foo-analysis>'."));
 static cl::alias PassPipeline2("p", cl::aliasopt(PassPipeline),
                                    cl::desc("Alias for -passes"));
-
-static cl::opt<bool> TemporarilyAllowOldPassesSyntax(
-    "temporarily-allow-old-pass-syntax",
-    cl::desc("Do not use in new tests. To be removed once all tests have "
-             "migrated."),
-    cl::init(false));
 
 static cl::opt<bool> PrintPasses("print-passes",
                                  cl::desc("Print available passes that can be "
@@ -209,10 +202,6 @@ static cl::opt<bool> VerifyDebugInfoPreserve(
     cl::desc("Start the pipeline with collecting and end it with checking of "
              "debug info preservation."));
 
-static cl::opt<bool>
-PrintBreakpoints("print-breakpoints-for-testing",
-                 cl::desc("Print select breakpoints location for testing"));
-
 static cl::opt<std::string> ClDataLayout("data-layout",
                                          cl::desc("data layout string to use"),
                                          cl::value_desc("layout-string"),
@@ -285,15 +274,6 @@ static cl::list<std::string>
     PassPlugins("load-pass-plugin",
                 cl::desc("Load passes from plugin library"));
 
-static inline void addPass(legacy::PassManagerBase &PM, Pass *P) {
-  // Add the pass to the pass manager...
-  PM.add(P);
-
-  // If we are verifying all of the intermediate steps, add the verifier...
-  if (VerifyEach)
-    PM.add(createVerifierPass());
-}
-
 //===----------------------------------------------------------------------===//
 // CodeGen-related helper functions.
 //
@@ -319,10 +299,6 @@ static TargetMachine* GetTargetMachine(Triple TheTriple, StringRef CPUStr,
       Options, codegen::getExplicitRelocModel(),
       codegen::getExplicitCodeModel(), GetCodeGenOptLevel());
 }
-
-#ifdef BUILD_EXAMPLES
-void initializeExampleIRTransforms(llvm::PassRegistry &Registry);
-#endif
 
 struct TimeTracerRAII {
   TimeTracerRAII(StringRef ProgramName) {
@@ -370,24 +346,41 @@ static bool shouldPinPassToLegacyPM(StringRef Pass) {
       "amdgcn-", "polly-", "riscv-", "dxil-"};
   std::vector<StringRef> PassNameContain = {"ehprepare"};
   std::vector<StringRef> PassNameExact = {
-      "safe-stack",           "cost-model",
-      "codegenprepare",       "interleaved-load-combine",
-      "unreachableblockelim", "verify-safepoint-ir",
-      "atomic-expand",        "expandvp",
-      "hardware-loops",       "type-promotion",
-      "mve-tail-predication", "interleaved-access",
-      "global-merge",         "pre-isel-intrinsic-lowering",
-      "expand-reductions",    "indirectbr-expand",
-      "generic-to-nvvm",      "expandmemcmp",
-      "loop-reduce",          "lower-amx-type",
-      "pre-amx-config",       "lower-amx-intrinsics",
-      "polyhedral-info",      "print-polyhedral-info",
-      "replace-with-veclib",  "jmc-instrument",
-      "dot-regions",          "dot-regions-only",
-      "view-regions",         "view-regions-only",
-      "select-optimize",      "expand-large-div-rem",
-      "structurizecfg",       "fix-irreducible",
-      "expand-large-fp-convert"};
+      "safe-stack",
+      "cost-model",
+      "codegenprepare",
+      "interleaved-load-combine",
+      "unreachableblockelim",
+      "verify-safepoint-ir",
+      "atomic-expand",
+      "expandvp",
+      "mve-tail-predication",
+      "interleaved-access",
+      "global-merge",
+      "pre-isel-intrinsic-lowering",
+      "expand-reductions",
+      "indirectbr-expand",
+      "generic-to-nvvm",
+      "expandmemcmp",
+      "loop-reduce",
+      "lower-amx-type",
+      "pre-amx-config",
+      "lower-amx-intrinsics",
+      "polyhedral-info",
+      "print-polyhedral-info",
+      "replace-with-veclib",
+      "jmc-instrument",
+      "dot-regions",
+      "dot-regions-only",
+      "view-regions",
+      "view-regions-only",
+      "select-optimize",
+      "expand-large-div-rem",
+      "structurizecfg",
+      "fix-irreducible",
+      "expand-large-fp-convert",
+      "callbrprepare",
+  };
   for (const auto &P : PassNamePrefix)
     if (Pass.startswith(P))
       return true;
@@ -438,6 +431,7 @@ int main(int argc, char **argv) {
   initializeExpandMemCmpPassPass(Registry);
   initializeScalarizeMaskedMemIntrinLegacyPassPass(Registry);
   initializeSelectOptimizePass(Registry);
+  initializeCallBrPreparePass(Registry);
   initializeCodeGenPreparePass(Registry);
   initializeAtomicExpandPass(Registry);
   initializeRewriteSymbolsLegacyPassPass(Registry);
@@ -455,14 +449,8 @@ int main(int argc, char **argv) {
   initializeExpandVectorPredicationPass(Registry);
   initializeWasmEHPreparePass(Registry);
   initializeWriteBitcodePassPass(Registry);
-  initializeHardwareLoopsPass(Registry);
-  initializeTypePromotionPass(Registry);
   initializeReplaceWithVeclibLegacyPass(Registry);
   initializeJMCInstrumenterPass(Registry);
-
-#ifdef BUILD_EXAMPLES
-  initializeExampleIRTransforms(Registry);
-#endif
 
   SmallVector<PassPlugin, 1> PluginList;
   PassPlugins.setCallback([&](const std::string &PluginPath) {
@@ -475,17 +463,26 @@ int main(int argc, char **argv) {
     PluginList.emplace_back(Plugin.get());
   });
 
+  // Register the Target and CPU printer for --version.
+  cl::AddExtraVersionPrinter(sys::printDefaultTargetAndDetectedCPU);
+
   cl::ParseCommandLineOptions(argc, argv,
     "llvm .bc -> .bc modular optimizer and analysis printer\n");
 
   LLVMContext Context;
 
-  // If `-passes=` is specified, use NPM.
-  // If `-enable-new-pm` is specified and there are no codegen passes, use NPM.
-  // e.g. `-enable-new-pm -sroa` will use NPM.
-  // but `-enable-new-pm -codegenprepare` will still revert to legacy PM.
-  const bool UseNPM = (EnableNewPassManager && !shouldForceLegacyPM()) ||
+  // TODO: remove shouldForceLegacyPM().
+  const bool UseNPM = (!EnableLegacyPassManager && !shouldForceLegacyPM()) ||
                       PassPipeline.getNumOccurrences() > 0;
+
+  if (UseNPM && !PassList.empty()) {
+    errs() << "The `opt -passname` syntax for the new pass manager is "
+              "not supported, please use `opt -passes=<pipeline>` (or the `-p` "
+              "alias for a more concise version).\n";
+    errs() << "See https://llvm.org/docs/NewPassManager.html#invoking-opt "
+              "for more details on the pass pipeline syntax.\n\n";
+    return 1;
+  }
 
   if (!UseNPM && PluginList.size()) {
     errs() << argv[0] << ": " << PassPlugins.ArgStr
@@ -520,7 +517,7 @@ int main(int argc, char **argv) {
   std::unique_ptr<ToolOutputFile> RemarksFile = std::move(*RemarksFileOrErr);
 
   // Load the input module...
-  auto SetDataLayout = [](StringRef) -> std::optional<std::string> {
+  auto SetDataLayout = [](StringRef, StringRef) -> std::optional<std::string> {
     if (ClDataLayout.empty())
       return std::nullopt;
     return ClDataLayout;
@@ -531,7 +528,8 @@ int main(int argc, char **argv) {
             InputFilename, Err, Context, nullptr, SetDataLayout)
             .Mod;
   else
-    M = parseIRFile(InputFilename, Err, Context, SetDataLayout);
+    M = parseIRFile(InputFilename, Err, Context,
+                    ParserCallbacks(SetDataLayout));
 
   if (!M) {
     Err.print(argv[0], errs());
@@ -656,14 +654,8 @@ int main(int argc, char **argv) {
 
   if (UseNPM) {
     if (legacy::debugPassSpecified()) {
-      errs()
-          << "-debug-pass does not work with the new PM, either use "
-             "-debug-pass-manager, or use the legacy PM (-enable-new-pm=0)\n";
-      return 1;
-    }
-    if (PassPipeline.getNumOccurrences() > 0 && PassList.size() > 0) {
-      errs()
-          << "Cannot specify passes via both -foo-pass and --passes=foo-pass\n";
+      errs() << "-debug-pass does not work with the new PM, either use "
+                "-debug-pass-manager, or use the legacy PM\n";
       return 1;
     }
     auto NumOLevel = OptLevelO0 + OptLevelO1 + OptLevelO2 + OptLevelO3 +
@@ -672,24 +664,13 @@ int main(int argc, char **argv) {
       errs() << "Cannot specify multiple -O#\n";
       return 1;
     }
-    if (NumOLevel > 0 &&
-        (PassPipeline.getNumOccurrences() > 0 || PassList.size() > 0)) {
+    if (NumOLevel > 0 && (PassPipeline.getNumOccurrences() > 0)) {
       errs() << "Cannot specify -O# and --passes=/--foo-pass, use "
                 "-passes='default<O#>,other-pass'\n";
       return 1;
     }
-    if (!PassList.empty()) {
-      errs() << "The `opt -passname` syntax for the new pass manager is "
-                "deprecated, please use `opt -passes=<pipeline>` (or the `-p` "
-                "alias for a more concise version).\n";
-      errs() << "See https://llvm.org/docs/NewPassManager.html#invoking-opt "
-                "for more details on the pass pipeline syntax.\n\n";
-      if (!TemporarilyAllowOldPassesSyntax)
-        return 1;
-    }
     std::string Pipeline = PassPipeline;
 
-    SmallVector<StringRef, 4> Passes;
     if (OptLevelO0)
       Pipeline = "default<O0>";
     if (OptLevelO1)
@@ -702,15 +683,13 @@ int main(int argc, char **argv) {
       Pipeline = "default<Os>";
     if (OptLevelOz)
       Pipeline = "default<Oz>";
-    for (const auto &P : PassList)
-      Passes.push_back(P->getPassArgument());
     OutputKind OK = OK_NoOutput;
     if (!NoOutput)
       OK = OutputAssembly
                ? OK_OutputAssembly
                : (OutputThinLTOBC ? OK_OutputThinLTOBitcode : OK_OutputBitcode);
 
-    VerifierKind VK = VK_VerifyInAndOut;
+    VerifierKind VK = VK_VerifyOut;
     if (NoVerify)
       VK = VK_NoVerifier;
     else if (VerifyEach)
@@ -721,7 +700,7 @@ int main(int argc, char **argv) {
     // layer.
     return runPassPipeline(argv[0], *M, TM.get(), &TLII, Out.get(),
                            ThinLinkOut.get(), RemarksFile.get(), Pipeline,
-                           Passes, PluginList, OK, VK, PreserveAssemblyUseListOrder,
+                           PluginList, OK, VK, PreserveAssemblyUseListOrder,
                            PreserveBitcodeUseListOrder, EmitSummaryIndex,
                            EmitModuleHash, EnableDebugify,
                            VerifyDebugInfoPreserve)
@@ -784,26 +763,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  std::unique_ptr<legacy::FunctionPassManager> FPasses;
-
-  if (PrintBreakpoints) {
-    // Default to standard output.
-    if (!Out) {
-      if (OutputFilename.empty())
-        OutputFilename = "-";
-
-      std::error_code EC;
-      Out = std::make_unique<ToolOutputFile>(OutputFilename, EC,
-                                              sys::fs::OF_None);
-      if (EC) {
-        errs() << EC.message() << '\n';
-        return 1;
-      }
-    }
-    Passes.add(createBreakpointPrinter(Out->os()));
-    NoOutput = true;
-  }
-
   if (TM) {
     // FIXME: We should dyn_cast this when supported.
     auto &LTM = static_cast<LLVMTargetMachine &>(*TM);
@@ -814,21 +773,18 @@ int main(int argc, char **argv) {
   // Create a new optimization pass for each one specified on the command line
   for (unsigned i = 0; i < PassList.size(); ++i) {
     const PassInfo *PassInf = PassList[i];
-    Pass *P = nullptr;
-    if (PassInf->getNormalCtor())
-      P = PassInf->getNormalCtor()();
-    else
+    if (PassInf->getNormalCtor()) {
+      Pass *P = PassInf->getNormalCtor()();
+      if (P) {
+        // Add the pass to the pass manager.
+        Passes.add(P);
+        // If we are verifying all of the intermediate steps, add the verifier.
+        if (VerifyEach)
+          Passes.add(createVerifierPass());
+      }
+    } else
       errs() << argv[0] << ": cannot create pass: "
              << PassInf->getPassName() << "\n";
-    if (P)
-      addPass(Passes, P);
-  }
-
-  if (FPasses) {
-    FPasses->doInitialization();
-    for (Function &F : *M)
-      FPasses->run(F);
-    FPasses->doFinalization();
   }
 
   // Check that the module is well formed on completion of optimization
@@ -915,7 +871,7 @@ int main(int argc, char **argv) {
     exportDebugifyStats(DebugifyExport, Passes.getDebugifyStatsMap());
 
   // Declare success.
-  if (!NoOutput || PrintBreakpoints)
+  if (!NoOutput)
     Out->keep();
 
   if (RemarksFile)

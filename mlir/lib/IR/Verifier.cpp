@@ -36,6 +36,7 @@
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Regex.h"
 #include <atomic>
+#include <optional>
 
 using namespace mlir;
 
@@ -182,7 +183,8 @@ LogicalResult OperationVerifier::verifyOperation(Operation &op) {
 
   // If we can get operation info for this, check the custom hook.
   OperationName opName = op.getName();
-  Optional<RegisteredOperationName> registeredInfo = opName.getRegisteredInfo();
+  std::optional<RegisteredOperationName> registeredInfo =
+      opName.getRegisteredInfo();
   if (registeredInfo && failed(registeredInfo->verifyInvariants(&op)))
     return failure();
 
@@ -300,7 +302,7 @@ static void diagnoseInvalidOperandDominance(Operation &op, unsigned operandNo) {
   }
   // Block argument case.
   Block *block1 = op.getBlock();
-  Block *block2 = operand.cast<BlockArgument>().getOwner();
+  Block *block2 = llvm::cast<BlockArgument>(operand).getOwner();
   Region *region1 = block1->getParent();
   Region *region2 = block2->getParent();
   Location loc = UnknownLoc::get(op.getContext());

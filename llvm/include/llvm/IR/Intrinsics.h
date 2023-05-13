@@ -16,7 +16,6 @@
 #define LLVM_IR_INTRINSICS_H
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/None.h"
 #include "llvm/Support/TypeSize.h"
 #include <optional>
 #include <string>
@@ -80,11 +79,6 @@ namespace Intrinsic {
   /// Returns true if the intrinsic can be overloaded.
   bool isOverloaded(ID id);
 
-  /// Returns true if the intrinsic is a leaf, i.e. it does not make any calls
-  /// itself.  Most intrinsics are leafs, the exceptions being the patchpoint
-  /// and statepoint intrinsics. These call (or invoke) their "target" argument.
-  bool isLeaf(ID id);
-
   /// Return the attributes for an intrinsic.
   AttributeList getAttributes(LLVMContext &C, ID id);
 
@@ -144,6 +138,7 @@ namespace Intrinsic {
       AMX,
       PPCQuad,
       AnyPtrToElt,
+      AArch64Svcount,
     } Kind;
 
     union {
@@ -155,13 +150,11 @@ namespace Intrinsic {
       ElementCount Vector_Width;
     };
 
+    // AK_% : Defined in Intrinsics.td
     enum ArgKind {
-      AK_Any,
-      AK_AnyInteger,
-      AK_AnyFloat,
-      AK_AnyVector,
-      AK_AnyPointer,
-      AK_MatchType = 7
+#define GET_INTRINSIC_ARGKIND
+#include "llvm/IR/IntrinsicEnums.inc"
+#undef GET_INTRINSIC_ARGKIND
     };
 
     unsigned getArgumentNumber() const {

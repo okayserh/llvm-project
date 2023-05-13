@@ -37,7 +37,6 @@
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TargetInfo.h"
-#include "llvm/ADT/None.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator_range.h"
@@ -1638,7 +1637,7 @@ CXXRecordDecl::getLambdaExplicitTemplateParameters() const {
 
   const auto ExplicitEnd = llvm::partition_point(
       *List, [](const NamedDecl *D) { return !D->isImplicit(); });
-  return llvm::makeArrayRef(List->begin(), ExplicitEnd);
+  return llvm::ArrayRef(List->begin(), ExplicitEnd);
 }
 
 Decl *CXXRecordDecl::getLambdaContextDecl() const {
@@ -1647,10 +1646,15 @@ Decl *CXXRecordDecl::getLambdaContextDecl() const {
   return getLambdaData().ContextDecl.get(Source);
 }
 
-void CXXRecordDecl::setDeviceLambdaManglingNumber(unsigned Num) const {
+void CXXRecordDecl::setLambdaNumbering(LambdaNumbering Numbering) {
   assert(isLambda() && "Not a lambda closure type!");
-  if (Num)
-    getASTContext().DeviceLambdaManglingNumbers[this] = Num;
+  getLambdaData().ManglingNumber = Numbering.ManglingNumber;
+  if (Numbering.DeviceManglingNumber)
+    getASTContext().DeviceLambdaManglingNumbers[this] =
+        Numbering.DeviceManglingNumber;
+  getLambdaData().IndexInContext = Numbering.IndexInContext;
+  getLambdaData().ContextDecl = Numbering.ContextDecl;
+  getLambdaData().HasKnownInternalLinkage = Numbering.HasKnownInternalLinkage;
 }
 
 unsigned CXXRecordDecl::getDeviceLambdaManglingNumber() const {
@@ -3248,6 +3252,16 @@ StaticAssertDecl *StaticAssertDecl::CreateDeserialized(ASTContext &C,
                                                        unsigned ID) {
   return new (C, ID) StaticAssertDecl(nullptr, SourceLocation(), nullptr,
                                       nullptr, SourceLocation(), false);
+}
+
+VarDecl *ValueDecl::getPotentiallyDecomposedVarDecl() {
+  assert((isa<VarDecl, BindingDecl>(this)) &&
+         "expected a VarDecl or a BindingDecl");
+  if (auto *Var = llvm::dyn_cast<VarDecl>(this))
+    return Var;
+  if (auto *BD = llvm::dyn_cast<BindingDecl>(this))
+    return llvm::dyn_cast<VarDecl>(BD->getDecomposedDecl());
+  return nullptr;
 }
 
 void BindingDecl::anchor() {}

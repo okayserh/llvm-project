@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <memory>
 #include <mutex>
+#include <optional>
 
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Breakpoint/BreakpointSite.h"
@@ -135,8 +136,7 @@ public:
   const char *GetIgnoredExceptions() const {
     const uint32_t idx = ePropertyIgnoredExceptions;
     const OptionValueString *option_value =
-        m_collection_sp->GetPropertyAtIndexAsOptionValueString(nullptr, false,
-                                                               idx);
+        m_collection_sp->GetPropertyAtIndexAsOptionValueString(idx);
     assert(option_value);
     return option_value->GetCurrentValue();
   }
@@ -144,8 +144,7 @@ public:
   OptionValueString *GetIgnoredExceptionValue() {
     const uint32_t idx = ePropertyIgnoredExceptions;
     OptionValueString *option_value =
-        m_collection_sp->GetPropertyAtIndexAsOptionValueString(nullptr, false,
-                                                               idx);
+        m_collection_sp->GetPropertyAtIndexAsOptionValueString(idx);
     assert(option_value);
     return option_value;
   }
@@ -163,8 +162,7 @@ void PlatformDarwin::DebuggerInitialize(
     const bool is_global_setting = false;
     PluginManager::CreateSettingForPlatformPlugin(
         debugger, GetGlobalProperties().GetValueProperties(),
-        ConstString("Properties for the Darwin platform plug-in."),
-        is_global_setting);
+        "Properties for the Darwin platform plug-in.", is_global_setting);
     OptionValueString *value = GetGlobalProperties().GetIgnoredExceptionValue();
     value->SetValidator(ExceptionMaskValidator);
   }
@@ -601,7 +599,7 @@ static llvm::ArrayRef<const char *> GetCompatibleArchs(ArchSpec::Core core) {
 /// distinct names (e.g. armv7f) but armv7 binaries run fine on an armv7f
 /// processor.
 void PlatformDarwin::ARMGetSupportedArchitectures(
-    std::vector<ArchSpec> &archs, llvm::Optional<llvm::Triple::OSType> os) {
+    std::vector<ArchSpec> &archs, std::optional<llvm::Triple::OSType> os) {
   const ArchSpec system_arch = GetSystemArchitecture();
   const ArchSpec::Core system_core = system_arch.GetCore();
   for (const char *arch : GetCompatibleArchs(system_core)) {
@@ -1240,10 +1238,9 @@ lldb_private::Status PlatformDarwin::FindBundleBinaryInExecSearchPaths(
 
     FileSpec platform_pull_upart(platform_file);
     std::vector<std::string> path_parts;
-    path_parts.push_back(
-        platform_pull_upart.GetLastPathComponent().AsCString());
+    path_parts.push_back(platform_pull_upart.GetFilename().AsCString());
     while (platform_pull_upart.RemoveLastPathComponent()) {
-      ConstString part = platform_pull_upart.GetLastPathComponent();
+      ConstString part = platform_pull_upart.GetFilename();
       path_parts.push_back(part.AsCString());
     }
     const size_t path_parts_size = path_parts.size();

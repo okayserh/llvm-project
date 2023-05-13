@@ -1,5 +1,5 @@
 # MLIR project.
-cmake_minimum_required(VERSION 3.13.4)
+cmake_minimum_required(VERSION 3.20.0)
 
 if(NOT DEFINED LLVM_COMMON_CMAKE_UTILS)
   set(LLVM_COMMON_CMAKE_UTILS ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
@@ -15,6 +15,7 @@ endif()
 
 # Must go below project(..)
 include(GNUInstallDirs)
+set(CMAKE_CXX_STANDARD 17)
 
 if(MLIR_STANDALONE_BUILD)
   find_package(LLVM CONFIG REQUIRED)

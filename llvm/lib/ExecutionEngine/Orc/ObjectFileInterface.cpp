@@ -10,6 +10,7 @@
 #include "llvm/ExecutionEngine/Orc/COFFPlatform.h"
 #include "llvm/ExecutionEngine/Orc/ELFNixPlatform.h"
 #include "llvm/ExecutionEngine/Orc/MachOPlatform.h"
+#include "llvm/ExecutionEngine/Orc/Shared/ObjectFormats.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Object/MachO.h"
@@ -85,7 +86,7 @@ getMachOObjectFileSymbolInfo(ExecutionSession &ES,
     }
     auto SegName = Obj.getSectionFinalSegmentName(Sec.getRawDataRefImpl());
     auto SecName = cantFail(Obj.getSectionName(Sec.getRawDataRefImpl()));
-    if (MachOPlatform::isInitializerSection(SegName, SecName)) {
+    if (isMachOInitializerSection(SegName, SecName)) {
       addInitSymbol(I, ES, Obj.getFileName());
       break;
     }
@@ -138,7 +139,7 @@ getELFObjectFileSymbolInfo(ExecutionSession &ES,
   SymbolStringPtr InitSymbol;
   for (auto &Sec : Obj.sections()) {
     if (auto SecName = Sec.getName()) {
-      if (ELFNixPlatform::isInitializerSection(*SecName)) {
+      if (isELFInitializerSection(*SecName)) {
         addInitSymbol(I, ES, Obj.getFileName());
         break;
       }
@@ -219,7 +220,7 @@ getCOFFObjectFileSymbolInfo(ExecutionSession &ES,
   SymbolStringPtr InitSymbol;
   for (auto &Sec : Obj.sections()) {
     if (auto SecName = Sec.getName()) {
-      if (COFFPlatform::isInitializerSection(*SecName)) {
+      if (isCOFFInitializerSection(*SecName)) {
         addInitSymbol(I, ES, Obj.getFileName());
         break;
       }

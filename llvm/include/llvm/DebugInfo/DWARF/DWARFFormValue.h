@@ -10,7 +10,6 @@
 #define LLVM_DEBUGINFO_DWARF_DWARFFORMVALUE_H
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/None.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/DebugInfo/DIContext.h"
 #include "llvm/Support/DataExtractor.h"
@@ -349,6 +348,14 @@ toBlock(const std::optional<DWARFFormValue> &V) {
     return V->getAsBlock();
   return std::nullopt;
 }
+
+/// Check whether specified \p Form belongs to the \p FC class.
+/// \param Form an attribute form.
+/// \param FC an attribute form class to check.
+/// \param DwarfVersion the version of DWARF debug info keeping the attribute.
+/// \returns true if specified \p Form belongs to the \p FC class.
+bool doesFormBelongToClass(dwarf::Form Form, DWARFFormValue::FormClass FC,
+                           uint16_t DwarfVersion);
 
 } // end namespace dwarf
 

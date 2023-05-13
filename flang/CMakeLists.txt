@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13.4)
+cmake_minimum_required(VERSION 3.20.0)
 
 if(NOT DEFINED LLVM_COMMON_CMAKE_UTILS)
   set(LLVM_COMMON_CMAKE_UTILS ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
@@ -12,6 +12,14 @@ set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if (LLVM_ENABLE_EH)
+  # To match with the flang guidelines we currently disable
+  # building with exception support in core LLVM.
+  message(FATAL_ERROR "Flang does not currently support building with \
+          LLVM exceptions enabled.  Please disable LLVM_ENABLE_EH when building \
+          flang.")
+endif()
 
 set(FLANG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -46,6 +54,10 @@ if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES Clang)
   if (IS_DIRECTORY "${LIBDIR}")
     link_libraries(${CLANG_RT_BUILTINS_LIBRARY})
   endif()
+endif()
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+  message(FATAL_ERROR "flang isn't supported on 32 bit CPUs")
 endif()
 
 if (FLANG_STANDALONE_BUILD)
@@ -419,11 +431,9 @@ if (FLANG_BUILD_TOOLS)
 endif()
 add_subdirectory(runtime)
 
-option(FLANG_BUILD_EXAMPLES "Build Flang example programs by default." OFF)
-if (FLANG_BUILD_EXAMPLES AND FLANG_STANDALONE_BUILD)
-  message(FATAL_ERROR "Examples are not supported in out-of-tree builds.")
+if (LLVM_INCLUDE_EXAMPLES)
+  add_subdirectory(examples)
 endif()
-add_subdirectory(examples)
 
 if (FLANG_INCLUDE_TESTS)
   add_subdirectory(test)

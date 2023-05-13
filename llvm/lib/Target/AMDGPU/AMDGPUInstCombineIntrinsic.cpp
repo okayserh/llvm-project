@@ -328,7 +328,8 @@ simplifyAMDGCNImageIntrinsic(const GCNSubtarget *ST,
       });
 }
 
-bool GCNTTIImpl::canSimplifyLegacyMulToMul(const Value *Op0, const Value *Op1,
+bool GCNTTIImpl::canSimplifyLegacyMulToMul(const Instruction &I,
+                                           const Value *Op0, const Value *Op1,
                                            InstCombiner &IC) const {
   // The legacy behaviour is that multiplying +/-0.0 by anything, even NaN or
   // infinity, gives +0.0. If we can prove we don't have one of the special
@@ -340,9 +341,14 @@ bool GCNTTIImpl::canSimplifyLegacyMulToMul(const Value *Op0, const Value *Op1,
     // One operand is not zero or infinity or NaN.
     return true;
   }
+
   auto *TLI = &IC.getTargetLibraryInfo();
-  if (isKnownNeverInfinity(Op0, TLI) && isKnownNeverNaN(Op0, TLI) &&
-      isKnownNeverInfinity(Op1, TLI) && isKnownNeverNaN(Op1, TLI)) {
+  if (isKnownNeverInfOrNaN(Op0, IC.getDataLayout(), TLI, 0,
+                           &IC.getAssumptionCache(), &I, &IC.getDominatorTree(),
+                           &IC.getOptimizationRemarkEmitter()) &&
+      isKnownNeverInfOrNaN(Op1, IC.getDataLayout(), TLI, 0,
+                           &IC.getAssumptionCache(), &I, &IC.getDominatorTree(),
+                           &IC.getOptimizationRemarkEmitter())) {
     // Neither operand is infinity or NaN.
     return true;
   }
@@ -981,13 +987,8 @@ GCNTTIImpl::instCombineIntrinsic(InstCombiner &IC, IntrinsicInst &II) const {
     if (II.isStrictFP())
       break;
 
-    if (C && C->isNaN()) {
-      // FIXME: We just need to make the nan quiet here, but that's unavailable
-      // on APFloat, only IEEEfloat
-      auto *Quieted =
-          ConstantFP::get(Ty, scalbn(*C, 0, APFloat::rmNearestTiesToEven));
-      return IC.replaceInstUsesWith(II, Quieted);
-    }
+    if (C && C->isNaN())
+      return IC.replaceInstUsesWith(II, ConstantFP::get(Ty, C->makeQuiet()));
 
     // ldexp(x, 0) -> x
     // ldexp(x, undef) -> x
@@ -1006,11 +1007,11 @@ GCNTTIImpl::instCombineIntrinsic(InstCombiner &IC, IntrinsicInst &II) const {
     // TODO: Move to InstSimplify?
     if (match(Op0, PatternMatch::m_AnyZeroFP()) ||
         match(Op1, PatternMatch::m_AnyZeroFP()))
-      return IC.replaceInstUsesWith(II, ConstantFP::getNullValue(II.getType()));
+      return IC.replaceInstUsesWith(II, ConstantFP::getZero(II.getType()));
 
     // If we can prove we don't have one of the special cases then we can use a
     // normal fmul instruction instead.
-    if (canSimplifyLegacyMulToMul(Op0, Op1, IC)) {
+    if (canSimplifyLegacyMulToMul(II, Op0, Op1, IC)) {
       auto *FMul = IC.Builder.CreateFMulFMF(Op0, Op1, &II);
       FMul->takeName(&II);
       return IC.replaceInstUsesWith(II, FMul);
@@ -1029,7 +1030,7 @@ GCNTTIImpl::instCombineIntrinsic(InstCombiner &IC, IntrinsicInst &II) const {
         match(Op1, PatternMatch::m_AnyZeroFP())) {
       // It's tempting to just return Op2 here, but that would give the wrong
       // result if Op2 was -0.0.
-      auto *Zero = ConstantFP::getNullValue(II.getType());
+      auto *Zero = ConstantFP::getZero(II.getType());
       auto *FAdd = IC.Builder.CreateFAddFMF(Zero, Op2, &II);
       FAdd->takeName(&II);
       return IC.replaceInstUsesWith(II, FAdd);
@@ -1037,7 +1038,7 @@ GCNTTIImpl::instCombineIntrinsic(InstCombiner &IC, IntrinsicInst &II) const {
 
     // If we can prove we don't have one of the special cases then we can use a
     // normal fma instead.
-    if (canSimplifyLegacyMulToMul(Op0, Op1, IC)) {
+    if (canSimplifyLegacyMulToMul(II, Op0, Op1, IC)) {
       II.setCalledOperand(Intrinsic::getDeclaration(
           II.getModule(), Intrinsic::fma, II.getType()));
       return &II;
@@ -1076,6 +1077,7 @@ static Value *simplifyAMDGCNMemoryIntrinsicDemanded(InstCombiner &IC,
   unsigned VWidth = IIVTy->getNumElements();
   if (VWidth == 1)
     return nullptr;
+  Type *EltTy = IIVTy->getElementType();
 
   IRBuilderBase::InsertPointGuard Guard(IC.Builder);
   IC.Builder.SetInsertPoint(&II);
@@ -1087,7 +1089,7 @@ static Value *simplifyAMDGCNMemoryIntrinsicDemanded(InstCombiner &IC,
     // Buffer case.
 
     const unsigned ActiveBits = DemandedElts.getActiveBits();
-    const unsigned UnusedComponentsAtFront = DemandedElts.countTrailingZeros();
+    const unsigned UnusedComponentsAtFront = DemandedElts.countr_zero();
 
     // Start assuming the prefix of elements is demanded, but possibly clear
     // some other bits if there are trailing zeros (unused components at front)
@@ -1123,9 +1125,9 @@ static Value *simplifyAMDGCNMemoryIntrinsicDemanded(InstCombiner &IC,
       if (OffsetIdx != InvalidOffsetIdx) {
         // Clear demanded bits and update the offset.
         DemandedElts &= ~((1 << UnusedComponentsAtFront) - 1);
-        auto *Offset = II.getArgOperand(OffsetIdx);
+        auto *Offset = Args[OffsetIdx];
         unsigned SingleComponentSizeInBits =
-            IC.getDataLayout().getTypeSizeInBits(II.getType()->getScalarType());
+            IC.getDataLayout().getTypeSizeInBits(EltTy);
         unsigned OffsetAdd =
             UnusedComponentsAtFront * SingleComponentSizeInBits / 8;
         auto *OffsetAddVal = ConstantInt::get(Offset->getType(), OffsetAdd);
@@ -1135,11 +1137,11 @@ static Value *simplifyAMDGCNMemoryIntrinsicDemanded(InstCombiner &IC,
   } else {
     // Image case.
 
-    ConstantInt *DMask = cast<ConstantInt>(II.getArgOperand(DMaskIdx));
+    ConstantInt *DMask = cast<ConstantInt>(Args[DMaskIdx]);
     unsigned DMaskVal = DMask->getZExtValue() & 0xf;
 
     // Mask off values that are undefined because the dmask doesn't cover them
-    DemandedElts &= (1 << countPopulation(DMaskVal)) - 1;
+    DemandedElts &= (1 << llvm::popcount(DMaskVal)) - 1;
 
     unsigned NewDMaskVal = 0;
     unsigned OrigLoadIdx = 0;
@@ -1156,9 +1158,9 @@ static Value *simplifyAMDGCNMemoryIntrinsicDemanded(InstCombiner &IC,
       Args[DMaskIdx] = ConstantInt::get(DMask->getType(), NewDMaskVal);
   }
 
-  unsigned NewNumElts = DemandedElts.countPopulation();
+  unsigned NewNumElts = DemandedElts.popcount();
   if (!NewNumElts)
-    return UndefValue::get(II.getType());
+    return UndefValue::get(IIVTy);
 
   if (NewNumElts >= VWidth && DemandedElts.isMask()) {
     if (DMaskIdx >= 0)
@@ -1172,23 +1174,19 @@ static Value *simplifyAMDGCNMemoryIntrinsicDemanded(InstCombiner &IC,
   if (!Intrinsic::getIntrinsicSignature(II.getCalledFunction(), OverloadTys))
     return nullptr;
 
-  Module *M = II.getParent()->getParent()->getParent();
-  Type *EltTy = IIVTy->getElementType();
   Type *NewTy =
       (NewNumElts == 1) ? EltTy : FixedVectorType::get(EltTy, NewNumElts);
-
   OverloadTys[0] = NewTy;
-  Function *NewIntrin =
-      Intrinsic::getDeclaration(M, II.getIntrinsicID(), OverloadTys);
 
+  Function *NewIntrin = Intrinsic::getDeclaration(
+      II.getModule(), II.getIntrinsicID(), OverloadTys);
   CallInst *NewCall = IC.Builder.CreateCall(NewIntrin, Args);
   NewCall->takeName(&II);
   NewCall->copyMetadata(II);
 
   if (NewNumElts == 1) {
-    return IC.Builder.CreateInsertElement(UndefValue::get(II.getType()),
-                                          NewCall,
-                                          DemandedElts.countTrailingZeros());
+    return IC.Builder.CreateInsertElement(UndefValue::get(IIVTy), NewCall,
+                                          DemandedElts.countr_zero());
   }
 
   SmallVector<int, 8> EltMask;

@@ -9,14 +9,14 @@
 #include "dir.h"
 
 #include "src/__support/OSUtil/syscall.h" // For internal syscall function.
+#include "src/__support/error_or.h"
 
-#include <errno.h>
 #include <fcntl.h>       // For open flags
 #include <sys/syscall.h> // For syscall numbers
 
 namespace __llvm_libc {
 
-int platform_opendir(const char *name) {
+ErrorOr<int> platform_opendir(const char *name) {
   int open_flags = O_RDONLY | O_DIRECTORY | O_CLOEXEC;
 #ifdef SYS_open
   int fd = __llvm_libc::syscall_impl(SYS_open, name, open_flags);
@@ -28,29 +28,31 @@ int platform_opendir(const char *name) {
 #endif
 
   if (fd < 0) {
-    errno = -fd;
-    return -1;
+    return __llvm_libc::Error(-fd);
   }
   return fd;
 }
 
-size_t platform_fetch_dirents(int fd, cpp::span<uint8_t> buffer) {
-  long size =
-      __llvm_libc::syscall_impl(SYS_getdents, fd, buffer.data(), buffer.size());
+ErrorOr<size_t> platform_fetch_dirents(int fd, cpp::span<uint8_t> buffer) {
+#ifdef SYS_getdents64
+  long size = __llvm_libc::syscall_impl(SYS_getdents64, fd, buffer.data(),
+                                        buffer.size());
+#else
+#error "getdents64 syscalls not available to perform a fetch dirents operation."
+#endif
+
   if (size < 0) {
-    errno = -size;
-    return 0;
+    return __llvm_libc::Error(static_cast<int>(-size));
   }
   return size;
 }
 
-bool platform_closedir(int fd) {
+int platform_closedir(int fd) {
   long ret = __llvm_libc::syscall_impl(SYS_close, fd);
   if (ret < 0) {
-    errno = -ret;
-    return false;
+    return static_cast<int>(-ret);
   }
-  return true;
+  return 0;
 }
 
 } // namespace __llvm_libc

@@ -28,6 +28,7 @@
 #include "Plugins/LanguageRuntime/CPlusPlus/CPPLanguageRuntime.h"
 #include "Plugins/TypeSystem/Clang/TypeSystemClang.h"
 #include "lldb/lldb-enumerations.h"
+#include <optional>
 #include <tuple>
 
 using namespace lldb;
@@ -43,6 +44,38 @@ lldb::ValueObjectSP lldb_private::formatters::GetChildMemberWithName(
       return child_sp;
   }
   return {};
+}
+
+lldb::ValueObjectSP
+lldb_private::formatters::GetFirstValueOfLibCXXCompressedPair(
+    ValueObject &pair) {
+  ValueObjectSP value;
+  ValueObjectSP first_child = pair.GetChildAtIndex(0, true);
+  if (first_child)
+    value = first_child->GetChildMemberWithName(ConstString("__value_"), true);
+  if (!value) {
+    // pre-r300140 member name
+    value = pair.GetChildMemberWithName(ConstString("__first_"), true);
+  }
+  return value;
+}
+
+lldb::ValueObjectSP
+lldb_private::formatters::GetSecondValueOfLibCXXCompressedPair(
+    ValueObject &pair) {
+  ValueObjectSP value;
+  if (pair.GetNumChildren() > 1) {
+    ValueObjectSP second_child = pair.GetChildAtIndex(1, true);
+    if (second_child) {
+      value =
+          second_child->GetChildMemberWithName(ConstString("__value_"), true);
+    }
+  }
+  if (!value) {
+    // pre-r300140 member name
+    value = pair.GetChildMemberWithName(ConstString("__second_"), true);
+  }
+  return value;
 }
 
 bool lldb_private::formatters::LibcxxOptionalSummaryProvider(
@@ -169,7 +202,7 @@ bool lldb_private::formatters::LibcxxUniquePointerSummaryProvider(
   if (!ptr_sp)
     return false;
 
-  ptr_sp = GetValueOfLibCXXCompressedPair(*ptr_sp);
+  ptr_sp = GetFirstValueOfLibCXXCompressedPair(*ptr_sp);
   if (!ptr_sp)
     return false;
 
@@ -321,7 +354,7 @@ bool lldb_private::formatters::LibCxxMapIteratorSyntheticFrontEnd::Update() {
               ast_ctx->GetBasicType(lldb::eBasicTypeVoid).GetPointerType()},
              {"cw", ast_ctx->GetBasicType(lldb::eBasicTypeBool)},
              {"payload", pair_type}});
-        llvm::Optional<uint64_t> size = tree_node_type.GetByteSize(nullptr);
+        std::optional<uint64_t> size = tree_node_type.GetByteSize(nullptr);
         if (!size)
           return false;
         WritableDataBufferSP buffer_sp(new DataBufferHeap(*size, 0));
@@ -483,7 +516,7 @@ bool lldb_private::formatters::LibCxxUnorderedMapIteratorSyntheticFrontEnd::
           ast_ctx->GetBasicType(lldb::eBasicTypeVoid).GetPointerType()},
          {"__hash_", ast_ctx->GetBasicType(lldb::eBasicTypeUnsignedLongLong)},
          {"__value_", pair_type}});
-    llvm::Optional<uint64_t> size = tree_node_type.GetByteSize(nullptr);
+    std::optional<uint64_t> size = tree_node_type.GetByteSize(nullptr);
     if (!size)
       return false;
     WritableDataBufferSP buffer_sp(new DataBufferHeap(*size, 0));
@@ -657,7 +690,9 @@ lldb_private::formatters::LibcxxUniquePtrSyntheticFrontEndCreator(
 
 size_t lldb_private::formatters::LibcxxUniquePtrSyntheticFrontEnd::
     CalculateNumChildren() {
-  return (m_value_ptr_sp ? 1 : 0);
+  if (m_value_ptr_sp)
+    return m_deleter_sp ? 2 : 1;
+  return 0;
 }
 
 lldb::ValueObjectSP
@@ -669,7 +704,10 @@ lldb_private::formatters::LibcxxUniquePtrSyntheticFrontEnd::GetChildAtIndex(
   if (idx == 0)
     return m_value_ptr_sp;
 
-  if (idx == 1) {
+  if (idx == 1)
+    return m_deleter_sp;
+
+  if (idx == 2) {
     Status status;
     auto value_sp = m_value_ptr_sp->Dereference(status);
     if (status.Success()) {
@@ -690,7 +728,15 @@ bool lldb_private::formatters::LibcxxUniquePtrSyntheticFrontEnd::Update() {
   if (!ptr_sp)
     return false;
 
-  m_value_ptr_sp = GetValueOfLibCXXCompressedPair(*ptr_sp);
+  // Retrieve the actual pointer and the deleter, and clone them to give them
+  // user-friendly names.
+  ValueObjectSP value_pointer_sp = GetFirstValueOfLibCXXCompressedPair(*ptr_sp);
+  if (value_pointer_sp)
+    m_value_ptr_sp = value_pointer_sp->Clone(ConstString("pointer"));
+
+  ValueObjectSP deleter_sp = GetSecondValueOfLibCXXCompressedPair(*ptr_sp);
+  if (deleter_sp)
+    m_deleter_sp = deleter_sp->Clone(ConstString("deleter"));
 
   return false;
 }
@@ -702,10 +748,12 @@ bool lldb_private::formatters::LibcxxUniquePtrSyntheticFrontEnd::
 
 size_t lldb_private::formatters::LibcxxUniquePtrSyntheticFrontEnd::
     GetIndexOfChildWithName(ConstString name) {
-  if (name == "__value_")
+  if (name == "pointer")
     return 0;
-  if (name == "$$dereference$$")
+  if (name == "deleter")
     return 1;
+  if (name == "$$dereference$$")
+    return 2;
   return UINT32_MAX;
 }
 
@@ -729,7 +777,7 @@ enum class StringLayout { CSD, DSC };
 /// Determine the size in bytes of \p valobj (a libc++ std::string object) and
 /// extract its data payload. Return the size + payload pair.
 // TODO: Support big-endian architectures.
-static llvm::Optional<std::pair<uint64_t, ValueObjectSP>>
+static std::optional<std::pair<uint64_t, ValueObjectSP>>
 ExtractLibcxxStringInfo(ValueObject &valobj) {
   ValueObjectSP valobj_r_sp =
       valobj.GetChildMemberWithName(ConstString("__r_"), /*can_create=*/true);
@@ -798,7 +846,7 @@ ExtractLibcxxStringInfo(ValueObject &valobj) {
     // inline string buffer (23 bytes on x86_64/Darwin). If it doesn't, it's
     // likely that the string isn't initialized and we're reading garbage.
     ExecutionContext exe_ctx(location_sp->GetExecutionContextRef());
-    const llvm::Optional<uint64_t> max_bytes =
+    const std::optional<uint64_t> max_bytes =
         location_sp->GetCompilerType().GetByteSize(
             exe_ctx.GetBestExecutionContextScope());
     if (!max_bytes || size > *max_bytes || !location_sp)
@@ -852,13 +900,13 @@ LibcxxWStringSummaryProvider(ValueObject &valobj, Stream &stream,
     return false;
 
   // std::wstring::size() is measured in 'characters', not bytes
-  TypeSystemClang *ast_context =
+  TypeSystemClangSP scratch_ts_sp =
       ScratchTypeSystemClang::GetForTarget(*valobj.GetTargetSP());
-  if (!ast_context)
+  if (!scratch_ts_sp)
     return false;
 
   auto wchar_t_size =
-      ast_context->GetBasicType(lldb::eBasicTypeWChar).GetByteSize(nullptr);
+      scratch_ts_sp->GetBasicType(lldb::eBasicTypeWChar).GetByteSize(nullptr);
   if (!wchar_t_size)
     return false;
 

@@ -28,6 +28,7 @@
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/SourceMgr.h"
 #include <algorithm>
+#include <optional>
 
 using namespace mlir;
 using namespace mlir::detail;
@@ -275,7 +276,7 @@ OptionalParseResult Parser::parseOptionalInteger(APInt &result) {
 
 /// Parse a floating point value from an integer literal token.
 ParseResult Parser::parseFloatFromIntegerLiteral(
-    Optional<APFloat> &result, const Token &tok, bool isNegative,
+    std::optional<APFloat> &result, const Token &tok, bool isNegative,
     const llvm::fltSemantics &semantics, size_t typeSizeInBits) {
   SMLoc loc = tok.getLoc();
   StringRef spelling = tok.getSpelling();
@@ -291,7 +292,7 @@ ParseResult Parser::parseFloatFromIntegerLiteral(
                           "leading minus");
   }
 
-  Optional<uint64_t> value = tok.getUInt64IntegerValue();
+  std::optional<uint64_t> value = tok.getUInt64IntegerValue();
   if (!value)
     return emitError(loc, "hexadecimal float constant out of range for type");
 
@@ -388,7 +389,7 @@ ParseResult Parser::codeCompleteDialectOrElidedOpName(SMLoc loc) {
     const char *bufBegin = state.lex.getBufferBegin();
     const char *it = loc.getPointer() - 1;
     for (; it > bufBegin && *it != '\n'; --it)
-      if (!llvm::is_contained(StringRef(" \t\r"), *it))
+      if (!StringRef(" \t\r").contains(*it))
         return true;
     return false;
   };
@@ -501,7 +502,7 @@ public:
 
   /// Return the location of the value identified by its name and number if it
   /// has been already reference.
-  Optional<SMLoc> getReferenceLoc(StringRef name, unsigned number) {
+  std::optional<SMLoc> getReferenceLoc(StringRef name, unsigned number) {
     auto &values = isolatedNameScopes.back().values;
     if (!values.count(name) || number >= values[name].size())
       return {};
@@ -533,12 +534,14 @@ public:
   /// skip parsing that component.
   ParseResult parseGenericOperationAfterOpName(
       OperationState &result,
-      Optional<ArrayRef<UnresolvedOperand>> parsedOperandUseInfo = std::nullopt,
-      Optional<ArrayRef<Block *>> parsedSuccessors = std::nullopt,
-      Optional<MutableArrayRef<std::unique_ptr<Region>>> parsedRegions =
+      std::optional<ArrayRef<UnresolvedOperand>> parsedOperandUseInfo =
           std::nullopt,
-      Optional<ArrayRef<NamedAttribute>> parsedAttributes = std::nullopt,
-      Optional<FunctionType> parsedFnType = std::nullopt);
+      std::optional<ArrayRef<Block *>> parsedSuccessors = std::nullopt,
+      std::optional<MutableArrayRef<std::unique_ptr<Region>>> parsedRegions =
+          std::nullopt,
+      std::optional<ArrayRef<NamedAttribute>> parsedAttributes = std::nullopt,
+      std::optional<Attribute> propertiesAttribute = std::nullopt,
+      std::optional<FunctionType> parsedFnType = std::nullopt);
 
   /// Parse an operation instance that is in the generic form and insert it at
   /// the provided insertion point.
@@ -1073,7 +1076,8 @@ Value OperationParser::createForwardRefPlaceholder(SMLoc loc, Type type) {
   auto name = OperationName("builtin.unrealized_conversion_cast", getContext());
   auto *op = Operation::create(
       getEncodedSourceLocation(loc), name, type, /*operands=*/{},
-      /*attributes=*/std::nullopt, /*successors=*/{}, /*numRegions=*/0);
+      /*attributes=*/std::nullopt, /*properties=*/nullptr, /*successors=*/{},
+      /*numRegions=*/0);
   forwardRefPlaceholders[op->getResult(0)] = loc;
   return op->getResult(0);
 }
@@ -1249,11 +1253,12 @@ struct CleanupOpStateRegions {
 
 ParseResult OperationParser::parseGenericOperationAfterOpName(
     OperationState &result,
-    Optional<ArrayRef<UnresolvedOperand>> parsedOperandUseInfo,
-    Optional<ArrayRef<Block *>> parsedSuccessors,
-    Optional<MutableArrayRef<std::unique_ptr<Region>>> parsedRegions,
-    Optional<ArrayRef<NamedAttribute>> parsedAttributes,
-    Optional<FunctionType> parsedFnType) {
+    std::optional<ArrayRef<UnresolvedOperand>> parsedOperandUseInfo,
+    std::optional<ArrayRef<Block *>> parsedSuccessors,
+    std::optional<MutableArrayRef<std::unique_ptr<Region>>> parsedRegions,
+    std::optional<ArrayRef<NamedAttribute>> parsedAttributes,
+    std::optional<Attribute> propertiesAttribute,
+    std::optional<FunctionType> parsedFnType) {
 
   // Parse the operand list, if not explicitly provided.
   SmallVector<UnresolvedOperand, 8> opInfo;
@@ -1282,6 +1287,16 @@ ParseResult OperationParser::parseGenericOperationAfterOpName(
     result.addSuccessors(*parsedSuccessors);
   }
 
+  // Parse the properties, if not explicitly provided.
+  if (propertiesAttribute) {
+    result.propertiesAttr = *propertiesAttribute;
+  } else if (consumeIf(Token::less)) {
+    result.propertiesAttr = parseAttribute();
+    if (!result.propertiesAttr)
+      return failure();
+    if (parseToken(Token::greater, "expected '>' to close properties"))
+      return failure();
+  }
   // Parse the region list, if not explicitly provided.
   if (!parsedRegions) {
     if (consumeIf(Token::l_paren)) {
@@ -1318,7 +1333,7 @@ ParseResult OperationParser::parseGenericOperationAfterOpName(
     auto type = parseType();
     if (!type)
       return failure();
-    auto fnType = type.dyn_cast<FunctionType>();
+    auto fnType = dyn_cast<FunctionType>(type);
     if (!fnType)
       return mlir::emitError(typeLoc, "expected function type");
 
@@ -1366,14 +1381,18 @@ Operation *OperationParser::parseGenericOperation() {
   if (!result.name.isRegistered()) {
     StringRef dialectName = StringRef(name).split('.').first;
     if (!getContext()->getLoadedDialect(dialectName) &&
-        !getContext()->getOrLoadDialect(dialectName) &&
-        !getContext()->allowsUnregisteredDialects()) {
-      // Emit an error if the dialect couldn't be loaded (i.e., it was not
-      // registered) and unregistered dialects aren't allowed.
-      emitError("operation being parsed with an unregistered dialect. If "
-                "this is intended, please use -allow-unregistered-dialect "
-                "with the MLIR tool used");
-      return nullptr;
+        !getContext()->getOrLoadDialect(dialectName)) {
+      if (!getContext()->allowsUnregisteredDialects()) {
+        // Emit an error if the dialect couldn't be loaded (i.e., it was not
+        // registered) and unregistered dialects aren't allowed.
+        emitError("operation being parsed with an unregistered dialect. If "
+                  "this is intended, please use -allow-unregistered-dialect "
+                  "with the MLIR tool used");
+        return nullptr;
+      }
+    } else {
+      // Reload the OperationName now that the dialect is loaded.
+      result.name = OperationName(name, getContext());
     }
   }
 
@@ -1384,10 +1403,53 @@ Operation *OperationParser::parseGenericOperation() {
   if (parseGenericOperationAfterOpName(result))
     return nullptr;
 
+  // Operation::create() is not allowed to fail, however setting the properties
+  // from an attribute is a failable operation. So we save the attribute here
+  // and set it on the operation post-parsing.
+  Attribute properties;
+  std::swap(properties, result.propertiesAttr);
+
+  // If we don't have properties in the textual IR, but the operation now has
+  // support for properties, we support some backward-compatible generic syntax
+  // for the operation and as such we accept inherent attributes mixed in the
+  // dictionary of discardable attributes. We pre-validate these here because
+  // invalid attributes can't be casted to the properties storage and will be
+  // silently dropped. For example an attribute { foo = 0 : i32 } that is
+  // declared as F32Attr in ODS would have a C++ type of FloatAttr in the
+  // properties array. When setting it we would do something like:
+  //
+  //   properties.foo = dyn_cast<FloatAttr>(fooAttr);
+  //
+  // which would end up with a null Attribute. The diagnostic from the verifier
+  // would be "missing foo attribute" instead of something like "expects a 32
+  // bits float attribute but got a 32 bits integer attribute".
+  if (!properties && !result.getRawProperties()) {
+    std::optional<RegisteredOperationName> info =
+        result.name.getRegisteredInfo();
+    if (info) {
+      if (failed(info->verifyInherentAttrs(result.attributes, [&]() {
+            return mlir::emitError(srcLocation) << "'" << name << "' op ";
+          })))
+        return nullptr;
+    }
+  }
+
   // Create the operation and try to parse a location for it.
   Operation *op = opBuilder.create(result);
   if (parseTrailingLocationSpecifier(op))
     return nullptr;
+
+  // Try setting the properties for the operation, using a diagnostic to print
+  // errors.
+  if (properties) {
+    InFlightDiagnostic diagnostic =
+        mlir::emitError(srcLocation, "invalid properties ")
+        << properties << " for op " << name << ": ";
+    if (failed(op->setPropertiesFromAttribute(properties, &diagnostic)))
+      return nullptr;
+    diagnostic.abandon();
+  }
+
   return op;
 }
 
@@ -1431,7 +1493,8 @@ public:
     // This can happen if an attribute set during parsing is also specified in
     // the attribute dictionary in the assembly, or the attribute is set
     // multiple during parsing.
-    Optional<NamedAttribute> duplicate = opState.attributes.findDuplicate();
+    std::optional<NamedAttribute> duplicate =
+        opState.attributes.findDuplicate();
     if (duplicate)
       return emitError(getNameLoc(), "attribute '")
              << duplicate->getName().getValue()
@@ -1450,14 +1513,15 @@ public:
 
   ParseResult parseGenericOperationAfterOpName(
       OperationState &result,
-      Optional<ArrayRef<UnresolvedOperand>> parsedUnresolvedOperands,
-      Optional<ArrayRef<Block *>> parsedSuccessors,
-      Optional<MutableArrayRef<std::unique_ptr<Region>>> parsedRegions,
-      Optional<ArrayRef<NamedAttribute>> parsedAttributes,
-      Optional<FunctionType> parsedFnType) final {
+      std::optional<ArrayRef<UnresolvedOperand>> parsedUnresolvedOperands,
+      std::optional<ArrayRef<Block *>> parsedSuccessors,
+      std::optional<MutableArrayRef<std::unique_ptr<Region>>> parsedRegions,
+      std::optional<ArrayRef<NamedAttribute>> parsedAttributes,
+      std::optional<Attribute> parsedPropertiesAttribute,
+      std::optional<FunctionType> parsedFnType) final {
     return parser.parseGenericOperationAfterOpName(
         result, parsedUnresolvedOperands, parsedSuccessors, parsedRegions,
-        parsedAttributes, parsedFnType);
+        parsedAttributes, parsedPropertiesAttribute, parsedFnType);
   }
   //===--------------------------------------------------------------------===//
   // Utilities
@@ -1772,7 +1836,7 @@ public:
 
   /// Parse a loc(...) specifier if present, filling in result if so.
   ParseResult
-  parseOptionalLocationSpecifier(Optional<Location> &result) override {
+  parseOptionalLocationSpecifier(std::optional<Location> &result) override {
     // If there is a 'loc' we parse a trailing location.
     if (!parser.consumeIf(Token::kw_loc))
       return success();
@@ -1820,7 +1884,7 @@ FailureOr<OperationName> OperationParser::parseCustomOperationName() {
   consumeToken();
 
   // Check to see if this operation name is already registered.
-  Optional<RegisteredOperationName> opInfo =
+  std::optional<RegisteredOperationName> opInfo =
       RegisteredOperationName::lookup(opName, getContext());
   if (opInfo)
     return *opInfo;
@@ -1859,7 +1923,7 @@ OperationParser::parseCustomOperation(ArrayRef<ResultRecord> resultIDs) {
   // This is the actual hook for the custom op parsing, usually implemented by
   // the op itself (`Op::parse()`). We retrieve it either from the
   // RegisteredOperationName or from the Dialect.
-  function_ref<ParseResult(OpAsmParser &, OperationState &)> parseAssemblyFn;
+  OperationName::ParseAssemblyFn parseAssemblyFn;
   bool isIsolatedFromAbove = false;
 
   StringRef defaultDialect = "";
@@ -1870,7 +1934,7 @@ OperationParser::parseCustomOperation(ArrayRef<ResultRecord> resultIDs) {
     if (iface && !iface->getDefaultDialect().empty())
       defaultDialect = iface->getDefaultDialect();
   } else {
-    Optional<Dialect::ParseOpHook> dialectHook;
+    std::optional<Dialect::ParseOpHook> dialectHook;
     Dialect *dialect = opNameInfo->getDialect();
     if (!dialect) {
       InFlightDiagnostic diag =
@@ -1926,10 +1990,23 @@ OperationParser::parseCustomOperation(ArrayRef<ResultRecord> resultIDs) {
   if (opAsmParser.didEmitError())
     return nullptr;
 
+  Attribute properties = opState.propertiesAttr;
+  opState.propertiesAttr = Attribute{};
+
   // Otherwise, create the operation and try to parse a location for it.
   Operation *op = opBuilder.create(opState);
   if (parseTrailingLocationSpecifier(op))
     return nullptr;
+
+  // Try setting the properties for the operation.
+  if (properties) {
+    InFlightDiagnostic diagnostic =
+        mlir::emitError(srcLocation, "invalid properties ")
+        << properties << " for op " << op->getName().getStringRef() << ": ";
+    if (failed(op->setPropertiesFromAttribute(properties, &diagnostic)))
+      return nullptr;
+    diagnostic.abandon();
+  }
   return op;
 }
 
@@ -2056,7 +2133,7 @@ ParseResult OperationParser::parseRegionBody(Region &region, SMLoc startLoc,
                << "previously referenced here";
       }
       Location loc = entryArg.sourceLoc.has_value()
-                         ? entryArg.sourceLoc.value()
+                         ? *entryArg.sourceLoc
                          : getEncodedSourceLocation(argInfo.location);
       BlockArgument arg = block->addArgument(entryArg.type, loc);
 
@@ -2275,7 +2352,7 @@ ParseResult OperationParser::codeCompleteSSAUse() {
         if (!forwardRefPlaceholders.count(result))
           detailOS << result.getOwner()->getName() << ": ";
       } else {
-        detailOS << "arg #" << frontValue.cast<BlockArgument>().getArgNumber()
+        detailOS << "arg #" << cast<BlockArgument>(frontValue).getArgNumber()
                  << ": ";
       }
 
@@ -2390,7 +2467,7 @@ public:
     // Blob data within then textual format is represented as a hex string.
     // TODO: We could avoid an additional alloc+copy here if we pre-allocated
     // the buffer to use during hex processing.
-    Optional<std::string> blobData =
+    std::optional<std::string> blobData =
         value.is(Token::string) ? value.getHexStringValue() : std::nullopt;
     if (!blobData)
       return p.emitError(value.getLoc(),

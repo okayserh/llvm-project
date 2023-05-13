@@ -1,7 +1,6 @@
 #include "clang/Basic/Cuda.h"
 
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/VersionTuple.h"
@@ -115,6 +114,8 @@ static const CudaArchToStringMap arch_names[] = {
     GFX(90a),  // gfx90a
     GFX(90c),  // gfx90c
     GFX(940),  // gfx940
+    GFX(941),  // gfx941
+    GFX(942),  // gfx942
     GFX(1010), // gfx1010
     GFX(1011), // gfx1011
     GFX(1012), // gfx1012

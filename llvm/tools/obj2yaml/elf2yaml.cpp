@@ -247,8 +247,7 @@ static void dumpSectionOffsets(const typename ELFT::Ehdr &Header,
   else
     ExpectedOffset = sizeof(typename ELFT::Ehdr);
 
-  for (const std::unique_ptr<ELFYAML::Chunk> &C :
-       makeArrayRef(V).drop_front()) {
+  for (const std::unique_ptr<ELFYAML::Chunk> &C : ArrayRef(V).drop_front()) {
     ELFYAML::Section &Sec = *cast<ELFYAML::Section>(C.get());
     const typename ELFT::Shdr &SecHdr = S[Sec.OriginalSecNdx];
 
@@ -360,7 +359,7 @@ template <class ELFT> Expected<ELFYAML::Object *> ELFDumper<ELFT>::dump() {
   std::vector<ELFYAML::Section *> OriginalOrder;
   if (!Chunks.empty())
     for (const std::unique_ptr<ELFYAML::Chunk> &C :
-         makeArrayRef(Chunks).drop_front())
+         ArrayRef(Chunks).drop_front())
       OriginalOrder.push_back(cast<ELFYAML::Section>(C.get()));
 
   // Sometimes the order of sections in the section header table does not match
@@ -402,10 +401,10 @@ template <class ELFT> Expected<ELFYAML::Object *> ELFDumper<ELFT>::dump() {
   }
 
   llvm::erase_if(Chunks, [this, &Y](const std::unique_ptr<ELFYAML::Chunk> &C) {
-    if (isa<ELFYAML::SectionHeaderTable>(*C.get()))
+    if (isa<ELFYAML::SectionHeaderTable>(*C))
       return false;
 
-    const ELFYAML::Section &S = cast<ELFYAML::Section>(*C.get());
+    const ELFYAML::Section &S = cast<ELFYAML::Section>(*C);
     return !shouldPrintSection(S, Sections[S.OriginalSecNdx], Y->DWARF);
   });
 
@@ -495,7 +494,7 @@ ELFDumper<ELFT>::dumpProgramHeaders(
     // It is not possible to have a non-Section chunk, because
     // obj2yaml does not create Fill chunks.
     for (const std::unique_ptr<ELFYAML::Chunk> &C : Chunks) {
-      ELFYAML::Section &S = cast<ELFYAML::Section>(*C.get());
+      ELFYAML::Section &S = cast<ELFYAML::Section>(*C);
       if (isInSegment<ELFT>(S, Sections[S.OriginalSecNdx], Phdr)) {
         if (!PH.FirstSec)
           PH.FirstSec = S.Name;
@@ -530,13 +529,13 @@ std::optional<DWARFYAML::Data> ELFDumper<ELFT>::dumpDWARFSections(
       cantFail(std::move(Err));
 
       if (RawSec->Name == ".debug_aranges")
-        Err = dumpDebugARanges(*DWARFCtx.get(), DWARF);
+        Err = dumpDebugARanges(*DWARFCtx, DWARF);
       else if (RawSec->Name == ".debug_str")
-        Err = dumpDebugStrings(*DWARFCtx.get(), DWARF);
+        Err = dumpDebugStrings(*DWARFCtx, DWARF);
       else if (RawSec->Name == ".debug_ranges")
-        Err = dumpDebugRanges(*DWARFCtx.get(), DWARF);
+        Err = dumpDebugRanges(*DWARFCtx, DWARF);
       else if (RawSec->Name == ".debug_addr")
-        Err = dumpDebugAddr(*DWARFCtx.get(), DWARF);
+        Err = dumpDebugAddr(*DWARFCtx, DWARF);
       else
         continue;
 
@@ -1222,6 +1221,7 @@ ELFDumper<ELFT>::dumpNoteSection(const Elf_Shdr *Shdr) {
 
   std::vector<ELFYAML::NoteEntry> Entries;
   ArrayRef<uint8_t> Content = *ContentOrErr;
+  size_t Align = std::max<size_t>(Shdr->sh_addralign, 4);
   while (!Content.empty()) {
     if (Content.size() < sizeof(Elf_Nhdr)) {
       S->Content = yaml::BinaryRef(*ContentOrErr);
@@ -1229,16 +1229,16 @@ ELFDumper<ELFT>::dumpNoteSection(const Elf_Shdr *Shdr) {
     }
 
     const Elf_Nhdr *Header = reinterpret_cast<const Elf_Nhdr *>(Content.data());
-    if (Content.size() < Header->getSize()) {
+    if (Content.size() < Header->getSize(Align)) {
       S->Content = yaml::BinaryRef(*ContentOrErr);
       return S.release();
     }
 
     Elf_Note Note(*Header);
     Entries.push_back(
-        {Note.getName(), Note.getDesc(), (ELFYAML::ELF_NT)Note.getType()});
+        {Note.getName(), Note.getDesc(Align), (ELFYAML::ELF_NT)Note.getType()});
 
-    Content = Content.drop_front(Header->getSize());
+    Content = Content.drop_front(Header->getSize(Align));
   }
 
   S->Notes = std::move(Entries);

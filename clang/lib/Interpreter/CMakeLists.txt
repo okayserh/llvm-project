@@ -3,8 +3,11 @@ set(LLVM_LINK_COMPONENTS
    native
    Option
    OrcJit
+   OrcShared
+   OrcTargetProcess
    Support
    Target
+   TargetParser
   )
 
 add_clang_library(clangInterpreter
@@ -20,13 +23,12 @@ add_clang_library(clangInterpreter
   clangAST
   clangAnalysis
   clangBasic
+  clangCodeGen
   clangDriver
-  clangEdit
   clangFrontend
+  clangFrontendTool
   clangLex
   clangParse
   clangSema
   clangSerialization
-  clangCodeGen
-  clangFrontendTool
   )

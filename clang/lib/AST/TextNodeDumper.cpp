@@ -1495,6 +1495,9 @@ void TextNodeDumper::VisitVectorType(const VectorType *T) {
   case VectorType::SveFixedLengthPredicateVector:
     OS << " fixed-length sve predicate vector";
     break;
+  case VectorType::RVVFixedLengthDataVector:
+    OS << " fixed-length rvv data vector";
+    break;
   }
   OS << " " << T->getNumElements();
 }
@@ -1806,6 +1809,8 @@ void TextNodeDumper::VisitVarDecl(const VarDecl *D) {
     case VarDecl::ListInit:
       OS << " listinit";
       break;
+    case VarDecl::ParenListInit:
+      OS << " parenlistinit";
     }
   }
   if (D->needsDestruction(D->getASTContext()))

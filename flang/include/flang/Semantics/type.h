@@ -266,7 +266,8 @@ public:
 
   bool MightBeParameterized() const;
   bool IsForwardReferenced() const;
-  bool HasDefaultInitialization(bool ignoreAllocatable = false) const;
+  bool HasDefaultInitialization(
+      bool ignoreAllocatable = false, bool ignorePointer = true) const;
   bool HasDestruction() const;
 
   // The "raw" type parameter list is a simple transcription from the
@@ -389,21 +390,6 @@ private:
 };
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const DeclTypeSpec &);
 
-// This represents a proc-interface in the declaration of a procedure or
-// procedure component. It comprises a symbol that represents the specific
-// interface or a decl-type-spec that represents the function return type.
-class ProcInterface {
-public:
-  const Symbol *symbol() const { return symbol_; }
-  const DeclTypeSpec *type() const { return type_; }
-  void set_symbol(const Symbol &symbol);
-  void set_type(const DeclTypeSpec &type);
-
-private:
-  const Symbol *symbol_{nullptr};
-  const DeclTypeSpec *type_{nullptr};
-};
-
 // Define some member functions here in the header so that they can be used by
 // lib/Evaluate without link-time dependency on Semantics.
 
@@ -459,6 +445,8 @@ inline DerivedTypeSpec *DeclTypeSpec::AsDerived() {
 inline const DerivedTypeSpec *DeclTypeSpec::AsDerived() const {
   return const_cast<DeclTypeSpec *>(this)->AsDerived();
 }
+
+bool IsInteroperableIntrinsicType(const DeclTypeSpec &);
 
 } // namespace Fortran::semantics
 #endif // FORTRAN_SEMANTICS_TYPE_H_

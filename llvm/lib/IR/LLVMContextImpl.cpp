@@ -113,8 +113,11 @@ LLVMContextImpl::~LLVMContextImpl() {
 
   CAZConstants.clear();
   CPNConstants.clear();
+  CTNConstants.clear();
   UVConstants.clear();
   PVConstants.clear();
+  IntZeroConstants.clear();
+  IntOneConstants.clear();
   IntConstants.clear();
   FPConstants.clear();
   CDSConstants.clear();
@@ -248,10 +251,6 @@ void LLVMContextImpl::setOptPassGate(OptPassGate& OPG) {
   this->OPG = &OPG;
 }
 
-bool LLVMContextImpl::hasOpaquePointersValue() {
-  return OpaquePointers.has_value();
-}
-
 bool LLVMContextImpl::getOpaquePointers() {
   if (LLVM_UNLIKELY(!OpaquePointers))
     OpaquePointers = OpaquePointersCL;
@@ -259,7 +258,7 @@ bool LLVMContextImpl::getOpaquePointers() {
 }
 
 void LLVMContextImpl::setOpaquePointers(bool OP) {
-  assert((!OpaquePointers || OpaquePointers.value() == OP) &&
+  assert((!OpaquePointers || *OpaquePointers == OP) &&
          "Cannot change opaque pointers mode once set");
   OpaquePointers = OP;
 }

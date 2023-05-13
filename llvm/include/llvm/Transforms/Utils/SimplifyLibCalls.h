@@ -89,9 +89,9 @@ private:
   /// parameter. These are used by an implementation to opt-into stricter
   /// checking.
   bool isFortifiedCallFoldable(CallInst *CI, unsigned ObjSizeOp,
-                               Optional<unsigned> SizeOp = std::nullopt,
-                               Optional<unsigned> StrOp = std::nullopt,
-                               Optional<unsigned> FlagsOp = std::nullopt);
+                               std::optional<unsigned> SizeOp = std::nullopt,
+                               std::optional<unsigned> StrOp = std::nullopt,
+                               std::optional<unsigned> FlagsOp = std::nullopt);
 };
 
 /// LibCallSimplifier - This class implements a collection of optimizations
@@ -181,6 +181,7 @@ private:
   Value *optimizeMemMove(CallInst *CI, IRBuilderBase &B);
   Value *optimizeMemSet(CallInst *CI, IRBuilderBase &B);
   Value *optimizeRealloc(CallInst *CI, IRBuilderBase &B);
+  Value *optimizeNew(CallInst *CI, IRBuilderBase &B, LibFunc &Func);
   Value *optimizeWcslen(CallInst *CI, IRBuilderBase &B);
   Value *optimizeBCopy(CallInst *CI, IRBuilderBase &B);
 
@@ -198,7 +199,7 @@ private:
   Value *optimizeFMinFMax(CallInst *CI, IRBuilderBase &B);
   Value *optimizeLog(CallInst *CI, IRBuilderBase &B);
   Value *optimizeSqrt(CallInst *CI, IRBuilderBase &B);
-  Value *optimizeSinCosPi(CallInst *CI, IRBuilderBase &B);
+  Value *optimizeSinCosPi(CallInst *CI, bool IsSin, IRBuilderBase &B);
   Value *optimizeTan(CallInst *CI, IRBuilderBase &B);
   // Wrapper for all floating point library call optimizations
   Value *optimizeFloatingPointLibCall(CallInst *CI, LibFunc Func,

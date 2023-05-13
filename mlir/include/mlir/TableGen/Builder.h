@@ -39,7 +39,7 @@ public:
     StringRef getCppType() const;
 
     /// Return an optional string containing the name of this parameter. If
-    /// None, no name was specified for this parameter by the user.
+    /// std::nullopt, no name was specified for this parameter by the user.
     std::optional<StringRef> getName() const { return name; }
 
     /// Return an optional string containing the default value to use for this
@@ -69,6 +69,10 @@ public:
 
   /// Return an optional string containing the body of the builder.
   std::optional<StringRef> getBody() const;
+
+  /// Return the deprecation message of the builder.
+  /// Empty optional if the builder is not deprecated.
+  std::optional<StringRef> getDeprecatedMessage() const;
 
 protected:
   /// The TableGen definition of this builder.

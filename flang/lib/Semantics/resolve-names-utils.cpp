@@ -151,16 +151,16 @@ void GenericSpecInfo::Analyze(const parser::GenericSpec &x) {
             return GenericKind::OtherKind::Assignment;
           },
           [&](const parser::GenericSpec::ReadFormatted &) -> GenericKind {
-            return GenericKind::DefinedIo::ReadFormatted;
+            return common::DefinedIo::ReadFormatted;
           },
           [&](const parser::GenericSpec::ReadUnformatted &) -> GenericKind {
-            return GenericKind::DefinedIo::ReadUnformatted;
+            return common::DefinedIo::ReadUnformatted;
           },
           [&](const parser::GenericSpec::WriteFormatted &) -> GenericKind {
-            return GenericKind::DefinedIo::WriteFormatted;
+            return common::DefinedIo::WriteFormatted;
           },
           [&](const parser::GenericSpec::WriteUnformatted &) -> GenericKind {
-            return GenericKind::DefinedIo::WriteUnformatted;
+            return common::DefinedIo::WriteUnformatted;
           },
       },
       x.u);
@@ -357,8 +357,14 @@ Bound ArraySpecAnalyzer::GetBound(const parser::SpecificationExpr &x) {
 static void PropagateSaveAttr(
     const EquivalenceObject &src, EquivalenceSet &dst) {
   if (src.symbol.attrs().test(Attr::SAVE)) {
+    bool isImplicit{src.symbol.implicitAttrs().test(Attr::SAVE)};
     for (auto &obj : dst) {
-      obj.symbol.attrs().set(Attr::SAVE);
+      if (!obj.symbol.attrs().test(Attr::SAVE)) {
+        obj.symbol.attrs().set(Attr::SAVE);
+        if (isImplicit) {
+          obj.symbol.implicitAttrs().set(Attr::SAVE);
+        }
+      }
     }
   }
 }
@@ -798,34 +804,34 @@ void SymbolMapper::MapSymbolExprs(Symbol &symbol) {
       }
     }
   }
-  common::visit(common::visitors{[&](ObjectEntityDetails &object) {
-                                   for (ShapeSpec &spec : object.shape()) {
-                                     MapShapeSpec(spec);
-                                   }
-                                   for (ShapeSpec &spec : object.coshape()) {
-                                     MapShapeSpec(spec);
-                                   }
-                                 },
-                    [&](ProcEntityDetails &proc) {
-                      if (const Symbol *mappedSymbol{
-                              MapInterface(proc.interface().symbol())}) {
-                        proc.interface().set_symbol(*mappedSymbol);
-                      } else if (const DeclTypeSpec *mappedType{
-                                     MapType(proc.interface().type())}) {
-                        proc.interface().set_type(*mappedType);
-                      }
-                      if (proc.init()) {
-                        if (const Symbol *mapped{MapSymbol(*proc.init())}) {
-                          proc.set_init(*mapped);
-                        }
-                      }
-                    },
-                    [&](const HostAssocDetails &hostAssoc) {
-                      if (const Symbol *mapped{MapSymbol(hostAssoc.symbol())}) {
-                        symbol.set_details(HostAssocDetails{*mapped});
-                      }
-                    },
-                    [](const auto &) {}},
+  common::visit(
+      common::visitors{[&](ObjectEntityDetails &object) {
+                         for (ShapeSpec &spec : object.shape()) {
+                           MapShapeSpec(spec);
+                         }
+                         for (ShapeSpec &spec : object.coshape()) {
+                           MapShapeSpec(spec);
+                         }
+                       },
+          [&](ProcEntityDetails &proc) {
+            if (const Symbol *
+                mappedSymbol{MapInterface(proc.procInterface())}) {
+              proc.set_procInterface(*mappedSymbol);
+            } else if (const DeclTypeSpec * mappedType{MapType(proc.type())}) {
+              proc.set_type(*mappedType);
+            }
+            if (proc.init()) {
+              if (const Symbol * mapped{MapSymbol(*proc.init())}) {
+                proc.set_init(*mapped);
+              }
+            }
+          },
+          [&](const HostAssocDetails &hostAssoc) {
+            if (const Symbol * mapped{MapSymbol(hostAssoc.symbol())}) {
+              symbol.set_details(HostAssocDetails{*mapped});
+            }
+          },
+          [](const auto &) {}},
       symbol.details());
 }
 

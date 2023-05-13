@@ -1,5 +1,8 @@
 ## This test checks how we handle the --bb-addr-map option.
 
+## Fails on windows (https://github.com/llvm/llvm-project/issues/60013).
+# UNSUPPORTED: system-windows
+
 ## Check 64-bit:
 # RUN: yaml2obj --docnum=1 %s -DBITS=64 -DADDR=0x999999999 -o %t1.x64.o
 # RUN: llvm-readobj %t1.x64.o --bb-addr-map 2>&1 | FileCheck %s -DADDR=0x999999999 -DFILE=%t1.x64.o --check-prefix=CHECK
@@ -17,6 +20,10 @@
 ## Check that a malformed section can be handled.
 # RUN: yaml2obj --docnum=1 %s -DBITS=32 -DSIZE=6 -o %t2.o
 # RUN: llvm-readobj %t2.o --bb-addr-map 2>&1 | FileCheck %s -DOFFSET=0x00000006 -DFILE=%t2.o --check-prefix=TRUNCATED
+
+## Check that invalid metadata can be handled.
+# RUN: yaml2obj --docnum=1 %s -DBITS=32 -DMETADATA=0xF000002 -o %t3.o
+# RUN: llvm-readobj %t3.o --bb-addr-map 2>&1 | FileCheck %s -DFILE=%t3.o --check-prefix=INVALIDMD
 
 # CHECK:      BBAddrMap [
 # CHECK-NEXT:   Function {
@@ -94,6 +101,9 @@
 # TRUNCATED-NEXT:   }
 # TRUNCATED-NEXT: ]
 
+# INVALIDMD:      BBAddrMap [
+# INVALIDMD-NEXT:   warning: '[[FILE]]': unable to dump SHT_LLVM_BB_ADDR_MAP section with index 3: invalid encoding for BBEntry::Metadata: 0xf000002
+
 --- !ELF
 FileHeader:
   Class: ELFCLASS[[BITS]]
@@ -117,7 +127,7 @@ Sections:
           - ID:            0
             AddressOffset: 0x0
             Size:          0x1
-            Metadata:      0xF0000002
+            Metadata:      [[METADATA=0x2]]
           - ID:            2
             AddressOffset: 0x3
             Size:          0x4

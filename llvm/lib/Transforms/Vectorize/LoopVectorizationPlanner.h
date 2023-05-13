@@ -297,7 +297,7 @@ public:
 
   /// Plan how to best vectorize, return the best VF and its cost, or
   /// std::nullopt if vectorization and interleaving should be avoided up front.
-  Optional<VectorizationFactor> plan(ElementCount UserVF, unsigned UserIC);
+  std::optional<VectorizationFactor> plan(ElementCount UserVF, unsigned UserIC);
 
   /// Use the VPlan-native path to plan how to best vectorize, return the best
   /// VF and its cost.
@@ -311,16 +311,22 @@ public:
   /// TODO: \p IsEpilogueVectorization is needed to avoid issues due to epilogue
   /// vectorization re-using plans for both the main and epilogue vector loops.
   /// It should be removed once the re-use issue has been fixed.
-  void executePlan(ElementCount VF, unsigned UF, VPlan &BestPlan,
-                   InnerLoopVectorizer &LB, DominatorTree *DT,
-                   bool IsEpilogueVectorization);
+  /// \p ExpandedSCEVs is passed during execution of the plan for epilogue loop
+  /// to re-use expansion results generated during main plan execution. Returns
+  /// a mapping of SCEVs to their expanded IR values. Note that this is a
+  /// temporary workaround needed due to the current epilogue handling.
+  DenseMap<const SCEV *, Value *>
+  executePlan(ElementCount VF, unsigned UF, VPlan &BestPlan,
+              InnerLoopVectorizer &LB, DominatorTree *DT,
+              bool IsEpilogueVectorization,
+              DenseMap<const SCEV *, Value *> *ExpandedSCEVs = nullptr);
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   void printPlans(raw_ostream &O);
 #endif
 
-  /// Look through the existing plans and return true if we have one with all
-  /// the vectorization factors in question.
+  /// Look through the existing plans and return true if we have one with
+  /// vectorization factor \p VF.
   bool hasPlanWithVF(ElementCount VF) const {
     return any_of(VPlans,
                   [&](const VPlanPtr &Plan) { return Plan->hasVF(VF); });
@@ -350,9 +356,12 @@ private:
 
   /// Build a VPlan using VPRecipes according to the information gather by
   /// Legal. This method is only used for the legacy inner loop vectorizer.
-  VPlanPtr buildVPlanWithVPRecipes(
-      VFRange &Range, SmallPtrSetImpl<Instruction *> &DeadInstructions,
-      const MapVector<Instruction *, Instruction *> &SinkAfter);
+  /// \p Range's largest included VF is restricted to the maximum VF the
+  /// returned VPlan is valid for. If no VPlan can be built for the input range,
+  /// set the largest included VF to the maximum VF for which no plan could be
+  /// built.
+  std::optional<VPlanPtr> tryToBuildVPlanWithVPRecipes(
+      VFRange &Range, SmallPtrSetImpl<Instruction *> &DeadInstructions);
 
   /// Build VPlans for power-of-2 VF's between \p MinVF and \p MaxVF inclusive,
   /// according to the information gathered by Legal when it checked if it is

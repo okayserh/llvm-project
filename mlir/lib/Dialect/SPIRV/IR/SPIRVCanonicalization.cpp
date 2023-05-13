@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include <utility>
+#include <optional>
 
 #include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
 
@@ -28,13 +29,13 @@ using namespace mlir;
 
 /// Returns the boolean value under the hood if the given `boolAttr` is a scalar
 /// or splat vector bool constant.
-static Optional<bool> getScalarOrSplatBoolAttr(Attribute attr) {
+static std::optional<bool> getScalarOrSplatBoolAttr(Attribute attr) {
   if (!attr)
     return std::nullopt;
 
-  if (auto boolAttr = attr.dyn_cast<BoolAttr>())
+  if (auto boolAttr = llvm::dyn_cast<BoolAttr>(attr))
     return boolAttr.getValue();
-  if (auto splatAttr = attr.dyn_cast<SplatElementsAttr>())
+  if (auto splatAttr = llvm::dyn_cast<SplatElementsAttr>(attr))
     if (splatAttr.getElementType().isInteger(1))
       return splatAttr.getSplatValue<bool>();
   return std::nullopt;
@@ -51,12 +52,12 @@ static Attribute extractCompositeElement(Attribute composite,
   if (indices.empty())
     return composite;
 
-  if (auto vector = composite.dyn_cast<ElementsAttr>()) {
+  if (auto vector = llvm::dyn_cast<ElementsAttr>(composite)) {
     assert(indices.size() == 1 && "must have exactly one index for a vector");
     return vector.getValues<Attribute>()[indices[0]];
   }
 
-  if (auto array = composite.dyn_cast<ArrayAttr>()) {
+  if (auto array = llvm::dyn_cast<ArrayAttr>(composite)) {
     assert(!indices.empty() && "must have at least one index for an array");
     return extractCompositeElement(array.getValue()[indices[0]],
                                    indices.drop_front());
@@ -116,7 +117,7 @@ void spirv::AccessChainOp::getCanonicalizationPatterns(
 // spirv.BitcastOp
 //===----------------------------------------------------------------------===//
 
-OpFoldResult spirv::BitcastOp::fold(ArrayRef<Attribute> /*operands*/) {
+OpFoldResult spirv::BitcastOp::fold(FoldAdaptor /*adaptor*/) {
   Value curInput = getOperand();
   if (getType() == curInput.getType())
     return curInput;
@@ -139,7 +140,7 @@ OpFoldResult spirv::BitcastOp::fold(ArrayRef<Attribute> /*operands*/) {
 // spirv.CompositeExtractOp
 //===----------------------------------------------------------------------===//
 
-OpFoldResult spirv::CompositeExtractOp::fold(ArrayRef<Attribute> operands) {
+OpFoldResult spirv::CompositeExtractOp::fold(FoldAdaptor adaptor) {
   if (auto insertOp =
           getComposite().getDefiningOp<spirv::CompositeInsertOp>()) {
     if (getIndices() == insertOp.getIndices())
@@ -148,7 +149,7 @@ OpFoldResult spirv::CompositeExtractOp::fold(ArrayRef<Attribute> operands) {
 
   if (auto constructOp =
           getComposite().getDefiningOp<spirv::CompositeConstructOp>()) {
-    auto type = constructOp.getType().cast<spirv::CompositeType>();
+    auto type = llvm::cast<spirv::CompositeType>(constructOp.getType());
     if (getIndices().size() == 1 &&
         constructOp.getConstituents().size() == type.getNumElements()) {
       auto i = getIndices().begin()->cast<IntegerAttr>();
@@ -158,17 +159,16 @@ OpFoldResult spirv::CompositeExtractOp::fold(ArrayRef<Attribute> operands) {
 
   auto indexVector =
       llvm::to_vector<8>(llvm::map_range(getIndices(), [](Attribute attr) {
-        return static_cast<unsigned>(attr.cast<IntegerAttr>().getInt());
+        return static_cast<unsigned>(llvm::cast<IntegerAttr>(attr).getInt());
       }));
-  return extractCompositeElement(operands[0], indexVector);
+  return extractCompositeElement(adaptor.getComposite(), indexVector);
 }
 
 //===----------------------------------------------------------------------===//
 // spirv.Constant
 //===----------------------------------------------------------------------===//
 
-OpFoldResult spirv::ConstantOp::fold(ArrayRef<Attribute> operands) {
-  assert(operands.empty() && "spirv.Constant has no operands");
+OpFoldResult spirv::ConstantOp::fold(FoldAdaptor /*adaptor*/) {
   return getValue();
 }
 
@@ -176,8 +176,7 @@ OpFoldResult spirv::ConstantOp::fold(ArrayRef<Attribute> operands) {
 // spirv.IAdd
 //===----------------------------------------------------------------------===//
 
-OpFoldResult spirv::IAddOp::fold(ArrayRef<Attribute> operands) {
-  assert(operands.size() == 2 && "spirv.IAdd expects two operands");
+OpFoldResult spirv::IAddOp::fold(FoldAdaptor adaptor) {
   // x + 0 = x
   if (matchPattern(getOperand2(), m_Zero()))
     return getOperand1();
@@ -188,15 +187,15 @@ OpFoldResult spirv::IAddOp::fold(ArrayRef<Attribute> operands) {
   // R, where N is the component width and R is computed with enough precision
   // to avoid overflow and underflow.
   return constFoldBinaryOp<IntegerAttr>(
-      operands, [](APInt a, const APInt &b) { return std::move(a) + b; });
+      adaptor.getOperands(),
+      [](APInt a, const APInt &b) { return std::move(a) + b; });
 }
 
 //===----------------------------------------------------------------------===//
 // spirv.IMul
 //===----------------------------------------------------------------------===//
 
-OpFoldResult spirv::IMulOp::fold(ArrayRef<Attribute> operands) {
-  assert(operands.size() == 2 && "spirv.IMul expects two operands");
+OpFoldResult spirv::IMulOp::fold(FoldAdaptor adaptor) {
   // x * 0 == 0
   if (matchPattern(getOperand2(), m_Zero()))
     return getOperand2();
@@ -210,14 +209,15 @@ OpFoldResult spirv::IMulOp::fold(ArrayRef<Attribute> operands) {
   // R, where N is the component width and R is computed with enough precision
   // to avoid overflow and underflow.
   return constFoldBinaryOp<IntegerAttr>(
-      operands, [](const APInt &a, const APInt &b) { return a * b; });
+      adaptor.getOperands(),
+      [](const APInt &a, const APInt &b) { return a * b; });
 }
 
 //===----------------------------------------------------------------------===//
 // spirv.ISub
 //===----------------------------------------------------------------------===//
 
-OpFoldResult spirv::ISubOp::fold(ArrayRef<Attribute> operands) {
+OpFoldResult spirv::ISubOp::fold(FoldAdaptor adaptor) {
   // x - x = 0
   if (getOperand1() == getOperand2())
     return Builder(getContext()).getIntegerAttr(getType(), 0);
@@ -228,24 +228,39 @@ OpFoldResult spirv::ISubOp::fold(ArrayRef<Attribute> operands) {
   // R, where N is the component width and R is computed with enough precision
   // to avoid overflow and underflow.
   return constFoldBinaryOp<IntegerAttr>(
-      operands, [](APInt a, const APInt &b) { return std::move(a) - b; });
+      adaptor.getOperands(),
+      [](APInt a, const APInt &b) { return std::move(a) - b; });
 }
 
 //===----------------------------------------------------------------------===//
 // spirv.LogicalAnd
 //===----------------------------------------------------------------------===//
 
-OpFoldResult spirv::LogicalAndOp::fold(ArrayRef<Attribute> operands) {
-  assert(operands.size() == 2 && "spirv.LogicalAnd should take two operands");
-
-  if (Optional<bool> rhs = getScalarOrSplatBoolAttr(operands.back())) {
+OpFoldResult spirv::LogicalAndOp::fold(FoldAdaptor adaptor) {
+  if (std::optional<bool> rhs =
+          getScalarOrSplatBoolAttr(adaptor.getOperand2())) {
     // x && true = x
-    if (rhs.value())
+    if (*rhs)
       return getOperand1();
 
     // x && false = false
+    if (!*rhs)
+      return adaptor.getOperand2();
+  }
+
+  return Attribute();
+}
+
+//===----------------------------------------------------------------------===//
+// spirv.LogicalNotEqualOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult spirv::LogicalNotEqualOp::fold(FoldAdaptor adaptor) {
+  if (std::optional<bool> rhs =
+          getScalarOrSplatBoolAttr(adaptor.getOperand2())) {
+    // x && false = x
     if (!rhs.value())
-      return operands.back();
+      return getOperand1();
   }
 
   return Attribute();
@@ -267,16 +282,14 @@ void spirv::LogicalNotOp::getCanonicalizationPatterns(
 // spirv.LogicalOr
 //===----------------------------------------------------------------------===//
 
-OpFoldResult spirv::LogicalOrOp::fold(ArrayRef<Attribute> operands) {
-  assert(operands.size() == 2 && "spirv.LogicalOr should take two operands");
-
-  if (auto rhs = getScalarOrSplatBoolAttr(operands.back())) {
-    if (rhs.value())
+OpFoldResult spirv::LogicalOrOp::fold(FoldAdaptor adaptor) {
+  if (auto rhs = getScalarOrSplatBoolAttr(adaptor.getOperand2())) {
+    if (*rhs)
       // x || true = true
-      return operands.back();
+      return adaptor.getOperand2();
 
     // x || false = x
-    if (!rhs.value())
+    if (!*rhs)
       return getOperand1();
   }
 
@@ -421,10 +434,9 @@ LogicalResult ConvertSelectionOpToSelect::canCanonicalizeSelection(
   // "Before version 1.4, Result Type must be a pointer, scalar, or vector.
   // Starting with version 1.4, Result Type can additionally be a composite type
   // other than a vector."
-  bool isScalarOrVector = trueBrStoreOp.getValue()
-                              .getType()
-                              .cast<spirv::SPIRVType>()
-                              .isScalarOrVector();
+  bool isScalarOrVector =
+      llvm::cast<spirv::SPIRVType>(trueBrStoreOp.getValue().getType())
+          .isScalarOrVector();
 
   // Check that each `spirv.Store` uses the same pointer, memory access
   // attributes and a valid type of the value.

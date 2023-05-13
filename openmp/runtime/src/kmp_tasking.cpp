@@ -21,6 +21,14 @@
 #include "ompt-specific.h"
 #endif
 
+#if ENABLE_LIBOMPTARGET
+static void (*tgt_target_nowait_query)(void **);
+
+void __kmp_init_target_task() {
+  *(void **)(&tgt_target_nowait_query) = KMP_DLSYM("__tgt_target_nowait_query");
+}
+#endif
+
 /* forward declaration */
 static void __kmp_enable_tasking(kmp_task_team_t *task_team,
                                  kmp_info_t *this_thr);
@@ -1063,7 +1071,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
   KMP_DEBUG_ASSERT(taskdata->td_flags.started == 1);
   KMP_DEBUG_ASSERT(taskdata->td_flags.freed == 0);
 
-  bool detach = false;
+  bool completed = true;
   if (UNLIKELY(taskdata->td_flags.detachable == TASK_DETACHABLE)) {
     if (taskdata->td_allow_completion_event.type ==
         KMP_EVENT_ALLOW_COMPLETION) {
@@ -1087,13 +1095,24 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
         // __kmp_fulfill_event might free taskdata at any time from now
 
         taskdata->td_flags.proxy = TASK_PROXY; // proxify!
-        detach = true;
+        completed = false;
       }
       __kmp_release_tas_lock(&taskdata->td_allow_completion_event.lock, gtid);
     }
   }
 
-  if (!detach) {
+  // Tasks with valid target async handles must be re-enqueued.
+  if (taskdata->td_target_data.async_handle != NULL) {
+    // Note: no need to translate gtid to its shadow. If the current thread is a
+    // hidden helper one, then the gtid is already correct. Otherwise, hidden
+    // helper threads are disabled, and gtid refers to a OpenMP thread.
+    __kmpc_give_task(task, __kmp_tid_from_gtid(gtid));
+    if (KMP_HIDDEN_HELPER_THREAD(gtid))
+      __kmp_hidden_helper_worker_thread_signal();
+    completed = false;
+  }
+
+  if (completed) {
     taskdata->td_flags.complete = 1; // mark the task as completed
 
 #if OMPT_SUPPORT
@@ -1125,6 +1144,13 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
     // function
     KMP_DEBUG_ASSERT(taskdata->td_flags.executing == 1);
     taskdata->td_flags.executing = 0; // suspend the finishing task
+
+    // Decrement the counter of hidden helper tasks to be executed.
+    if (taskdata->td_flags.hidden_helper) {
+      // Hidden helper tasks can only be executed by hidden helper threads.
+      KMP_ASSERT(KMP_HIDDEN_HELPER_THREAD(gtid));
+      KMP_ATOMIC_DEC(&__kmp_unexecuted_hidden_helper_tasks);
+    }
   }
 
   KA_TRACE(
@@ -1136,7 +1162,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
   // johnmc: if an asynchronous inquiry peers into the runtime system
   // it doesn't see the freed task as the current task.
   thread->th.th_current_task = resumed_task;
-  if (!detach)
+  if (completed)
     __kmp_free_task_and_ancestors(gtid, taskdata, thread);
 
   // TODO: GEH - make sure root team implicit task is initialized properly.
@@ -1532,6 +1558,7 @@ kmp_task_t *__kmp_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
       parent_task->td_taskgroup; // task inherits taskgroup from the parent task
   taskdata->td_dephash = NULL;
   taskdata->td_depnode = NULL;
+  taskdata->td_target_data.async_handle = NULL;
   if (flags->tiedness == TASK_UNTIED)
     taskdata->td_last_tied = NULL; // will be set when the task is scheduled
   else
@@ -1674,13 +1701,6 @@ static void __kmp_invoke_task(kmp_int32 gtid, kmp_task_t *task,
   }
 #endif
 
-  // Decreament the counter of hidden helper tasks to be executed
-  if (taskdata->td_flags.hidden_helper) {
-    // Hidden helper tasks can only be executed by hidden helper threads
-    KMP_ASSERT(KMP_HIDDEN_HELPER_THREAD(gtid));
-    KMP_ATOMIC_DEC(&__kmp_unexecuted_hidden_helper_tasks);
-  }
-
   // Proxy tasks are not handled by the runtime
   if (taskdata->td_flags.proxy != TASK_PROXY) {
     __kmp_task_start(gtid, task, current_task); // OMPT only if not discarded
@@ -1783,6 +1803,15 @@ static void __kmp_invoke_task(kmp_int32 gtid, kmp_task_t *task,
     KMP_FSYNC_ACQUIRED(taskdata); // acquired self (new task)
 #endif
 
+#if ENABLE_LIBOMPTARGET
+    if (taskdata->td_target_data.async_handle != NULL) {
+      // If we have a valid target async handle, that means that we have already
+      // executed the task routine once. We must query for the handle completion
+      // instead of re-executing the routine.
+      KMP_ASSERT(tgt_target_nowait_query);
+      tgt_target_nowait_query(&taskdata->td_target_data.async_handle);
+    } else
+#endif
     if (task->routine != NULL) {
 #ifdef KMP_GOMP_COMPAT
       if (taskdata->td_flags.native) {
@@ -3909,6 +3938,44 @@ void __kmp_wait_to_unref_task_teams(void) {
   }
 }
 
+void __kmp_shift_task_state_stack(kmp_info_t *this_thr, kmp_uint8 value) {
+  // Shift values from th_task_state_top+1 to task_state_stack_sz
+  if (this_thr->th.th_task_state_top + 1 >=
+      this_thr->th.th_task_state_stack_sz) { // increase size
+    kmp_uint32 new_size = 2 * this_thr->th.th_task_state_stack_sz;
+    kmp_uint8 *old_stack, *new_stack;
+    kmp_uint32 i;
+    new_stack = (kmp_uint8 *)__kmp_allocate(new_size);
+    for (i = 0; i <= this_thr->th.th_task_state_top; ++i) {
+      new_stack[i] = this_thr->th.th_task_state_memo_stack[i];
+    }
+    // If we need to reallocate do the shift at the same time.
+    for (; i < this_thr->th.th_task_state_stack_sz; ++i) {
+      new_stack[i + 1] = this_thr->th.th_task_state_memo_stack[i];
+    }
+    for (i = this_thr->th.th_task_state_stack_sz; i < new_size;
+         ++i) { // zero-init rest of stack
+      new_stack[i] = 0;
+    }
+    old_stack = this_thr->th.th_task_state_memo_stack;
+    this_thr->th.th_task_state_memo_stack = new_stack;
+    this_thr->th.th_task_state_stack_sz = new_size;
+    __kmp_free(old_stack);
+  } else {
+    kmp_uint8 *end;
+    kmp_uint32 i;
+
+    end = &this_thr->th
+               .th_task_state_memo_stack[this_thr->th.th_task_state_stack_sz];
+
+    for (i = this_thr->th.th_task_state_stack_sz - 1;
+         i > this_thr->th.th_task_state_top; i--, end--)
+      end[0] = end[-1];
+  }
+  this_thr->th.th_task_state_memo_stack[this_thr->th.th_task_state_top + 1] =
+      value;
+}
+
 // __kmp_task_team_setup:  Create a task_team for the current team, but use
 // an already created, unused one if it already exists.
 void __kmp_task_team_setup(kmp_info_t *this_thr, kmp_team_t *team, int always) {
@@ -3927,6 +3994,14 @@ void __kmp_task_team_setup(kmp_info_t *this_thr, kmp_team_t *team, int always) {
                   __kmp_gtid_from_thread(this_thr),
                   team->t.t_task_team[this_thr->th.th_task_state], team->t.t_id,
                   this_thr->th.th_task_state));
+  }
+  if (this_thr->th.th_task_state == 1 && always && team->t.t_nproc == 1) {
+    // fix task state stack to adjust for proxy and helper tasks
+    KA_TRACE(20, ("__kmp_task_team_setup: Primary T#%d needs to shift stack"
+                  " for team %d at parity=%d\n",
+                  __kmp_gtid_from_thread(this_thr), team->t.t_id,
+                  this_thr->th.th_task_state));
+    __kmp_shift_task_state_stack(this_thr, this_thr->th.th_task_state);
   }
 
   // After threads exit the release, they will call sync, and then point to this
@@ -5130,4 +5205,46 @@ void __kmpc_taskloop_5(ident_t *loc, int gtid, kmp_task_t *task, int if_val,
   __kmp_taskloop(loc, gtid, task, if_val, lb, ub, st, nogroup, sched, grainsize,
                  modifier, task_dup);
   KA_TRACE(20, ("__kmpc_taskloop_5(exit): T#%d\n", gtid));
+}
+
+/*!
+@ingroup TASKING
+@param gtid Global Thread ID of current thread
+@return Returns a pointer to the thread's current task async handle. If no task
+is present or gtid is invalid, returns NULL.
+
+Acqurires a pointer to the target async handle from the current task.
+*/
+void **__kmpc_omp_get_target_async_handle_ptr(kmp_int32 gtid) {
+  if (gtid == KMP_GTID_DNE)
+    return NULL;
+
+  kmp_info_t *thread = __kmp_thread_from_gtid(gtid);
+  kmp_taskdata_t *taskdata = thread->th.th_current_task;
+
+  if (!taskdata)
+    return NULL;
+
+  return &taskdata->td_target_data.async_handle;
+}
+
+/*!
+@ingroup TASKING
+@param gtid Global Thread ID of current thread
+@return Returns TRUE if the current task being executed of the given thread has
+a task team allocated to it. Otherwise, returns FALSE.
+
+Checks if the current thread has a task team.
+*/
+bool __kmpc_omp_has_task_team(kmp_int32 gtid) {
+  if (gtid == KMP_GTID_DNE)
+    return FALSE;
+
+  kmp_info_t *thread = __kmp_thread_from_gtid(gtid);
+  kmp_taskdata_t *taskdata = thread->th.th_current_task;
+
+  if (!taskdata)
+    return FALSE;
+
+  return taskdata->td_task_team != NULL;
 }

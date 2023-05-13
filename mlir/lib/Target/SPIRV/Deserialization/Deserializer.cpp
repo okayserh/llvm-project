@@ -16,8 +16,8 @@
 #include "mlir/Dialect/SPIRV/IR/SPIRVEnums.h"
 #include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
 #include "mlir/Dialect/SPIRV/IR/SPIRVTypes.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Location.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Target/SPIRV/SPIRVBinaryUtils.h"
@@ -29,6 +29,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include "llvm/Support/raw_ostream.h"
+#include <optional>
 
 using namespace mlir;
 
@@ -363,11 +364,11 @@ spirv::Deserializer::processFunction(ArrayRef<uint32_t> operands) {
   }
 
   Type fnType = getType(operands[3]);
-  if (!fnType || !fnType.isa<FunctionType>()) {
+  if (!fnType || !isa<FunctionType>(fnType)) {
     return emitError(unknownLoc, "unknown function type from <id> ")
            << operands[3];
   }
-  auto functionType = fnType.cast<FunctionType>();
+  auto functionType = cast<FunctionType>(fnType);
 
   if ((isVoidType(resultType) && functionType.getNumResults() != 0) ||
       (functionType.getNumResults() == 1 &&
@@ -500,7 +501,7 @@ spirv::Deserializer::processFunctionEnd(ArrayRef<uint32_t> operands) {
   return success();
 }
 
-Optional<std::pair<Attribute, Type>>
+std::optional<std::pair<Attribute, Type>>
 spirv::Deserializer::getConstant(uint32_t id) {
   auto constIt = constantMap.find(id);
   if (constIt == constantMap.end())
@@ -508,7 +509,7 @@ spirv::Deserializer::getConstant(uint32_t id) {
   return constIt->getSecond();
 }
 
-Optional<spirv::SpecConstOperationMaterializationInfo>
+std::optional<spirv::SpecConstOperationMaterializationInfo>
 spirv::Deserializer::getSpecConstantOperation(uint32_t id) {
   auto constIt = specConstOperationMap.find(id);
   if (constIt == specConstOperationMap.end())
@@ -534,7 +535,7 @@ std::string spirv::Deserializer::getSpecConstantSymbol(uint32_t id) {
 
 spirv::SpecConstantOp
 spirv::Deserializer::createSpecConstant(Location loc, uint32_t resultID,
-                                        Attribute defaultValue) {
+                                        TypedAttr defaultValue) {
   auto symName = opBuilder.getStringAttr(getSpecConstantSymbol(resultID));
   auto op = opBuilder.create<spirv::SpecConstantOp>(unknownLoc, symName,
                                                     defaultValue);
@@ -561,7 +562,7 @@ spirv::Deserializer::processGlobalVariable(ArrayRef<uint32_t> operands) {
     return emitError(unknownLoc, "unknown result type <id> : ")
            << operands[wordIndex];
   }
-  auto ptrType = type.dyn_cast<spirv::PointerType>();
+  auto ptrType = dyn_cast<spirv::PointerType>(type);
   if (!ptrType) {
     return emitError(unknownLoc,
                      "expected a result type <id> to be a spirv.ptr, found : ")
@@ -622,7 +623,7 @@ IntegerAttr spirv::Deserializer::getConstantInt(uint32_t id) {
   if (!constInfo) {
     return nullptr;
   }
-  return constInfo->first.dyn_cast<IntegerAttr>();
+  return dyn_cast<IntegerAttr>(constInfo->first);
 }
 
 LogicalResult spirv::Deserializer::processName(ArrayRef<uint32_t> operands) {
@@ -824,7 +825,7 @@ spirv::Deserializer::processArrayType(ArrayRef<uint32_t> operands) {
            << operands[2] << "can only come from normal constant right now";
   }
 
-  if (auto intVal = countInfo->first.dyn_cast<IntegerAttr>()) {
+  if (auto intVal = dyn_cast<IntegerAttr>(countInfo->first)) {
     count = intVal.getValue().getZExtValue();
   } else {
     return emitError(unknownLoc, "OpTypeArray count must come from a "
@@ -856,7 +857,7 @@ spirv::Deserializer::processFunctionType(ArrayRef<uint32_t> operands) {
   }
   ArrayRef<Type> returnTypes;
   if (!isVoidType(returnType)) {
-    returnTypes = llvm::makeArrayRef(returnType);
+    returnTypes = llvm::ArrayRef(returnType);
   }
   typeMap[operands[0]] = FunctionType::get(context, argTypes, returnTypes);
   return success();
@@ -1171,7 +1172,7 @@ LogicalResult spirv::Deserializer::processConstant(ArrayRef<uint32_t> operands,
 
   auto resultID = operands[1];
 
-  if (auto intType = resultType.dyn_cast<IntegerType>()) {
+  if (auto intType = dyn_cast<IntegerType>(resultType)) {
     auto bitwidth = intType.getWidth();
     if (failed(checkOperandSizeForBitwidth(bitwidth))) {
       return failure();
@@ -1204,7 +1205,7 @@ LogicalResult spirv::Deserializer::processConstant(ArrayRef<uint32_t> operands,
     return success();
   }
 
-  if (auto floatType = resultType.dyn_cast<FloatType>()) {
+  if (auto floatType = dyn_cast<FloatType>(resultType)) {
     auto bitwidth = floatType.getWidth();
     if (failed(checkOperandSizeForBitwidth(bitwidth))) {
       return failure();
@@ -1294,12 +1295,12 @@ spirv::Deserializer::processConstantComposite(ArrayRef<uint32_t> operands) {
   }
 
   auto resultID = operands[1];
-  if (auto vectorType = resultType.dyn_cast<VectorType>()) {
+  if (auto vectorType = dyn_cast<VectorType>(resultType)) {
     auto attr = DenseElementsAttr::get(vectorType, elements);
     // For normal constants, we just record the attribute (and its type) for
     // later materialization at use sites.
     constantMap.try_emplace(resultID, attr, resultType);
-  } else if (auto arrayType = resultType.dyn_cast<spirv::ArrayType>()) {
+  } else if (auto arrayType = dyn_cast<spirv::ArrayType>(resultType)) {
     auto attr = opBuilder.getArrayAttr(elements);
     constantMap.try_emplace(resultID, attr, resultType);
   } else {
@@ -1443,7 +1444,7 @@ spirv::Deserializer::processConstantNull(ArrayRef<uint32_t> operands) {
   }
 
   auto resultID = operands[1];
-  if (resultType.isIntOrFloat() || resultType.isa<VectorType>()) {
+  if (resultType.isIntOrFloat() || isa<VectorType>(resultType)) {
     auto attr = opBuilder.getZeroAttr(resultType);
     // For normal constants, we just record the attribute (and its type) for
     // later materialization at use sites.
@@ -1512,7 +1513,7 @@ spirv::Deserializer::processBranchConditional(ArrayRef<uint32_t> operands) {
   auto *trueBlock = getOrCreateBlock(operands[1]);
   auto *falseBlock = getOrCreateBlock(operands[2]);
 
-  Optional<std::pair<uint32_t, uint32_t>> weights;
+  std::optional<std::pair<uint32_t, uint32_t>> weights;
   if (operands.size() == 5) {
     weights = std::make_pair(operands[3], operands[4]);
   }
@@ -1750,7 +1751,7 @@ LogicalResult ControlFlowStructurizer::structurize() {
     return failure();
   Region &body = op->getRegion(0);
 
-  BlockAndValueMapping mapper;
+  IRMapping mapper;
   // All references to the old merge block should be directed to the
   // selection/loop merge block in the SelectionOp/LoopOp's region.
   mapper.map(mergeBlock, &body.back());

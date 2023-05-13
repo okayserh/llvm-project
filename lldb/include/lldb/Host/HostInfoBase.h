@@ -19,6 +19,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <string>
 
 namespace lldb_private {
@@ -64,7 +65,8 @@ public:
   static const ArchSpec &
   GetArchitecture(ArchitectureKind arch_kind = eArchKindDefault);
 
-  static llvm::Optional<ArchitectureKind> ParseArchitectureKind(llvm::StringRef kind);
+  static std::optional<ArchitectureKind>
+  ParseArchitectureKind(llvm::StringRef kind);
 
   /// Returns the directory containing the lldb shared library. Only the
   /// directory member of the FileSpec is filled in.
@@ -118,6 +120,14 @@ public:
   GetSharedCacheImageInfo(llvm::StringRef image_name) {
     return {};
   }
+
+  /// Returns the distribution id of the host
+  ///
+  /// This will be something like "ubuntu", "fedora", etc. on Linux.
+  ///
+  /// \return Returns either std::nullopt or a reference to a const std::string
+  /// containing the distribution id
+  static llvm::StringRef GetDistributionId() { return llvm::StringRef(); }
 
 protected:
   static bool ComputeSharedLibraryDirectory(FileSpec &file_spec);

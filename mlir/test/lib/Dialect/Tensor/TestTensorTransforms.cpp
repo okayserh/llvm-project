@@ -43,11 +43,6 @@ struct TestTensorTransforms
 
   void runOnOperation() override;
 
-  Option<bool> testSplitPaddingPatterns{
-      *this, "test-split-padding-patterns",
-      llvm::cl::desc("Test patterns to split tensor.pad ops"),
-      llvm::cl::init(false)};
-
   Option<bool> testFoldConstantExtractSlice{
       *this, "test-fold-constant-extract-slice",
       llvm::cl::desc("Test folding arith.constant and tensor.extract_slice"),
@@ -74,11 +69,21 @@ struct TestTensorTransforms
       *this, "test-empty-op-folding",
       llvm::cl::desc("Test folding of tensor.empty"), llvm::cl::init(false)};
 
+  Option<bool> testFoldIntoPackAndUnpack{
+      *this, "test-fold-into-pack-and-unpack",
+      llvm::cl::desc("Test folding ops into tensor.pack and tensor.unpack"),
+      llvm::cl::init(false)};
+
   Option<bool> useForeach{
       *this, "use-foreach",
       llvm::cl::desc(
-          "Use the scf.foreach_thread operation when generating loop nests for "
+          "Use the scf.forall operation when generating loop nests for "
           "the extract_slice of collapse_shape pattern"),
+      llvm::cl::init(false)};
+
+  Option<bool> testSimplifyPackPatterns{
+      *this, "test-simplify-pack-patterns",
+      llvm::cl::desc("Test patterns to simplify tensor.pack"),
       llvm::cl::init(false)};
 };
 } // namespace
@@ -95,9 +100,9 @@ static void applyEmptyOpFoldingPatterns(Operation *rootOp) {
   (void)applyPatternsAndFoldGreedily(rootOp, std::move(patterns));
 }
 
-static void applySplitPaddingPatterns(Operation *rootOp) {
+static void applyFoldIntoPackAndUnpackPatterns(Operation *rootOp) {
   RewritePatternSet patterns(rootOp->getContext());
-  tensor::populateSplitPaddingPatterns(patterns);
+  tensor::populateFoldIntoPackAndUnpackPatterns(patterns);
   (void)applyPatternsAndFoldGreedily(rootOp, std::move(patterns));
 }
 
@@ -108,7 +113,7 @@ static void applyFoldConstantExtractSlicePatterns(Operation *rootOp) {
         if (!op.getSource().hasOneUse())
           return false;
 
-        auto resultType = op.getResult().getType().cast<ShapedType>();
+        auto resultType = cast<ShapedType>(op.getResult().getType());
         constexpr int64_t kConstantFoldingMaxNumElements = 1024;
         return resultType.getNumElements() <= kConstantFoldingMaxNumElements;
       };
@@ -120,6 +125,12 @@ static void applyFoldConstantExtractSlicePatterns(Operation *rootOp) {
 static void applyFoldConsecutiveInsertExtractSlicePatterns(Operation *rootOp) {
   RewritePatternSet patterns(rootOp->getContext());
   tensor::populateMergeConsecutiveInsertExtractSlicePatterns(patterns);
+  (void)applyPatternsAndFoldGreedily(rootOp, std::move(patterns));
+}
+
+static void applySimplifyPackPatterns(Operation *rootOp) {
+  RewritePatternSet patterns(rootOp->getContext());
+  tensor::populateSimplifyTensorPack(patterns);
   (void)applyPatternsAndFoldGreedily(rootOp, std::move(patterns));
 }
 
@@ -166,12 +177,12 @@ struct RewriteExtractSliceFromCollapseShapeBase
 
     // Materialize the output shape values of the slice operation.
     ReifiedRankedShapedTypeDims reifiedShapes;
-    if (failed(op.reifyResultShapes(rewriter, reifiedShapes)))
+    if (failed(reifyResultShapes(rewriter, op, reifiedShapes)))
       return rewriter.notifyMatchFailure(op, "failed to reify result shapes");
 
     // Create the destination tensor using the above values.
     Type elementType = op.getSourceType().getElementType();
-    SmallVector<OpFoldResult> outputShape = getAsOpFoldResult(reifiedShapes[0]);
+    SmallVector<OpFoldResult> outputShape = reifiedShapes[0];
     Value dest = rewriter.create<tensor::EmptyOp>(op->getLoc(), outputShape,
                                                   elementType);
 
@@ -225,9 +236,10 @@ struct RewriteExtractSliceFromCollapseShapeUsingScfForeach
                                 tensor::ExtractSliceFromCollapseHelper &helper,
                                 PatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
-    auto foreachOp = rewriter.create<scf::ForeachThreadOp>(
-        loc, /*outputs=*/dest, /*numThreads=*/helper.getIterationSpaceSizes(),
-        /*mapping=*/ArrayRef<Attribute>{},
+    auto forallOp = rewriter.create<scf::ForallOp>(
+        loc, /*numThreads=*/getAsOpFoldResult(helper.getIterationSpaceSizes()),
+        /*outputs=*/dest,
+        /*mapping=*/std::nullopt,
         [&](OpBuilder &nestedBuilder, Location loc, ValueRange regionArgs) {
           unsigned numThreadIdRegionArgs =
               helper.getIterationSpaceSizes().size();
@@ -240,12 +252,12 @@ struct RewriteExtractSliceFromCollapseShapeUsingScfForeach
           auto [tile, insertParams] =
               helper.emitLoopNestBody(nestedBuilder, loc, outputIvs);
           // Insert the slice into the destination.
-          auto term = nestedBuilder.create<scf::PerformConcurrentlyOp>(loc);
+          auto term = nestedBuilder.create<scf::InParallelOp>(loc);
           nestedBuilder.setInsertionPointToStart(term.getBody());
           nestedBuilder.create<tensor::ParallelInsertSliceOp>(
               loc, tile, outputArgs[0], insertParams);
         });
-    rewriter.replaceOp(op, foreachOp->getResult(0));
+    rewriter.replaceOp(op, forallOp->getResult(0));
     return success();
   }
 };
@@ -266,8 +278,8 @@ applyRewriteExtractFromCollapseShapePatterns(Operation *rootOp,
 
 void TestTensorTransforms::runOnOperation() {
   Operation *rootOp = getOperation();
-  if (testSplitPaddingPatterns)
-    applySplitPaddingPatterns(rootOp);
+  if (testSimplifyPackPatterns)
+    applySimplifyPackPatterns(rootOp);
   if (testFoldConstantExtractSlice)
     applyFoldConstantExtractSlicePatterns(rootOp);
   if (testFoldConsecutiveInsertExtractSlice)
@@ -276,6 +288,8 @@ void TestTensorTransforms::runOnOperation() {
     applyReassociativeReshapeFoldingPatterns(rootOp);
   if (testEmptyOpFolding)
     applyEmptyOpFoldingPatterns(rootOp);
+  if (testFoldIntoPackAndUnpack)
+    applyFoldIntoPackAndUnpackPatterns(rootOp);
   if (testRewriteExtractSliceWithTiledCollapseShape) {
     if (failed(
             applyRewriteExtractFromCollapseShapePatterns(rootOp, useForeach)))

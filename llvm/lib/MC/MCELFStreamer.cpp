@@ -331,7 +331,7 @@ void MCELFStreamer::emitCommonSymbol(MCSymbol *S, uint64_t Size,
 
     switchSection(P.first, P.second);
   } else {
-    if (Symbol->declareCommon(Size, ByteAlignment.value()))
+    if (Symbol->declareCommon(Size, ByteAlignment))
       report_fatal_error(Twine("Symbol: ") + Symbol->getName() +
                          " redeclared as different type");
   }
@@ -551,8 +551,7 @@ void MCELFStreamer::emitInstToData(const MCInst &Inst,
   MCAssembler &Assembler = getAssembler();
   SmallVector<MCFixup, 4> Fixups;
   SmallString<256> Code;
-  raw_svector_ostream VecOS(Code);
-  Assembler.getEmitter().encodeInstruction(Inst, VecOS, Fixups, STI);
+  Assembler.getEmitter().encodeInstruction(Inst, Code, Fixups, STI);
 
   for (auto &Fixup : Fixups)
     fixSymbolsInTLSFixups(Fixup.getValue());

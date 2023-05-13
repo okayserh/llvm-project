@@ -4,6 +4,7 @@ set(LLVM_LINK_COMPONENTS
   AsmParser
   AsmPrinter
   CodeGen
+  CodeGenTypes
   Core
   FileCheck
   MC
@@ -12,6 +13,7 @@ set(LLVM_LINK_COMPONENTS
   SelectionDAG
   Support
   Target
+  TargetParser
   )
 
 add_llvm_unittest(CodeGenTests

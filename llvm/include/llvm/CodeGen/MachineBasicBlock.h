@@ -171,7 +171,7 @@ private:
 
   /// Fixed unique ID assigned to this basic block upon creation. Used with
   /// basic block sections and basic block labels.
-  Optional<unsigned> BBID;
+  std::optional<unsigned> BBID;
 
   /// With basic block sections, this stores the Section ID of the basic block.
   MBBSectionID SectionID{0};
@@ -624,7 +624,7 @@ public:
 
   void setIsEndSection(bool V = true) { IsEndSection = V; }
 
-  Optional<unsigned> getBBID() const { return BBID; }
+  std::optional<unsigned> getBBID() const { return BBID; }
 
   /// Returns the BBID of the block when BBAddrMapVersion >= 2, otherwise
   /// returns `MachineBasicBlock::Number`.
@@ -793,10 +793,15 @@ public:
 
   /// Return the fallthrough block if the block can implicitly
   /// transfer control to the block after it by falling off the end of
-  /// it.  This should return null if it can reach the block after
-  /// it, but it uses an explicit branch to do so (e.g., a table
-  /// jump).  Non-null return  is a conservative answer.
-  MachineBasicBlock *getFallThrough();
+  /// it. If an explicit branch to the fallthrough block is not allowed,
+  /// set JumpToFallThrough to be false. Non-null return is a conservative
+  /// answer.
+  MachineBasicBlock *getFallThrough(bool JumpToFallThrough = true);
+
+  /// Return the fallthrough block if the block can implicitly
+  /// transfer control to it's successor, whether by a branch or
+  /// a fallthrough. Non-null return is a conservative answer.
+  MachineBasicBlock *getLogicalFallThrough() { return getFallThrough(false); }
 
   /// Return true if the block can implicitly transfer control to the
   /// block after it by falling off the end of it.  This should return
@@ -1255,6 +1260,12 @@ template <> struct GraphTraits<Inverse<const MachineBasicBlock*>> {
   static ChildIteratorType child_begin(NodeRef N) { return N->pred_begin(); }
   static ChildIteratorType child_end(NodeRef N) { return N->pred_end(); }
 };
+
+// These accessors are handy for sharing templated code between IR and MIR.
+inline auto successors(const MachineBasicBlock *BB) { return BB->successors(); }
+inline auto predecessors(const MachineBasicBlock *BB) {
+  return BB->predecessors();
+}
 
 /// MachineInstrSpan provides an interface to get an iteration range
 /// containing the instruction it was initialized with, along with all

@@ -384,7 +384,7 @@ static APInt findDemandedEltsByAllUsers(Value *V) {
 /// return it with the canonical type if it isn't already canonical.  We
 /// arbitrarily pick 64 bit as our canonical type.  The actual bitwidth doesn't
 /// matter, we just want a consistent type to simplify CSE.
-ConstantInt *getPreferredVectorIndex(ConstantInt *IndexC) {
+static ConstantInt *getPreferredVectorIndex(ConstantInt *IndexC) {
   const unsigned IndexBW = IndexC->getType()->getBitWidth();
   if (IndexBW == 64 || IndexC->getValue().getActiveBits() > 64)
     return nullptr;
@@ -875,7 +875,7 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
 
   // Try to find a value of each element of an aggregate.
   // FIXME: deal with more complex, not one-dimensional, aggregate types
-  SmallVector<Optional<Instruction *>, 2> AggElts(NumAggElts, NotFound);
+  SmallVector<std::optional<Instruction *>, 2> AggElts(NumAggElts, NotFound);
 
   // Do we know values for each element of the aggregate?
   auto KnowAllElts = [&AggElts]() {
@@ -908,7 +908,7 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
     // Now, we may have already previously recorded the value for this element
     // of an aggregate. If we did, that means the CurrIVI will later be
     // overwritten with the already-recorded value. But if not, let's record it!
-    Optional<Instruction *> &Elt = AggElts[Indices.front()];
+    std::optional<Instruction *> &Elt = AggElts[Indices.front()];
     Elt = Elt.value_or(InsertedValue);
 
     // FIXME: should we handle chain-terminating undef base operand?
@@ -938,7 +938,7 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
     /// or different elements had different source aggregates.
     FoundMismatch
   };
-  auto Describe = [](Optional<Value *> SourceAggregate) {
+  auto Describe = [](std::optional<Value *> SourceAggregate) {
     if (SourceAggregate == NotFound)
       return AggregateDescription::NotFound;
     if (*SourceAggregate == FoundMismatch)
@@ -952,8 +952,8 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
   // If found, return the source aggregate from which the extraction was.
   // If \p PredBB is provided, does PHI translation of an \p Elt first.
   auto FindSourceAggregate =
-      [&](Instruction *Elt, unsigned EltIdx, Optional<BasicBlock *> UseBB,
-          Optional<BasicBlock *> PredBB) -> Optional<Value *> {
+      [&](Instruction *Elt, unsigned EltIdx, std::optional<BasicBlock *> UseBB,
+          std::optional<BasicBlock *> PredBB) -> std::optional<Value *> {
     // For now(?), only deal with, at most, a single level of PHI indirection.
     if (UseBB && PredBB)
       Elt = dyn_cast<Instruction>(Elt->DoPHITranslation(*UseBB, *PredBB));
@@ -980,9 +980,9 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
   // see if we can find appropriate source aggregate for each of the elements,
   // and see it's the same aggregate for each element. If so, return it.
   auto FindCommonSourceAggregate =
-      [&](Optional<BasicBlock *> UseBB,
-          Optional<BasicBlock *> PredBB) -> Optional<Value *> {
-    Optional<Value *> SourceAggregate;
+      [&](std::optional<BasicBlock *> UseBB,
+          std::optional<BasicBlock *> PredBB) -> std::optional<Value *> {
+    std::optional<Value *> SourceAggregate;
 
     for (auto I : enumerate(AggElts)) {
       assert(Describe(SourceAggregate) != AggregateDescription::FoundMismatch &&
@@ -994,7 +994,7 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
       // For this element, is there a plausible source aggregate?
       // FIXME: we could special-case undef element, IFF we know that in the
       //        source aggregate said element isn't poison.
-      Optional<Value *> SourceAggregateForElement =
+      std::optional<Value *> SourceAggregateForElement =
           FindSourceAggregate(*I.value(), I.index(), UseBB, PredBB);
 
       // Okay, what have we found? Does that correlate with previous findings?
@@ -1028,7 +1028,7 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
     return *SourceAggregate;
   };
 
-  Optional<Value *> SourceAggregate;
+  std::optional<Value *> SourceAggregate;
 
   // Can we find the source aggregate without looking at predecessors?
   SourceAggregate = FindCommonSourceAggregate(/*UseBB=*/std::nullopt,
@@ -1049,7 +1049,7 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
   // they all should be defined in the same basic block.
   BasicBlock *UseBB = nullptr;
 
-  for (const Optional<Instruction *> &I : AggElts) {
+  for (const std::optional<Instruction *> &I : AggElts) {
     BasicBlock *BB = (*I)->getParent();
     // If it's the first instruction we've encountered, record the basic block.
     if (!UseBB) {
@@ -1129,6 +1129,11 @@ Instruction *InstCombinerImpl::foldAggregateConstructionIntoAggregateReuse(
 /// It should be transformed to:
 ///  %0 = insertvalue { i8, i32 } undef, i8 %y, 0
 Instruction *InstCombinerImpl::visitInsertValueInst(InsertValueInst &I) {
+  if (Value *V = simplifyInsertValueInst(
+          I.getAggregateOperand(), I.getInsertedValueOperand(), I.getIndices(),
+          SQ.getWithInstruction(&I)))
+    return replaceInstUsesWith(I, V);
+
   bool IsRedundant = false;
   ArrayRef<unsigned int> FirstIndices = I.getIndices();
 
@@ -1339,7 +1344,7 @@ static Instruction *foldInsEltIntoIdentityShuffle(InsertElementInst &InsElt) {
       // (demanded elements analysis may unset it later).
       return nullptr;
     } else {
-      assert(OldMask[i] == UndefMaskElem &&
+      assert(OldMask[i] == PoisonMaskElem &&
              "Unexpected shuffle mask element for identity shuffle");
       NewMask[i] = IdxC;
     }
@@ -1515,6 +1520,71 @@ static Instruction *narrowInsElt(InsertElementInst &InsElt,
   return CastInst::Create(CastOpcode, NewInsElt, InsElt.getType());
 }
 
+/// If we are inserting 2 halves of a value into adjacent elements of a vector,
+/// try to convert to a single insert with appropriate bitcasts.
+static Instruction *foldTruncInsEltPair(InsertElementInst &InsElt,
+                                        bool IsBigEndian,
+                                        InstCombiner::BuilderTy &Builder) {
+  Value *VecOp    = InsElt.getOperand(0);
+  Value *ScalarOp = InsElt.getOperand(1);
+  Value *IndexOp  = InsElt.getOperand(2);
+
+  // Pattern depends on endian because we expect lower index is inserted first.
+  // Big endian:
+  // inselt (inselt BaseVec, (trunc (lshr X, BW/2), Index0), (trunc X), Index1
+  // Little endian:
+  // inselt (inselt BaseVec, (trunc X), Index0), (trunc (lshr X, BW/2)), Index1
+  // Note: It is not safe to do this transform with an arbitrary base vector
+  //       because the bitcast of that vector to fewer/larger elements could
+  //       allow poison to spill into an element that was not poison before.
+  // TODO: Detect smaller fractions of the scalar.
+  // TODO: One-use checks are conservative.
+  auto *VTy = dyn_cast<FixedVectorType>(InsElt.getType());
+  Value *Scalar0, *BaseVec;
+  uint64_t Index0, Index1;
+  if (!VTy || (VTy->getNumElements() & 1) ||
+      !match(IndexOp, m_ConstantInt(Index1)) ||
+      !match(VecOp, m_InsertElt(m_Value(BaseVec), m_Value(Scalar0),
+                                m_ConstantInt(Index0))) ||
+      !match(BaseVec, m_Undef()))
+    return nullptr;
+
+  // The first insert must be to the index one less than this one, and
+  // the first insert must be to an even index.
+  if (Index0 + 1 != Index1 || Index0 & 1)
+    return nullptr;
+
+  // For big endian, the high half of the value should be inserted first.
+  // For little endian, the low half of the value should be inserted first.
+  Value *X;
+  uint64_t ShAmt;
+  if (IsBigEndian) {
+    if (!match(ScalarOp, m_Trunc(m_Value(X))) ||
+        !match(Scalar0, m_Trunc(m_LShr(m_Specific(X), m_ConstantInt(ShAmt)))))
+      return nullptr;
+  } else {
+    if (!match(Scalar0, m_Trunc(m_Value(X))) ||
+        !match(ScalarOp, m_Trunc(m_LShr(m_Specific(X), m_ConstantInt(ShAmt)))))
+      return nullptr;
+  }
+
+  Type *SrcTy = X->getType();
+  unsigned ScalarWidth = SrcTy->getScalarSizeInBits();
+  unsigned VecEltWidth = VTy->getScalarSizeInBits();
+  if (ScalarWidth != VecEltWidth * 2 || ShAmt != VecEltWidth)
+    return nullptr;
+
+  // Bitcast the base vector to a vector type with the source element type.
+  Type *CastTy = FixedVectorType::get(SrcTy, VTy->getNumElements() / 2);
+  Value *CastBaseVec = Builder.CreateBitCast(BaseVec, CastTy);
+
+  // Scale the insert index for a vector with half as many elements.
+  // bitcast (inselt (bitcast BaseVec), X, NewIndex)
+  uint64_t NewIndex = IsBigEndian ? Index1 / 2 : Index0 / 2;
+  Value *NewInsert = Builder.CreateInsertElement(CastBaseVec, X, NewIndex);
+  return new BitCastInst(NewInsert, VTy);
+}
+
 Instruction *InstCombinerImpl::visitInsertElementInst(InsertElementInst &IE) {
   Value *VecOp    = IE.getOperand(0);
   Value *ScalarOp = IE.getOperand(1);
@@ -1525,9 +1595,21 @@ Instruction *InstCombinerImpl::visitInsertElementInst(InsertElementInst &IE) {
     return replaceInstUsesWith(IE, V);
 
   // Canonicalize type of constant indices to i64 to simplify CSE
-  if (auto *IndexC = dyn_cast<ConstantInt>(IdxOp))
+  if (auto *IndexC = dyn_cast<ConstantInt>(IdxOp)) {
     if (auto *NewIdx = getPreferredVectorIndex(IndexC))
       return replaceOperand(IE, 2, NewIdx);
+
+    Value *BaseVec, *OtherScalar;
+    uint64_t OtherIndexVal;
+    if (match(VecOp, m_OneUse(m_InsertElt(m_Value(BaseVec),
+                                          m_Value(OtherScalar),
+                                          m_ConstantInt(OtherIndexVal)))) &&
+        !isa<Constant>(OtherScalar) && OtherIndexVal > IndexC->getZExtValue()) {
+      Value *NewIns = Builder.CreateInsertElement(BaseVec, ScalarOp, IdxOp);
+      return InsertElementInst::Create(NewIns, OtherScalar,
+                                       Builder.getInt64(OtherIndexVal));
+    }
+  }
 
   // If the scalar is bitcast and inserted into undef, do the insert in the
   // source type followed by bitcast.
@@ -1640,6 +1722,9 @@ Instruction *InstCombinerImpl::visitInsertElementInst(InsertElementInst &IE) {
     return IdentityShuf;
 
   if (Instruction *Ext = narrowInsElt(IE, Builder))
+    return Ext;
+
+  if (Instruction *Ext = foldTruncInsEltPair(IE, DL.isBigEndian(), Builder))
     return Ext;
 
   return nullptr;
@@ -2060,7 +2145,7 @@ static Instruction *foldSelectShuffleWith1Binop(ShuffleVectorInst &Shuf) {
                                 ConstantExpr::getShuffleVector(IdC, C, Mask);
 
   bool MightCreatePoisonOrUB =
-      is_contained(Mask, UndefMaskElem) &&
+      is_contained(Mask, PoisonMaskElem) &&
       (Instruction::isIntDivRem(BOpcode) || Instruction::isShift(BOpcode));
   if (MightCreatePoisonOrUB)
     NewC = InstCombiner::getSafeVectorConstantForBinop(BOpcode, NewC, true);
@@ -2074,7 +2159,7 @@ static Instruction *foldSelectShuffleWith1Binop(ShuffleVectorInst &Shuf) {
   // An undef shuffle mask element may propagate as an undef constant element in
   // the new binop. That would produce poison where the original code might not.
   // If we already made a safe constant, then there's no danger.
-  if (is_contained(Mask, UndefMaskElem) && !MightCreatePoisonOrUB)
+  if (is_contained(Mask, PoisonMaskElem) && !MightCreatePoisonOrUB)
     NewBO->dropPoisonGeneratingFlags();
   return NewBO;
 }
@@ -2098,8 +2183,7 @@ static Instruction *canonicalizeInsertSplat(ShuffleVectorInst &Shuf,
 
   // Insert into element 0 of an undef vector.
   UndefValue *UndefVec = UndefValue::get(Shuf.getType());
-  Constant *Zero = Builder.getInt32(0);
-  Value *NewIns = Builder.CreateInsertElement(UndefVec, X, Zero);
+  Value *NewIns = Builder.CreateInsertElement(UndefVec, X, (uint64_t)0);
 
   // Splat from element 0. Any mask element that is undefined remains undefined.
   // For example:
@@ -2109,7 +2193,7 @@ static Instruction *canonicalizeInsertSplat(ShuffleVectorInst &Shuf,
       cast<FixedVectorType>(Shuf.getType())->getNumElements();
   SmallVector<int, 16> NewMask(NumMaskElts, 0);
   for (unsigned i = 0; i != NumMaskElts; ++i)
-    if (Mask[i] == UndefMaskElem)
+    if (Mask[i] == PoisonMaskElem)
       NewMask[i] = Mask[i];
 
   return new ShuffleVectorInst(NewIns, NewMask);
@@ -2194,7 +2278,7 @@ Instruction *InstCombinerImpl::foldSelectShuffle(ShuffleVectorInst &Shuf) {
   // mask element, the result is undefined, but it is not poison or undefined
   // behavior. That is not necessarily true for div/rem/shift.
   bool MightCreatePoisonOrUB =
-      is_contained(Mask, UndefMaskElem) &&
+      is_contained(Mask, PoisonMaskElem) &&
       (Instruction::isIntDivRem(BOpc) || Instruction::isShift(BOpc));
   if (MightCreatePoisonOrUB)
     NewC = InstCombiner::getSafeVectorConstantForBinop(BOpc, NewC,
@@ -2245,7 +2329,7 @@ Instruction *InstCombinerImpl::foldSelectShuffle(ShuffleVectorInst &Shuf) {
     NewI->andIRFlags(B1);
     if (DropNSW)
       NewI->setHasNoSignedWrap(false);
-    if (is_contained(Mask, UndefMaskElem) && !MightCreatePoisonOrUB)
+    if (is_contained(Mask, PoisonMaskElem) && !MightCreatePoisonOrUB)
       NewI->dropPoisonGeneratingFlags();
   }
   return replaceInstUsesWith(Shuf, NewBO);
@@ -2281,7 +2365,7 @@ static Instruction *foldTruncShuffle(ShuffleVectorInst &Shuf,
       SrcType->getScalarSizeInBits() / DestType->getScalarSizeInBits();
   ArrayRef<int> Mask = Shuf.getShuffleMask();
   for (unsigned i = 0, e = Mask.size(); i != e; ++i) {
-    if (Mask[i] == UndefMaskElem)
+    if (Mask[i] == PoisonMaskElem)
       continue;
     uint64_t LSBIndex = IsBigEndian ? (i + 1) * TruncRatio - 1 : i * TruncRatio;
     assert(LSBIndex <= INT32_MAX && "Overflowed 32-bits");
@@ -2327,37 +2411,51 @@ static Instruction *narrowVectorSelect(ShuffleVectorInst &Shuf,
   return SelectInst::Create(NarrowCond, NarrowX, NarrowY);
 }
 
-/// Canonicalize FP negate after shuffle.
-static Instruction *foldFNegShuffle(ShuffleVectorInst &Shuf,
-                                    InstCombiner::BuilderTy &Builder) {
-  Instruction *FNeg0;
+/// Canonicalize FP negate/abs after shuffle.
+static Instruction *foldShuffleOfUnaryOps(ShuffleVectorInst &Shuf,
+                                          InstCombiner::BuilderTy &Builder) {
+  auto *S0 = dyn_cast<Instruction>(Shuf.getOperand(0));
   Value *X;
-  if (!match(Shuf.getOperand(0), m_CombineAnd(m_Instruction(FNeg0),
-                                              m_FNeg(m_Value(X)))))
+  if (!S0 || !match(S0, m_CombineOr(m_FNeg(m_Value(X)), m_FAbs(m_Value(X)))))
     return nullptr;
 
-  // shuffle (fneg X), Mask --> fneg (shuffle X, Mask)
-  if (FNeg0->hasOneUse() && match(Shuf.getOperand(1), m_Undef())) {
+  bool IsFNeg = S0->getOpcode() == Instruction::FNeg;
+
+  // Match 1-input (unary) shuffle.
+  // shuffle (fneg/fabs X), Mask --> fneg/fabs (shuffle X, Mask)
+  if (S0->hasOneUse() && match(Shuf.getOperand(1), m_Undef())) {
     Value *NewShuf = Builder.CreateShuffleVector(X, Shuf.getShuffleMask());
-    return UnaryOperator::CreateFNegFMF(NewShuf, FNeg0);
+    if (IsFNeg)
+      return UnaryOperator::CreateFNegFMF(NewShuf, S0);
+
+    Function *FAbs = Intrinsic::getDeclaration(Shuf.getModule(),
+                                               Intrinsic::fabs, Shuf.getType());
+    CallInst *NewF = CallInst::Create(FAbs, {NewShuf});
+    NewF->setFastMathFlags(S0->getFastMathFlags());
+    return NewF;
   }
 
-  Instruction *FNeg1;
+  // Match 2-input (binary) shuffle.
+  auto *S1 = dyn_cast<Instruction>(Shuf.getOperand(1));
   Value *Y;
-  if (!match(Shuf.getOperand(1), m_CombineAnd(m_Instruction(FNeg1),
-                                              m_FNeg(m_Value(Y)))))
+  if (!S1 || !match(S1, m_CombineOr(m_FNeg(m_Value(Y)), m_FAbs(m_Value(Y)))) ||
+      S0->getOpcode() != S1->getOpcode() ||
+      (!S0->hasOneUse() && !S1->hasOneUse()))
     return nullptr;
 
-  // shuffle (fneg X), (fneg Y), Mask --> fneg (shuffle X, Y, Mask)
-  if (FNeg0->hasOneUse() || FNeg1->hasOneUse()) {
-    Value *NewShuf = Builder.CreateShuffleVector(X, Y, Shuf.getShuffleMask());
-    Instruction *NewFNeg = UnaryOperator::CreateFNeg(NewShuf);
-    NewFNeg->copyIRFlags(FNeg0);
-    NewFNeg->andIRFlags(FNeg1);
-    return NewFNeg;
+  // shuf (fneg/fabs X), (fneg/fabs Y), Mask --> fneg/fabs (shuf X, Y, Mask)
+  Value *NewShuf = Builder.CreateShuffleVector(X, Y, Shuf.getShuffleMask());
+  Instruction *NewF;
+  if (IsFNeg) {
+    NewF = UnaryOperator::CreateFNeg(NewShuf);
+  } else {
+    Function *FAbs = Intrinsic::getDeclaration(Shuf.getModule(),
+                                               Intrinsic::fabs, Shuf.getType());
+    NewF = CallInst::Create(FAbs, {NewShuf});
   }
-
-  return nullptr;
+  NewF->copyIRFlags(S0);
+  NewF->andIRFlags(S1);
+  return NewF;
 }
 
 /// Canonicalize casts after shuffle.
@@ -2453,7 +2551,7 @@ static Instruction *foldIdentityExtractShuffle(ShuffleVectorInst &Shuf) {
   for (unsigned i = 0; i != NumElts; ++i) {
     int ExtractMaskElt = Shuf.getMaskValue(i);
     int MaskElt = Mask[i];
-    NewMask[i] = ExtractMaskElt == UndefMaskElem ? ExtractMaskElt : MaskElt;
+    NewMask[i] = ExtractMaskElt == PoisonMaskElem ? ExtractMaskElt : MaskElt;
   }
   return new ShuffleVectorInst(X, Y, NewMask);
 }
@@ -2619,7 +2717,8 @@ static Instruction *foldIdentityPaddedShuffles(ShuffleVectorInst &Shuf) {
 // splatting the first element of the result of the BinOp
 Instruction *InstCombinerImpl::simplifyBinOpSplats(ShuffleVectorInst &SVI) {
   if (!match(SVI.getOperand(1), m_Undef()) ||
-      !match(SVI.getShuffleMask(), m_ZeroMask()))
+      !match(SVI.getShuffleMask(), m_ZeroMask()) ||
+      !SVI.getOperand(0)->hasOneUse())
     return nullptr;
 
   Value *Op0 = SVI.getOperand(0);
@@ -2679,7 +2778,6 @@ Instruction *InstCombinerImpl::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
   }
 
   ArrayRef<int> Mask = SVI.getShuffleMask();
-  Type *Int32Ty = Type::getInt32Ty(SVI.getContext());
 
   // Peek through a bitcasted shuffle operand by scaling the mask. If the
   // simulated shuffle can simplify, then this shuffle is unnecessary:
@@ -2735,7 +2833,7 @@ Instruction *InstCombinerImpl::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
   if (Instruction *I = narrowVectorSelect(SVI, Builder))
     return I;
 
-  if (Instruction *I = foldFNegShuffle(SVI, Builder))
+  if (Instruction *I = foldShuffleOfUnaryOps(SVI, Builder))
     return I;
 
   if (Instruction *I = foldCastShuffle(SVI, Builder))
@@ -2798,7 +2896,7 @@ Instruction *InstCombinerImpl::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
     Value *V = LHS;
     unsigned MaskElems = Mask.size();
     auto *SrcTy = cast<FixedVectorType>(V->getType());
-    unsigned VecBitWidth = SrcTy->getPrimitiveSizeInBits().getFixedSize();
+    unsigned VecBitWidth = SrcTy->getPrimitiveSizeInBits().getFixedValue();
     unsigned SrcElemBitWidth = DL.getTypeSizeInBits(SrcTy->getElementType());
     assert(SrcElemBitWidth && "vector elements must have a bitwidth");
     unsigned SrcNumElems = SrcTy->getNumElements();
@@ -2836,15 +2934,15 @@ Instruction *InstCombinerImpl::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
       unsigned SrcElemsPerTgtElem = TgtElemBitWidth / SrcElemBitWidth;
       assert(SrcElemsPerTgtElem);
       BegIdx /= SrcElemsPerTgtElem;
-      bool BCAlreadyExists = NewBCs.find(CastSrcTy) != NewBCs.end();
+      bool BCAlreadyExists = NewBCs.contains(CastSrcTy);
       auto *NewBC =
           BCAlreadyExists
               ? NewBCs[CastSrcTy]
               : Builder.CreateBitCast(V, CastSrcTy, SVI.getName() + ".bc");
       if (!BCAlreadyExists)
         NewBCs[CastSrcTy] = NewBC;
-      auto *Ext = Builder.CreateExtractElement(
-          NewBC, ConstantInt::get(Int32Ty, BegIdx), SVI.getName() + ".extract");
+      auto *Ext = Builder.CreateExtractElement(NewBC, BegIdx,
+                                               SVI.getName() + ".extract");
       // The shufflevector isn't being replaced: the bitcast that used it
       // is. InstCombine will visit the newly-created instructions.
       replaceInstUsesWith(*BC, Ext);

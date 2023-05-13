@@ -142,7 +142,7 @@ def CastOp : Toy_Op<"cast", [
 
 def FuncOp : Toy_Op<"func", [
     DeclareOpInterfaceMethods<CallableOpInterface>, FunctionOpInterface,
-    IsolatedFromAbove, Symbol
+    IsolatedFromAbove
   ]> {
   let summary = "user defined function operation";
   let description = [{
@@ -163,7 +163,9 @@ def FuncOp : Toy_Op<"func", [
 
   let arguments = (ins
     SymbolNameAttr:$sym_name,
-    TypeAttrOf<FunctionType>:$function_type
+    TypeAttrOf<FunctionType>:$function_type,
+    OptionalAttr<DictArrayAttr>:$arg_attrs,
+    OptionalAttr<DictArrayAttr>:$res_attrs
   );
   let regions = (region AnyRegion:$body);
 

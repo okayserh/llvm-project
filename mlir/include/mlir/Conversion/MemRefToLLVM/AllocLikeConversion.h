@@ -31,7 +31,7 @@ protected:
                              Value input, Value alignment);
 
   static MemRefType getMemRefResultType(Operation *op) {
-    return op->getResult(0).getType().cast<MemRefType>();
+    return cast<MemRefType>(op->getResult(0).getType());
   }
 
   /// Computes the alignment for the given memory allocation op.
@@ -61,7 +61,7 @@ protected:
   int64_t alignedAllocationGetAlignment(ConversionPatternRewriter &rewriter,
                                         Location loc, OpType op,
                                         const DataLayout *defaultLayout) const {
-    if (Optional<uint64_t> alignment = op.getAlignment())
+    if (std::optional<uint64_t> alignment = op.getAlignment())
       return *alignment;
 
     // Whenever we don't have alignment set, we will use an alignment
