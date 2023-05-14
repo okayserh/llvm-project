@@ -12,7 +12,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Triple.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -60,8 +60,8 @@ class T8xxAsmParser : public MCTargetAsmParser {
                                OperandVector &Operands, MCStreamer &Out,
                                uint64_t &ErrorInfo,
                                bool MatchingInlineAsm) override;
-  bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) override;
-  OperandMatchResultTy tryParseRegister(unsigned &RegNo, SMLoc &StartLoc,
+  bool parseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) override;
+  OperandMatchResultTy tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
                                         SMLoc &EndLoc) override;
   bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
@@ -95,8 +95,8 @@ class T8xxAsmParser : public MCTargetAsmParser {
   const T8xxMCExpr *adjustPICRelocation(T8xxMCExpr::VariantKind VK,
                                          const MCExpr *subExpr);
 
-  // returns true if Tok is matched to a register and returns register in RegNo.
-  bool matchRegisterName(const AsmToken &Tok, unsigned &RegNo,
+  // returns true if Tok is matched to a register and returns register in Reg.
+  bool matchRegisterName(const AsmToken &Tok, MCRegister &Reg,
                          unsigned &RegKind);
 
   bool matchT8xxAsmModifiers(const MCExpr *&EVal, SMLoc &EndLoc);
@@ -545,25 +545,25 @@ bool T8xxAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   llvm_unreachable("Implement any new match types added!");
 }
 
-bool T8xxAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
+bool T8xxAsmParser::parseRegister(MCRegister &Reg, SMLoc &StartLoc,
                                    SMLoc &EndLoc) {
-  if (tryParseRegister(RegNo, StartLoc, EndLoc) != MatchOperand_Success)
+  if (tryParseRegister(Reg, StartLoc, EndLoc) != MatchOperand_Success)
     return Error(StartLoc, "invalid register name");
   return false;
 }
 
-OperandMatchResultTy T8xxAsmParser::tryParseRegister(unsigned &RegNo,
+OperandMatchResultTy T8xxAsmParser::tryParseRegister(MCRegister &Reg,
                                                       SMLoc &StartLoc,
                                                       SMLoc &EndLoc) {
   const AsmToken &Tok = Parser.getTok();
   StartLoc = Tok.getLoc();
   EndLoc = Tok.getEndLoc();
-  RegNo = 0;
+  Reg = 0;
   if (getLexer().getKind() != AsmToken::Percent)
     return MatchOperand_NoMatch;
   Parser.Lex();
   unsigned regKind = T8xxOperand::rk_None;
-  if (matchRegisterName(Tok, RegNo, regKind)) {
+  if (matchRegisterName(Tok, Reg, regKind)) {
     Parser.Lex();
     return MatchOperand_Success;
   }
@@ -902,13 +902,14 @@ T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
         return MatchOperand_NoMatch;
       Parser.Lex(); // eat %
 
-      unsigned RegNo, RegKind;
-      if (!matchRegisterName(Parser.getTok(), RegNo, RegKind))
+      MCRegister Reg;
+      unsigned int RegKind;      
+      if (!matchRegisterName(Parser.getTok(), Reg, RegKind))
         return MatchOperand_NoMatch;
 
       Parser.Lex(); // Eat the identifier token.
       SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer()-1);
-      Operands.push_back(T8xxOperand::CreateReg(RegNo, RegKind, S, E));
+      Operands.push_back(T8xxOperand::CreateReg(Reg, RegKind, S, E));
       ResTy = MatchOperand_Success;
     } else {
       ResTy = parseMEMOperand(Operands);
@@ -959,18 +960,20 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
   default:  break;
 
   case AsmToken::Percent:
-    Parser.Lex(); // Eat the '%'.
-    unsigned RegNo;
-    unsigned RegKind;
-    if (matchRegisterName(Parser.getTok(), RegNo, RegKind)) {
-      StringRef name = Parser.getTok().getString();
-      Parser.Lex(); // Eat the identifier token.
-      E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-      Op = T8xxOperand::CreateReg(RegNo, RegKind, S, E);
-    }
-    if (matchT8xxAsmModifiers(EVal, E)) {
-      E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-      Op = T8xxOperand::CreateImm(EVal, S, E);
+    {
+      Parser.Lex(); // Eat the '%'.
+      MCRegister Reg;
+      unsigned RegKind;
+      if (matchRegisterName(Parser.getTok(), Reg, RegKind)) {
+	StringRef name = Parser.getTok().getString();
+	Parser.Lex(); // Eat the identifier token.
+	E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
+	Op = T8xxOperand::CreateReg(Reg, RegKind, S, E);
+      }
+      if (matchT8xxAsmModifiers(EVal, E)) {
+	E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
+	Op = T8xxOperand::CreateImm(EVal, S, E);
+      }
     }
     break;
 
@@ -1020,10 +1023,10 @@ T8xxAsmParser::parseBranchModifiers(OperandVector &Operands) {
   return MatchOperand_Success;
 }
 
-bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, unsigned &RegNo,
+bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, MCRegister &Reg,
                                        unsigned &RegKind) {
   int64_t intVal = 0;
-  RegNo = 0;
+  Reg = 0;
   RegKind = T8xxOperand::rk_None;
   /*
   if (Tok.is(AsmToken::Identifier)) {

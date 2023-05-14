@@ -25,13 +25,13 @@ T8xxTargetAsmStreamer::T8xxTargetAsmStreamer(MCStreamer &S,
                                                formatted_raw_ostream &OS)
     : T8xxTargetStreamer(S), OS(OS) {}
 
-void T8xxTargetAsmStreamer::emitT8xxRegisterIgnore(unsigned reg) {
+void T8xxTargetAsmStreamer::emitT8xxRegisterIgnore(MCRegister reg) {
   OS << "\t.register "
      << "%" << StringRef(T8xxInstPrinter::getRegisterName(reg)).lower()
      << ", #ignore\n";
 }
 
-void T8xxTargetAsmStreamer::emitT8xxRegisterScratch(unsigned reg) {
+void T8xxTargetAsmStreamer::emitT8xxRegisterScratch(MCRegister reg) {
   OS << "\t.register "
      << "%" << StringRef(T8xxInstPrinter::getRegisterName(reg)).lower()
      << ", #scratch\n";

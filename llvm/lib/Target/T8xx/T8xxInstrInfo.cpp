@@ -213,7 +213,8 @@ void T8xxInstrInfo::
 storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                     Register SrcReg, bool isKill, int FI,
                     const TargetRegisterClass *RC,
-                    const TargetRegisterInfo *TRI) const {
+                    const TargetRegisterInfo *TRI,
+		    Register VReg) const {
   uint16_t hweSrcReg = TRI->getEncodingValue (SrcReg.asMCReg());
 
   /* With Stack relative to WPTR */
@@ -228,7 +229,8 @@ void T8xxInstrInfo::
 loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                      Register DestReg, int FI,
                      const TargetRegisterClass *RC,
-                     const TargetRegisterInfo *TRI) const {
+                     const TargetRegisterInfo *TRI,
+		     Register VReg) const {
   uint16_t hweDestReg = TRI->getEncodingValue (DestReg.asMCReg());
 
   /* With Stack relative to WPTR */
