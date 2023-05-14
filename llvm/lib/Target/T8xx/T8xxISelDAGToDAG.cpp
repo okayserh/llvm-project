@@ -20,6 +20,9 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
+#define DEBUG_TYPE "t8xx-isel"
+#define PASS_NAME "T8xx DAG->DAG Pattern Instruction Selection"
+
 //===----------------------------------------------------------------------===//
 // Instruction Selector Implementation
 //===----------------------------------------------------------------------===//
@@ -34,7 +37,9 @@ class T8xxDAGToDAGISel : public SelectionDAGISel {
   /// make the right decision when generating code for different targets.
   const T8xxSubtarget *Subtarget = nullptr;
 public:
-  explicit T8xxDAGToDAGISel(T8xxTargetMachine &tm) : SelectionDAGISel(tm) {}
+  static char ID;
+
+  explicit T8xxDAGToDAGISel(T8xxTargetMachine &tm) : SelectionDAGISel(ID, tm) {}
 
   void Select(SDNode *N) override;
 
@@ -57,6 +62,9 @@ private:
 };
 }  // end anonymous namespace
 
+char T8xxDAGToDAGISel::ID = 0;
+
+INITIALIZE_PASS(T8xxDAGToDAGISel, DEBUG_TYPE, PASS_NAME, false, false)
 
 bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset) {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
