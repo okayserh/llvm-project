@@ -1,3 +1,17 @@
+# T8xx Backend
+
+This branch includes my attempts to create a LLVM backend for the rather ancient
+Inmos Transputer architecture. In the late 80s, early 90s they were used in some
+parallel supercomputers due to their (at that time) impressive floating point
+performance and later were also accessible for the ambitious hobbyist.
+
+From the perspective of creating an LLVM backend, the challenging part is
+that the ISA is quite "non-standard". Instructions operate on an operand 
+stack, and no "real registers" are available. However, 4k memory block 
+with 1 cycle access time provides some substitute for registers.
+
+Note: The code is work in progress!
+
 # The LLVM Compiler Infrastructure
 
 Welcome to the LLVM project!
