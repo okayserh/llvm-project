@@ -16,7 +16,7 @@
 #include "T8xxFrameLowering.h"
 #include "T8xxISelLowering.h"
 #include "T8xxInstrInfo.h"
-#include "llvm/ADT/Triple.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"

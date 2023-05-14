@@ -11,6 +11,7 @@
 
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCRegister.h"
 
 namespace llvm {
 
@@ -22,9 +23,9 @@ class T8xxTargetStreamer : public MCTargetStreamer {
 public:
   T8xxTargetStreamer(MCStreamer &S);
   /// Emit ".register <reg>, #ignore".
-  virtual void emitT8xxRegisterIgnore(unsigned reg){};
+  virtual void emitT8xxRegisterIgnore(MCRegister reg){};
   /// Emit ".register <reg>, #scratch".
-  virtual void emitT8xxRegisterScratch(unsigned reg){};
+  virtual void emitT8xxRegisterScratch(MCRegister reg){};
 };
 
 // This part is for ascii assembly output
@@ -33,8 +34,8 @@ class T8xxTargetAsmStreamer : public T8xxTargetStreamer {
 
 public:
   T8xxTargetAsmStreamer(MCStreamer &S, formatted_raw_ostream &OS);
-  void emitT8xxRegisterIgnore(unsigned reg) override;
-  void emitT8xxRegisterScratch(unsigned reg) override;
+  void emitT8xxRegisterIgnore(MCRegister reg) override;
+  void emitT8xxRegisterScratch(MCRegister reg) override;
 };
 
 // This part is for ELF object output
@@ -42,8 +43,8 @@ class T8xxTargetELFStreamer : public T8xxTargetStreamer {
 public:
   T8xxTargetELFStreamer(MCStreamer &S);
   MCELFStreamer &getStreamer();
-  void emitT8xxRegisterIgnore(unsigned reg) override {}
-  void emitT8xxRegisterScratch(unsigned reg) override {}
+  void emitT8xxRegisterIgnore(MCRegister reg) override {}
+  void emitT8xxRegisterScratch(MCRegister reg) override {}
 };
 } // end namespace llvm
 
