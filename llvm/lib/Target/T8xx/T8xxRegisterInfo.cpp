@@ -73,7 +73,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   const MachineFunction &MF = *MI.getParent()->getParent();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   MachineOperand &FIOp = MI.getOperand(FIOperandNum);
-  unsigned FI = FIOp.getIndex();
+  int FI = FIOp.getIndex();
 
   printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %i\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
   MI.dump ();
@@ -102,19 +102,23 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   default:
     // Not supported yet.
     return false;
-  case T8xx::LDRi:
-  case T8xx::LDRi8:
-  case T8xx::LDRzi8:
-  case T8xx::LDRsi8:
-  case T8xx::LDRi16:
-  case T8xx::LDRzi16:
-  case T8xx::LDRsi16:
-  case T8xx::STRi:
-  case T8xx::STRi8:
-  case T8xx::STRi16:
-  case T8xx::STRimm8:
-    //  case T8xx::STRimm32:
+  case T8xx::LDRi8regop:
+  case T8xx::LDRi16regop:
+  case T8xx::LDRi32regop:
+  case T8xx::LDRzi8regop:
+  case T8xx::LDRzi16regop:
+  case T8xx::LDRsi8regop:
+  case T8xx::LDRsi16regop:
+
+  case T8xx::STRi8regop:
+  case T8xx::STRi16regop:
+  case T8xx::STRi32regop:
+  case T8xx::STRi8immop:
+  case T8xx::STRi16immop:
+  case T8xx::STRi32immop:
+
   case T8xx::LEA_ADDri:
+    /*
   case T8xx::ADDmemmemop:
   case T8xx::SUBmemmemop:
   case T8xx::MULmemmemop:
@@ -123,6 +127,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::XORmemmemop:
   case T8xx::ORmemmemop:
   case T8xx::ANDmemmemop:
+    */
     ImmOpIdx = FIOperandNum + 1;
     break;
   }
@@ -130,66 +135,11 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // FIXME: check the size of offset.
   MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
 
-  // TODO: Somehow the stack references seem not to be correct.
-  /*
-Function uses 3 regs
-emitEpilogue End
-eliminateFrameIndex  FI: 0  OpNum: 1   SPAdj: 0  StackSize 17
-  STRi renamable $r1, %stack.0, 0 :: (store (s32) into %ir.3)
-Function uses 3 regs
-After eliminateFrameIndex
-  STRi renamable $r1, $wptr, 25 :: (store (s32) into %ir.3)
-eliminateFrameIndex  FI: 1  OpNum: 1   SPAdj: 0  StackSize 17
-  STRi renamable $r2, %stack.1, 0 :: (store (s32) into %ir.4)
-Function uses 3 regs
-After eliminateFrameIndex
-  STRi renamable $r2, $wptr, 21 :: (store (s32) into %ir.4)
-eliminateFrameIndex  FI: 2  OpNum: 1   SPAdj: 0  StackSize 17
-  STRi16 renamable $r2, %stack.2, 0 :: (store (s16) into %ir.5, align 4)
-Function uses 3 regs
-After eliminateFrameIndex
-  STRi16 renamable $r2, $wptr, 17 :: (store (s16) into %ir.5, align 4)
-eliminateFrameIndex  FI: 3  OpNum: 1   SPAdj: 0  StackSize 17
-  STRi killed renamable $r3, %stack.3, 0 :: (store (s32) into %ir.6)
-Function uses 3 regs
-After eliminateFrameIndex
-  STRi killed renamable $r3, $wptr, 13 :: (store (s32) into %ir.6)
-eliminateFrameIndex  FI: 4  OpNum: 1   SPAdj: 0  StackSize 17
-  STRi8 killed renamable $r2, %stack.4, 0 :: (store (s8) into %ir.7)
-Function uses 3 regs
-After eliminateFrameIndex
-  STRi8 killed renamable $r2, $wptr, 12 :: (store (s8) into %ir.7)
-
-Frame Objects:
-  fi#0: size=4, align=4, at location [SP-4]  -> R1 (erste Parameter)   16
-  fi#1: size=4, align=4, at location [SP-8]  -> R2 (zweiter Parameter) 20
-  fi#2: size=4, align=4, at location [SP-12] -> short i   24
-  fi#3: size=4, align=4, at location [SP-16] -> int buf   28
-  fi#4: size=1, align=1, at location [SP-17] -> char abc  29
-
-  12 + 17 = 29
-
-  frame-setup AJW -36
-  LDL 1
-  STL 25
-  LDL 2
-  STL 21
-  LDL 1
-  LDC 17
-  renamable $r3 = SHLregimmop renamable $r1, 17
-  STL 3
-  renamable $r3 = SRAregimmop killed renamable $r3, 16
-  LDL 3
-  LDL 2
-  */
-  
-  //  int Offset = -MFI.getObjectOffset(FI) + used_regs * 4 + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
-
-  // This approach gets the direction right, but does not work when the
-  // later objects are not properly aligned
-  // int Offset = (MFI.getStackSize() + (used_regs + 1) * 4)+MFI.getObjectOffset(FI) + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
-
   int Offset = -MFI.getObjectOffset(FI) -MFI.getObjectSize(FI) + (used_regs + 1) * 4 + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
+  
+
+  printf ("eliminateFrameIndex  FI: %i Offset: %i Size: %i StackSize %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize());
+
 
   // Note: There was erroneous behavior in the initial version
   // Since the R15 was "used", the next call to eliminateFrameIndex

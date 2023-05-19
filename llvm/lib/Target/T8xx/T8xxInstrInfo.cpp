@@ -42,8 +42,8 @@ T8xxInstrInfo::T8xxInstrInfo(T8xxSubtarget &ST)
 /// any side effects other than loading from the stack slot.
 unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
-  if (MI.getOpcode() == T8xx::LDRi || MI.getOpcode() == T8xx::LDRi8 ||
-      MI.getOpcode() == T8xx::LDRzi8 || MI.getOpcode() == T8xx::LDRsi8) {
+  if (MI.getOpcode() == T8xx::LDRi32regop || MI.getOpcode() == T8xx::LDRi8regop ||
+      MI.getOpcode() == T8xx::LDRzi8regop || MI.getOpcode() == T8xx::LDRsi8regop) {
     if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
         MI.getOperand(2).getImm() == 0) {
       FrameIndex = MI.getOperand(1).getIndex();
@@ -60,7 +60,7 @@ unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 /// any side effects other than storing to the stack slot.
 unsigned T8xxInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                             int &FrameIndex) const {
-  if (MI.getOpcode() == T8xx::STRi || MI.getOpcode() == T8xx::STRi8/* ||
+  if (MI.getOpcode() == T8xx::STRi32regop || MI.getOpcode() == T8xx::STRi32immop/* ||
 								      MI.getOpcode() == T8xx::STRi16*/) {
     if (MI.getOperand(0).isFI() && MI.getOperand(1).isImm() &&
         MI.getOperand(1).getImm() == 0) {
@@ -246,7 +246,7 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
  * Load the operand to the processor register stack
  */
 
-void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum, const unsigned int OReg) const
+void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum, const int OReg) const
 {
   DebugLoc DL = MI.getDebugLoc();
   MachineBasicBlock &MBB = *MI.getParent();
@@ -441,136 +441,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
-  case T8xx::LEA_ADDri:
-    {
-      const unsigned FI = MI.getOperand(2).getImm();
-      if ((MI.getOperand(1).getReg() == T8xx::WPTR) && (FI % 4 == 0))
-	loadRegStack (MI, 1, FI / 4);
-      else
-	{
-	  loadRegStack (MI, 1);
-	  addAddrOffset (MI, 2);
-	}
-
-      storeRegStack (MI, 0);
-
-      MBB.erase(MI);
-      return true;
-    }
-    break;
-
-  case T8xx::STRi:
-  case T8xx::STRi16:
-    {
-      // Destination register (outs!?)
-      const Register AddBaseReg = MI.getOperand(1).getReg();  // TODO: Clarify whether that's always the frameindex?
-      const unsigned FI = MI.getOperand(2).getImm();
-
-      /* With stack relative to WPTR */
-      loadRegStack (MI, 0);
-
-      // Truncation to lower 16 bits via "and"
-      if (MI.getOpcode() == T8xx::STRi16)
-	{
-	  BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0xFFFF);
-	  BuildMI(MBB, MI, DL, get(T8xx::AND));
-	}
-
-      // For 16 bit values also a 32 bit alignment needs to satisfied
-      if (AddBaseReg == T8xx::WPTR)
-	if (FI % 4 == 0)
-	  BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(FI / 4);  // Stack Offset goes via OREG
-	else
-	  printf ("STRi unaligned frame index %i\n", FI);
-      else
-	printf ("STRi wrong register in operand type\n");
-      MBB.erase(MI);
-      return true;
-    }
-    break;
-
-  case T8xx::STRi8:
-  case T8xx::STRimm8:
-    {
-      const unsigned FI = MI.getOperand(2).getImm();
-      if ((MI.getOperand(1).getReg() == T8xx::WPTR) && (FI % 4 == 0))
-	loadRegStack (MI, 1, FI / 4);
-      else
-	{
-	  loadRegStack (MI, 1);
-	  addAddrOffset (MI, 2);
-	}
-
-      loadRegStack (MI, 0);
-      BuildMI(MBB, MI, DL, get(T8xx::SB));
-      // TODO: For the sext / zext cases add some for sign extension or zero extension
-
-      MBB.erase(MI);
-      return true;
-    }
-    break;
-
-  case T8xx::LDRi:
-  case T8xx::LDRi16:
-  case T8xx::LDRzi16:
-  case T8xx::LDRsi16:
-    {
-      // Destination register (outs!?)
-      const Register DstReg = MI.getOperand(0).getReg();
-      const unsigned AddBaseReg = MI.getOperand(1).getReg();
-      const unsigned FI = MI.getOperand(2).getImm();
-
-      // BuildMI inserts before "MI"
-      if (AddBaseReg == T8xx::WPTR)
-	if (FI % 4 == 0)
-	  BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(FI / 4);
-	else
-	  printf ("LDRi unaligned frame index %i\n", FI);
-      else
-	printf ("LDRi wrong register in operand type\n");
-
-      // Sign extension
-      if (MI.getOpcode() == T8xx::LDRsi16)
-	{
-	  BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0x8000);
-	  BuildMI(MBB, MI, DL, get(T8xx::XWORD));
-	}
-
-      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));
-      MBB.erase(MI);
-      return true;
-    }
-    break;
-
-  case T8xx::LDRi8:
-  case T8xx::LDRsi8:
-  case T8xx::LDRzi8:
-    {
-      const unsigned FI = MI.getOperand(2).getImm();
-      if ((MI.getOperand(1).getReg() == T8xx::WPTR) && (FI % 4 == 0))
-	loadRegStack (MI, 1, FI / 4);
-      else
-	{
-	  loadRegStack (MI, 1);
-	  addAddrOffset (MI, 2);
-	}
-
-      // SB Takes an address in StackReg A. Hence the code above pulls the address into A
-      BuildMI(MBB, MI, DL, get(T8xx::LB));
-      // TODO: For the sext / zext cases add some for sign extension or zero extension
-      if (MI.getOpcode() == T8xx::LDRsi8)
-	{
-	  BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0x80);
-	  BuildMI(MBB, MI, DL, get(T8xx::XWORD));
-	}
-      
-      storeRegStack (MI, 0);
-
-      MBB.erase(MI);
-      return true;
-    }
-    break;
-
+#if 0
   case T8xx::MOVimmr:
     {
       // Destination register (outs!?)
@@ -599,163 +470,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return true;
     }
     break;
-
-  case T8xx::ADDmemmemop:
-  case T8xx::SUBmemmemop:
-  case T8xx::MULmemmemop:
-  case T8xx::SDIVmemmemop:
-  case T8xx::SREMmemmemop:
-  case T8xx::SHLmemmemop:
-  case T8xx::SHRmemmemop:
-  case T8xx::XORmemmemop:
-  case T8xx::ORmemmemop:
-  case T8xx::ANDmemmemop:
-    {
-      // DstReg = 0
-      // Src1 = 1 (Reg/Imm)
-      // FI = 2 (Reg), Offset = 3 (Imm)
-
-      // In contrast to LDRi8 etc., here the value at an address
-      // should be put into A reg.
-      const unsigned FI = MI.getOperand(3).getImm();
-      if (MI.getOperand(2).getReg() == T8xx::WPTR)
-	if (FI % 4 == 0)
-	  BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(FI / 4);
-	else
-	  printf ("LDRi unaligned frame index %i\n", FI);
-      else
-	{
-	  // TODO: Create a sequence which reads from
-	  // a global address (Some register + some offset)
-	  printf ("LDRi wrong register in operand type\n");
-	}
-
-      // Load second operand
-      loadRegStack (MI, 1);
-
-      // Destination register
-      // Inserts after MI
-      storeRegStack (MI, 0, true);
-      return true;
-    }
-    break;
-
-  case T8xx::SRAregregop:
-  case T8xx::SRAregimmop:
-    {
-      // Section 5.7.3 from compiler writers guide (Single length arithmetic shifts)
-      // sra (P29 Compiler writing guide)
-      // ldl X; xdble; ldl Y; lshr; stl X  (right)
-      const Register DstReg = MI.getOperand(0).getReg();
-
-      loadRegStack (MI, 1);  // X (value to be shifted)
-      BuildMI(MBB, MI, DL, get(T8xx::XDBLE));
-      loadRegStack (MI, 2);  // Y (number of bits to be shifted)
-      BuildMI(MBB, MI, DL, get(T8xx::LSHR));
-      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));  // Stack Offset goes via OREG
-
-      MBB.erase(MI);
-      return (true);
-    }
-    break;
-
-    // sla
-    // ldl X; xdble; ldl Y; lshr; csngl; stl X  (left)
-    
-  case T8xx::ROTRregregop:
-  case T8xx::ROTRregimmop:
-    {
-      // Section 5.7.3 from compiler writers guide (Single length arithmetic shifts)
-      // rotr (P30 Compilter writing guide)
-      // ldl X; ldc 0; ldl Y; lshr; or; stl X   (rotate X by Y places right)
-      const Register DstReg = MI.getOperand(0).getReg();
-
-      loadRegStack (MI, 1);  // X (value to be shifted)
-      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0);
-      loadRegStack (MI, 2);  // Y (number of bits to be shifted)
-      BuildMI(MBB, MI, DL, get(T8xx::LSHR));
-      BuildMI(MBB, MI, DL, get(T8xx::OR));
-      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));  // Stack Offset goes via OREG
-
-      MBB.erase(MI);
-      return (true);
-    }
-    break;
-
-  case T8xx::ROTLregregop:
-  case T8xx::ROTLregimmop:
-    {
-      // Section 5.7.3 from compiler writers guide (Single length arithmetic shifts)
-      // rotl
-      // ldc 0; ldl X; ldl Y; lshl; or; stl X   (rotate X by Y places left)
-      const Register DstReg = MI.getOperand(0).getReg();
-
-      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0);
-      loadRegStack (MI, 1);  // X (value to be shifted)
-      loadRegStack (MI, 2);  // Y (number of bits to be shifted)
-      BuildMI(MBB, MI, DL, get(T8xx::LSHL));
-      BuildMI(MBB, MI, DL, get(T8xx::OR));
-      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));  // Stack Offset goes via OREG
-
-      MBB.erase(MI);
-      return (true);
-    }
-    break;
-
-  case T8xx::UDIVregregop:
-  case T8xx::UDIVregimmop:
-  case T8xx::UREMregregop:
-  case T8xx::UREMregimmop:
-    {
-      // Section 5.7.2, P28 top from compiler writers guide (Multiple length multiplication and division)
-      const Register DstReg = MI.getOperand(0).getReg();
-
-      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(0);  // Most significant word (0)
-      loadRegStack (MI, 1);  // X (value to be divided)
-      loadRegStack (MI, 2);  // Y (divisor)
-      BuildMI(MBB, MI, DL, get(T8xx::LDIV));
-      // Result is in A, Remainder in B. If Remainder is requested, swap results.
-      if ((MI.getOpcode() == T8xx::UREMregregop) ||
-	  (MI.getOpcode() == T8xx::UREMregimmop))
-	BuildMI(MBB, MI, DL, get(T8xx::REV));
-      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));  // Stack Offset goes via OREG
-
-      MBB.erase(MI);
-      return (true);
-    }
-    break;
-    
-  case T8xx::ADDregregop:
-  case T8xx::SUBregregop:
-  case T8xx::MULregregop:
-  case T8xx::SDIVregregop:
-  case T8xx::SREMregregop:
-  case T8xx::SHLregregop:
-  case T8xx::SHRregregop:
-  case T8xx::XORregregop:
-  case T8xx::ORregregop:
-  case T8xx::ANDregregop:
-  case T8xx::ADDregimmop:
-  case T8xx::SUBregimmop:
-  case T8xx::MULregimmop:
-  case T8xx::SDIVregimmop:
-  case T8xx::SREMregimmop:
-  case T8xx::SHLregimmop:
-  case T8xx::SHRregimmop:
-  case T8xx::XORregimmop:
-  case T8xx::ORregimmop:
-  case T8xx::ANDregimmop:
-    {
-      loadRegStack (MI, 1);
-      loadRegStack (MI, 2);
-
-      // Destination register (outs!?)
-      const Register DstReg = MI.getOperand(0).getReg();
-      MachineBasicBlock::iterator MBBI = MI;
-      // Inserts after MI
-      BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue (DstReg.asMCReg()));
-      return true;
-    }
-    break;
+#endif
   }
 }
