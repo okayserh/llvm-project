@@ -16,7 +16,7 @@
 
 def CC_T8xx32 : CallingConv<[
   // i32 f32 arguments get passed in integer registers if there is space.
-//  CCIfType<[i32], CCAssignToReg<[R1, R2, R3]>>,
+  CCIfType<[i32], CCAssignToReg<[R1, R2, R3]>>,
 
   // Alternatively, they are assigned to the stack in 4-byte aligned units.
   CCIfType<[i32], CCAssignToStack<4, 4>>
