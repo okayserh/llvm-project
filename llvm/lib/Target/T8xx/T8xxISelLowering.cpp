@@ -197,7 +197,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // be put on the stack
 
     SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
-    SDValue PtrOff = DAG.getIntPtrConstant(-VA.getLocMemOffset(), Loc);
+    SDValue PtrOff = DAG.getIntPtrConstant(-(VA.getLocMemOffset() + 4), Loc);
     PtrOff = DAG.getNode(ISD::ADD, Loc, MVT::i32, StackPtr, PtrOff);
     /* LEG Original
     MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,

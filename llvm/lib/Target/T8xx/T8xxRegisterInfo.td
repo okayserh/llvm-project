@@ -59,3 +59,8 @@ def PSTACK  : T8xxReg<17, "PSTACK">;
 
 def IntRegs : RegisterClass<"T8xx", [i32], 32,
                             (add (sequence "R%u", 1, 15))>;
+
+// The frame pointer or workspace pointer is special
+// in that it is used in special adressing modes
+def WptrRegs : RegisterClass<"T8xx", [i32], 32,
+                            (add WPTR)>;

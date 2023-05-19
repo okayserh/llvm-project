@@ -48,6 +48,8 @@ public:
                        raw_ostream &OS);
   void printAddrModeMemSrc(const MCInst *MI, int OpNum, const MCSubtargetInfo &STI,
 			   raw_ostream &O);
+  void printAddrModeMem(const MCInst *MI, int OpNum, const MCSubtargetInfo &STI,
+			raw_ostream &O);
 };
 } // end namespace llvm
 

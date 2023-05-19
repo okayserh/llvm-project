@@ -41,7 +41,7 @@ class T8xxInstrInfo : public T8xxGenInstrInfo {
   virtual void anchor();
 
   void loadRegStack (MachineInstr &MI, const unsigned int OpNum,
-		     const unsigned int OReg = 0) const;
+		     const int OReg = 0) const;
 
   void addAddrOffset (MachineInstr &MI, const unsigned int OpNum) const;
 
