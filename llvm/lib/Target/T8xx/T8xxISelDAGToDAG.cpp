@@ -147,6 +147,7 @@ bool T8xxDAGToDAGISel::SelectADDRr(SDValue Addr, SDValue &Base) {
     return false; // direct calls.
   }
 
+  printf ("Replacing ADDRr\n");
   Base = Addr;
   return true;
 }
