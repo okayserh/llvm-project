@@ -441,35 +441,5 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
-#if 0
-  case T8xx::MOVimmr:
-    {
-      // Destination register (outs!?)
-      const Register DstReg = MI.getOperand(0).getReg();
-
-      // BuildMI inserts before "MI"
-      loadRegStack (MI,1);
-      BuildMI(MBB, MI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));  // Stack Offset goes via OREG
-      MBB.erase(MI);
-      return true;
-    }
-    break;
-
-  case T8xx::ADDimmr:
-    {
-      // Destination register (outs!?)
-      const Register DstReg = MI.getOperand(0).getReg();
-      const Register SrcReg1 = MI.getOperand(1).getReg();
-
-      // BuildMI inserts before "MI"
-      BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(SrcReg1.asMCReg())); // SrcReg1 to BREG
-
-      // Inserts after MI
-      MachineBasicBlock::iterator MBBI = MI;
-      BuildMI(MBB, ++MBBI, DL, get(T8xx::STL)).addImm(TRI->getEncodingValue(DstReg.asMCReg()));  // Stack Offset goes via OREG
-      return true;
-    }
-    break;
-#endif
   }
 }
