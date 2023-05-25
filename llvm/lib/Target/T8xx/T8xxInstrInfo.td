@@ -461,8 +461,8 @@ def immop : T8xxPseudoInst<
 }
 
 defm STRi8mem :  T8StorageMem<"\tldl $addr \n\tsb \n" , truncstorei8>;
-defm STRi16mem : T8StorageMem<"\tldc #FFFF \n and \n\tldl $addr \n" ,truncstorei16>;
-defm STRi32mem : T8StorageMem<"\tldl $addr \n" ,store>;
+defm STRi16mem : T8StorageMem<"\tldc #FFFF \n and \n\tldl $addr \n\tstnl \n" ,truncstorei16>;
+defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl \n" ,store>;
 
 
 // Taken from SparcInstrInfo.td
@@ -591,29 +591,3 @@ def ADJCALLSTACKUP : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                             "ADJCALLSTACKUP $amt1",
                             [(callseq_end timm:$amt1, timm:$amt2)]>;
 }
-
-
-// Note: these instructions seem to "kill" the
-// following patterns when placed before the more
-// specific patterns. Presumably, these patterns always
-// match and prevent the algorithm to look for other patterns
-// below in the code.
-
-/*
-def ADDwptr  : T8xxPseudoInst<(outs IntRegs:$dst),
-       	 	(ins WptrRegs:$src1, i32imm:$src2 ),
-		"ldlp $src2 \n\tstl $dst \n",
-		[(set i32:$dst, (add i32:$src1, imm:$src2))]> {
-		let isCodeGenOnly = 1;
-		let op2 = 0x00;
-		}
-*/
-/*
-def MOVwptr  : T8xxPseudoInst<(outs IntRegs:$dst),
-       	 	(ins WptrRegs:$src),
-		"ldlp \n\tstl $dst \n",
-		[(set i32:$dst, i32:$src)]> {
-		let isCodeGenOnly = 1;
-		let op2 = 0x00;
-		}
-*/

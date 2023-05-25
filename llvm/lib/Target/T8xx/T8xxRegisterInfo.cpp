@@ -89,9 +89,14 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       const TargetRegisterClass *rc = (*ri);
       for (int j = 0; j < (*ri)->getNumRegs (); ++j)
 	{
+	  // Note: only R1 to R15 as used stack registers
+	  // are relevant as they need some reserved space on the stack
 	  unsigned reg_id = (*ri)->getRegister(j).id();
-	  if (!RI.reg_empty (reg_id))
-	    used_regs++;
+	  if ((reg_id >= T8xx::R1) && (reg_id <= T8xx::R15))
+	    {
+	      if (!RI.reg_empty (reg_id))
+		used_regs++;
+	    }
 	}
     }
   printf ("Function uses %i regs\n", used_regs);
@@ -140,16 +145,43 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // FIXME: check the size of offset.
   MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
 
-  int Offset = -MFI.getObjectOffset(FI) -MFI.getObjectSize(FI) + (used_regs + 1) * 4 + ImmOp.getImm() ;  // Instead of 4 = Sizeof(register)
-  
+  // Get the size of parameters on the stack
+  unsigned fixed_obj_size = 0;
+  for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
+    fixed_obj_size += MFI.getObjectSize (i);
+  unsigned obj_size = 0;
+  for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
+    obj_size += MFI.getObjectSize (i) > 0 ? MFI.getObjectSize (i) : 0;
 
-  printf ("eliminateFrameIndex  FI: %i Offset: %i Size: %i StackSize %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize());
+  printf ("Fixed objects size = %i\n", fixed_obj_size);
+  printf ("Objects size = %i\n", obj_size);
+
+  int Offset = 0;
+  // FI < 0 = fixed stack objects (i.e. call parameters)
+  if (FI < 0)
+    {
+      Offset = obj_size + MFI.getObjectOffset(FI) + ImmOp.getImm() ;
+    }
+  else
+    {
+      Offset = -MFI.getObjectOffset(FI) -MFI.getObjectSize(FI) + ImmOp.getImm() ;
+    }
+  
+  // Note: getObjectOffset is positive for the function parameter (0, 4, 8)
+  // getObjectOffset is negative for the frame object (-4, -8, -12)
+  
+  // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
+  Offset += MFI.getOffsetAdjustment ();
+  
+  printf ("eliminateFrameIndex  FI: %i Offset: %i Size: %i StackSize %i  ImmOp %i  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
 
 
   // Note: There was erroneous behavior in the initial version
   // Since the R15 was "used", the next call to eliminateFrameIndex
   // counted one additional used register, which led to
   // a double usage of certain stack positions.
+  // Note: This error is back :-/. Presumably since WPTR is now
+  // included as real register, the function also takes this up.
   FIOp.ChangeToRegister(T8xx::WPTR, false);  // TODO: Just a fix to make it compile
   ImmOp.setImm(Offset);
   
