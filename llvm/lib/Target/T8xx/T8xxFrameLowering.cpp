@@ -41,9 +41,10 @@ DisableLeafProc("disable-t8xx-leaf-proc",
                 cl::Hidden);
 
 T8xxFrameLowering::T8xxFrameLowering(const T8xxSubtarget &ST)
-    : TargetFrameLowering(TargetFrameLowering::StackGrowsDown,
-                          Align(8), 0,
-                          Align(8)) {}
+  : TargetFrameLowering(TargetFrameLowering::StackGrowsDown,  // StackDir
+			Align(4),  // StackAlignment
+			0,      // LocalAreaOffset
+			Align(4)) {}   // TransientRealignment
 
 void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
                                           MachineBasicBlock &MBB,
@@ -71,10 +72,17 @@ uint64_t T8xxFrameLowering::computeStackSize(MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   uint64_t StackSize = MFI.getStackSize();
   unsigned StackAlign = getStackAlignment();
-  if (StackAlign > 0) {
-    StackSize = RoundUpToAlignment(StackSize, StackAlign);
-  }
-  return StackSize;
+
+  // Get the size of parameters on the stack
+  uint64_t fixed_obj_size = 0;
+  for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
+    fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ());
+  uint64_t obj_size = 0;
+  for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
+    obj_size += MFI.getObjectSize (i) > 0 ?
+      RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ()) : 0;
+
+  return (obj_size + fixed_obj_size);
 }
 
 
@@ -83,6 +91,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   printf ("emitPrologue\n");
   
   // Compute the stack size, to determine if we need a prologue at all.
+  MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
@@ -114,7 +123,13 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 	    used_regs++;
 	}
     }
-  printf ("Function uses %i regs\n", used_regs);
+  printf ("Function uses %i regs, Stack size = %i\n", used_regs, StackSize);
+
+  // Attempt to adjust stack offset
+  /* Note: This is just a helper variable in the MFI object. */
+  printf ("Current FI Offset = %i\n", MFI.getOffsetAdjustment ());
+  // Note: The +1 is for R0, which is reserved
+  MFI.setOffsetAdjustment ((used_regs + 1) * 4);
   
   // Try to evaluate used registers
 #if 0
