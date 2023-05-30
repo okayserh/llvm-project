@@ -28,7 +28,7 @@ def RetCC_T8xx32 : CallingConv<[
 
   // Integer values get stored in stack slots that are 4 bytes in
   // size and 4-byte aligned.
-  CCIfType<[i32], CCAssignToStack<4, 4>>
+//  CCIfType<[i32], CCAssignToStack<4, 4>>
 ]>;
 
 // TODO: Probably needs to span all integer registers
