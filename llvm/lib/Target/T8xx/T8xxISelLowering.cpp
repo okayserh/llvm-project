@@ -43,6 +43,7 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case T8xxISD::LOAD_SYM: return "LOAD_SYM";
     /*	case LEGISD::MOVEi32:  return "MOVEi32";*/
   case T8xxISD::CALL:     return "CALL";
+  case T8xxISD::LOAD_OP_STACK:     return "LOAD_OP_STACK";
   }
 }
 
@@ -145,7 +146,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
 
   printf ("LowerCall\n");
-  
+
   // Analyze operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), ArgLocs,
@@ -181,13 +182,13 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     if (VA.isRegLoc()) {
       printf ("VA %i is Reg\n", i);
-      
+
       RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
       continue;
     }
 
     printf ("VA %i is Mem\n", i);
-    
+
     assert(VA.isMemLoc() &&
            "Only support passing arguments through registers or via the stack");
 
@@ -215,7 +216,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   printf ("Before RegsToPass\n");
   DAG.dump ();
-  
+
   // Build a sequence of copy-to-reg nodes chained together with token chain
   // and flag operands which copy the outgoing args into the appropriate regs.
   SDValue InFlag;
@@ -226,7 +227,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
   printf ("After RegsToPass\n");
   DAG.dump ();
-  
+
   // We only support calling global addresses.
   /* Original code
   GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee);
@@ -241,7 +242,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0);
 
-  
+
   std::vector<SDValue> Ops;
   Ops.push_back(Chain);
   Ops.push_back(Callee);
@@ -320,7 +321,7 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
   printf ("LowerFormalArguments\n");
   DAG.dump ();
   printf ("Pre LowerFormalArguments\n");
-  
+
   MachineFunction &MF = DAG.getMachineFunction();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
 
@@ -332,7 +333,7 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
   CCInfo.AnalyzeFormalArguments(Ins, CC_T8xx32);
 
   int i = 0;
-  
+
   for (auto &VA : ArgLocs) {
     if (VA.isRegLoc()) {
       printf ("VA %i is Reg\n", i++);
@@ -351,7 +352,7 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
     }
 
     printf ("VA %i is Mem\n", i++);
-    
+
     assert(VA.isMemLoc() &&
            "Can only pass arguments as either registers or via the stack");
 
@@ -401,7 +402,7 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   printf ("LowerFormalReturn\n");
   DAG.dump ();
   printf ("Pre LowerFormalReturn\n");
-  
+
   // CCValAssign - represent the assignment of the return value to locations.
   SmallVector<CCValAssign, 16> RVLocs;
 
@@ -416,7 +417,7 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   SmallVector<SDValue, 4> RetOps(1, Chain);
 
   printf ("Temp A, RVLocs Size %i\n", RVLocs.size());
-  
+
   // Copy the result values into the output registers.
   for (unsigned i = 0, e = RVLocs.size(); i < e; ++i) {
     CCValAssign &VA = RVLocs[i];
@@ -424,6 +425,22 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
     Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), OutVals[i], Flag);
 
+    /* TODO: Clarify why this does not work
+    // Note: Transcription from SelectionDAG.h, Line 777
+    //SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
+    SDVTList VTs = DAG.getVTList(MVT::Other);
+    SDValue Ops[] = { Chain, DAG.getRegister(VA.getLocReg(), OutVals[i].getValueType()), OutVals[i], Flag };
+
+    Chain = DAG.getNode(T8xxISD::LOAD_OP_STACK, DL, VTs,
+                   ArrayRef(Ops, Flag.getNode() ? 4 : 3));
+
+    printf ("Res No %i  Num Val %i\n", Chain.getResNo (), Chain.getNode()->getNumValues ());
+
+    // Works
+    // Chain = DAG.getNode(ISD::CopyToReg, DL, VTs,
+    //               ArrayRef(Ops, Flag.getNode() ? 4 : 3));
+    */
+    
     Flag = Chain.getValue(1);
     RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
   }
@@ -443,12 +460,12 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   int i = 0;
   for (const auto &Op : RetOps)
-    {      
+    {
       printf ("Op %i %p\n", i++, &Op);
       Op.dump ();
       printf ("OpCode %i\n", Op.getOpcode());
     }
-      
+
   SDValue ret = DAG.getNode(T8xxISD::RET_FLAG, DL, MVT::Other, RetOps);
 
   printf ("Post Lower Return\n");
