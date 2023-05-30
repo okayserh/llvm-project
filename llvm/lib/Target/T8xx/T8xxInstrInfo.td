@@ -53,6 +53,12 @@ def SDT_SPRet     : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
 def T8xxRetFlag     : SDNode<"T8xxISD::RET_FLAG", SDTNone,
                            [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
+
+def SDT_LoadOpS     : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>, SDTCisSameAs<0,1>]>;
+
+def T8xxLoadOpStack : SDNode<"T8xxISD::LOAD_OP_STACK", SDT_LoadOpS,
+                           [SDNPHasChain]>;
+
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
@@ -357,7 +363,6 @@ def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, IntRegs:$lhs, IntRegs:$rhs),
 
 // Load instructions
 
-//multiclass T8Load<string opstr, PatFrag opnode>{
 multiclass T8Load<string opstr, SDPatternOperator opnode>{
 
 def regop : T8xxPseudoInst<
@@ -383,7 +388,6 @@ defm LDRsi16 : T8Load<"ldl $addr \n\tldc #8000 \n\txword \n", sextloadi16>;
 
 // Load from global addresses
 
-//multiclass T8LoadMem<string opstr, PatFrag opnode>{
 multiclass T8LoadMem<string opstr, SDPatternOperator opnode>{
 
 def regop : T8xxPseudoInst<
@@ -409,7 +413,6 @@ defm LDRsi16mem :  T8LoadMem<"ldl $addr MEM \n\tldc #8000 \n\txword \n", sextloa
 
 // Store instructions on frame
 
-//multiclass T8Storage<string opstr, PatFrag opnode>{
 multiclass T8Storage<string opstr, SDPatternOperator opnode>{
 
 def regop : T8xxPseudoInst<
@@ -438,7 +441,6 @@ defm STRi32 : T8Storage<"\tstl $addr \n" ,store>;
 
 // Store instructions on global memory
 
-//multiclass T8StorageMem<string opstr, PatFrag opnode>{
 multiclass T8StorageMem<string opstr, SDPatternOperator opnode>{
 
 def regop : T8xxPseudoInst<
@@ -484,11 +486,20 @@ def LEA_ADDri   : T8Inst<(outs IntRegs:$rd),
 
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : T8Inst<(outs), (ins variable_ops),
-                    "ret",  [(T8xxRetFlag)]> {
+                    "stl %r1 \n\tldl %r0 \n\tgcall \n",  [(T8xxRetFlag)]> {
     let op1 = 0x20;
     let op2 = 0x22;
+    let isCodeGenOnly = 1;
   }
 }
+
+
+def LoadOpStack : T8Inst<(outs), (ins IntRegs:$src),
+                    "ldl $src \n",  [(set AREG, (T8xxLoadOpStack i32:$src))]> {
+    let op1 = 0x20;
+    let op2 = 0x23;
+    let isCodeGenOnly = 1;
+  }
 
 
 //===----------------------------------------------------------------------===//
