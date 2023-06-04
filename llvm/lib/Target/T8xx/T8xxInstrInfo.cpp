@@ -205,8 +205,11 @@ void T8xxInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   uint16_t hweDstReg = TRI->getEncodingValue (DestReg);
 
   /* 16 Register in Workspace approach */
-  BuildMI(MBB, I, DL, get(T8xx::LDL)).addImm(hweSrcReg);
-  BuildMI(MBB, I, DL, get(T8xx::STL)).addImm(hweDstReg);
+  if ((SrcReg >= T8xx::R0) and (SrcReg <= T8xx::R15))
+    BuildMI(MBB, I, DL, get(T8xx::LDL)).addImm(hweSrcReg);
+
+  if ((DestReg >= T8xx::R0) and (DestReg <= T8xx::R15))
+    BuildMI(MBB, I, DL, get(T8xx::STL)).addImm(hweDstReg);
 }
 
 void T8xxInstrInfo::
@@ -259,11 +262,14 @@ void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum, co
   switch (MOT)
     {
     case MachineOperand::MO_Register:
-      if (MI.getOperand(OpNum).getReg() == T8xx::WPTR)
-	BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(OReg);
-      else
-	BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(MI.getOperand(OpNum).getReg().asMCReg()));
-      break;
+      {
+	MCRegister SrcReg = MI.getOperand(OpNum).getReg ();
+	if (SrcReg == T8xx::WPTR)
+	  BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(OReg);
+	if ((SrcReg >= T8xx::R0) and (SrcReg <= T8xx::R15))
+	  BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(MI.getOperand(OpNum).getReg().asMCReg()));
+      }
+      break;	
     case MachineOperand::MO_Immediate:
       BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(MI.getOperand(OpNum).getImm());
       break;
@@ -441,5 +447,28 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
-  }
+  case T8xx::LoadOpStack:
+    {
+      loadRegStack (MI, 1);
+      return true;
+    }
+    break;
+
+
+    // Return instruction
+    /*
+  case T8xx::RET:
+    {
+      for (unsigned int i = 0; i < MI.getNumOperands (); ++i)
+	{
+	  loadRegStack (MI, i);
+	  //	  printf ("RET %i Type %i\n", i, MI.getOperand(i).getType ());
+	  //	  const ISD::CondCode CC = (ISD::CondCode)MI.getOperand(0).getImm();
+	 //	  const MachineOperand::MachineOperandType MOT_LHS = ;  // X
+	}
+      return false;
+    }
+    break;
+*/      
+   }
 }
