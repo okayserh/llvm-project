@@ -54,7 +54,8 @@ def T8xxRetFlag     : SDNode<"T8xxISD::RET_FLAG", SDTNone,
                            [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 
-def SDT_LoadOpS     : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>, SDTCisSameAs<0,1>]>;
+//def SDT_LoadOpS     : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>, SDTCisSameAs<0,1>]>;
+def SDT_LoadOpS     : SDTypeProfile<1, 1, [SDTCisVT<0, i32>, SDTCisSameAs<0,1>]>;
 
 def T8xxLoadOpStack : SDNode<"T8xxISD::LOAD_OP_STACK", SDT_LoadOpS,
                            [SDNPHasChain]>;
@@ -486,7 +487,7 @@ def LEA_ADDri   : T8Inst<(outs IntRegs:$rd),
 
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : T8Inst<(outs), (ins variable_ops),
-                    "stl %r1 \n\tldl %r0 \n\tgcall \n",  [(T8xxRetFlag)]> {
+                    "ldl %r0 \n\tgcall \n",  [(T8xxRetFlag)]> {
     let op1 = 0x20;
     let op2 = 0x22;
     let isCodeGenOnly = 1;
@@ -494,11 +495,13 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 }
 
 
-def LoadOpStack : T8Inst<(outs), (ins IntRegs:$src),
-                    "ldl $src \n",  [(set AREG, (T8xxLoadOpStack i32:$src))]> {
+def LoadOpStack : T8Inst<(outs OperandReg:$dst), (ins IntRegs:$src),
+//                    "ldl $src \n",  [(set i32:$dst, (T8xxLoadOpStack i32:$src))]> {
+                    "ldl $src \n",  [(set i32:$dst, (T8xxLoadOpStack i32:$src))]> {
     let op1 = 0x20;
     let op2 = 0x23;
     let isCodeGenOnly = 1;
+    let isPseudo = 1;
   }
 
 
@@ -520,11 +523,17 @@ def LoadOpStack : T8Inst<(outs), (ins IntRegs:$src),
 
 
 // Working version, passed directly
+// Note: Currently only one return value in the A register is allowed
+// Since the gcall exchanges instruction pointer with the A reg,
+// the "rev" is required to put the return value (initially stored in Operand
+// register A, then pushed down to B) into the A operand register.
+// Then the "copyToReg" after the call will shift it into the
+// right destination "Frame-Register"
 //let isCall = 1, Uses = [R15] in {
 let isCall = 1 in {
   def CALL : T8Inst<(outs), (ins i32imm:$addr),
 //                      "call $addr",
-                      "ldc $addr \n\tldpi \n\tgcall \n",
+                      "ldc $addr \n\tldpi \n\tgcall \n\trev \n",
                       [(call tglobaladdr:$addr)]> {
     let isCodeGenOnly = 1;
     let op1 = 0x22;
