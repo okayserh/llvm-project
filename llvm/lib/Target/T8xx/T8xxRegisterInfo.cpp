@@ -149,12 +149,15 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   unsigned fixed_obj_size = 0;
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
     fixed_obj_size += MFI.getObjectSize (i);
+  printf ("Fixed objects size = %i\n", fixed_obj_size);
+  fixed_obj_size = (fixed_obj_size + 3) / 4 * 4;
+  printf ("Aligned Fixed objects size = %i\n", fixed_obj_size);
   unsigned obj_size = 0;
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
     obj_size += MFI.getObjectSize (i) > 0 ? MFI.getObjectSize (i) : 0;
-
-  printf ("Fixed objects size = %i\n", fixed_obj_size);
   printf ("Objects size = %i\n", obj_size);
+  obj_size = (obj_size + 3) / 4 * 4;
+  printf ("Aligned Objects size = %i\n", obj_size);
 
   int Offset = 0;
   // FI < 0 = fixed stack objects (i.e. call parameters)

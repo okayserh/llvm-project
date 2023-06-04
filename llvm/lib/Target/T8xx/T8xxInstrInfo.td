@@ -53,13 +53,6 @@ def SDT_SPRet     : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
 def T8xxRetFlag     : SDNode<"T8xxISD::RET_FLAG", SDTNone,
                            [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
-
-//def SDT_LoadOpS     : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>, SDTCisSameAs<0,1>]>;
-def SDT_LoadOpS     : SDTypeProfile<1, 1, [SDTCisVT<0, i32>, SDTCisSameAs<0,1>]>;
-
-def T8xxLoadOpStack : SDNode<"T8xxISD::LOAD_OP_STACK", SDT_LoadOpS,
-                           [SDNPHasChain]>;
-
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
@@ -495,16 +488,6 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 }
 
 
-def LoadOpStack : T8Inst<(outs OperandReg:$dst), (ins IntRegs:$src),
-//                    "ldl $src \n",  [(set i32:$dst, (T8xxLoadOpStack i32:$src))]> {
-                    "ldl $src \n",  [(set i32:$dst, (T8xxLoadOpStack i32:$src))]> {
-    let op1 = 0x20;
-    let op2 = 0x23;
-    let isCodeGenOnly = 1;
-    let isPseudo = 1;
-  }
-
-
 //===----------------------------------------------------------------------===//
 // Call Instructions
 //===----------------------------------------------------------------------===//
@@ -529,10 +512,8 @@ def LoadOpStack : T8Inst<(outs OperandReg:$dst), (ins IntRegs:$src),
 // register A, then pushed down to B) into the A operand register.
 // Then the "copyToReg" after the call will shift it into the
 // right destination "Frame-Register"
-//let isCall = 1, Uses = [R15] in {
 let isCall = 1 in {
   def CALL : T8Inst<(outs), (ins i32imm:$addr),
-//                      "call $addr",
                       "ldc $addr \n\tldpi \n\tgcall \n\trev \n",
                       [(call tglobaladdr:$addr)]> {
     let isCodeGenOnly = 1;
