@@ -64,3 +64,7 @@ def IntRegs : RegisterClass<"T8xx", [i32], 32,
 // in that it is used in special adressing modes
 def WptrRegs : RegisterClass<"T8xx", [i32], 32,
                             (add WPTR)>;
+
+def OperandReg : RegisterClass<"T8xx", [i32], 32,
+                                (add AREG)>;
+
