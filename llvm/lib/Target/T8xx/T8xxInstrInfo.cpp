@@ -446,29 +446,5 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return true;
     }
     break;
-
-  case T8xx::LoadOpStack:
-    {
-      loadRegStack (MI, 1);
-      return true;
-    }
-    break;
-
-
-    // Return instruction
-    /*
-  case T8xx::RET:
-    {
-      for (unsigned int i = 0; i < MI.getNumOperands (); ++i)
-	{
-	  loadRegStack (MI, i);
-	  //	  printf ("RET %i Type %i\n", i, MI.getOperand(i).getType ());
-	  //	  const ISD::CondCode CC = (ISD::CondCode)MI.getOperand(0).getImm();
-	 //	  const MachineOperand::MachineOperandType MOT_LHS = ;  // X
-	}
-      return false;
-    }
-    break;
-*/      
    }
 }

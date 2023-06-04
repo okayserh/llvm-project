@@ -430,40 +430,12 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     CCValAssign &VA = RVLocs[i];
     assert(VA.isRegLoc() && "Can only return in registers!");
 
-    // OKH: This copies the value from its original location into the
-    // respective register, where it can be provided as parameter to the return
-    // instruction
-
-#if 0
-    // Note: Transcription from SelectionDAG.h, Line 777
-    //SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
-
-    // Type of the "bottom" of the node in the DAG. I.e. the return values to other nodes
-    SDVTList VTs = DAG.getVTList(VA.getLocVT ());
-
-    // Input values of the node in the DAG.
-    //    SDValue Ops[] = { Chain, DAG.getRegister(VA.getLocReg(), OutVals[i].getValueType()), OutVals[i], Flag };
-    // SDValue Ops[] = {Chain, DAG.getRegister(VA.getLocReg(), OutVals[i].getValueType()), OutVals[i]};
-    SDValue Ops[] = {Chain, DAG.getRegister(VA.getLocReg(), VA.getLocVT()), OutVals[i]};
-
-    //    Chain = DAG.getNode(T8xxISD::LOAD_OP_STACK, DL, VTs,
-    //               ArrayRef(Ops, Flag.getNode() ? 4 : 3));
-    //Chain = DAG.getNode(T8xxISD::LOAD_OP_STACK, DL, VTs,
-    //               ArrayRef(Ops, 3));
-    Chain = DAG.getNode(T8xxISD::LOAD_OP_STACK, DL, MVT::i32, DAG.getRegister(T8xx::AREG, MVT::i32), OutVals[i], Chain);
-
-    Flag = Chain.getValue(0);
-#else
     Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), OutVals[i], Flag);
     
     Flag = Chain.getValue(1);
-#endif
     
     RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
   }
-
-  printf ("In Between 2\n");
-  DAG.dump ();
 
   unsigned RetAddrOffset = 8; // Call Inst + Delay Slot
   RetOps[0] = Chain;  // Update chain.
@@ -471,19 +443,6 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   // Add the flag if we have it.
   if (Flag.getNode())
     RetOps.push_back(Flag);
-
-  printf ("Temp B  NumOps %i\n", RetOps.size());
-
-  // From WebAssembly
-  //  RetOps.append(OutVals.begin(), OutVals.end());
-  
-  int i = 0;
-  for (const auto &Op : RetOps)
-    {
-      printf ("Op %i %p\n", i++, &Op);
-      Op.dump ();
-      printf ("OpCode %i\n", Op.getOpcode());
-    }
 
   SDValue ret = DAG.getNode(T8xxISD::RET_FLAG, DL, MVT::Other, RetOps);
 

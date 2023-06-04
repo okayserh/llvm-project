@@ -119,8 +119,11 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 	  if (reg_id > max_reg_id)
 	    max_reg_id = reg_id;
 
-	  if (!RI.reg_empty (reg_id))
-	    used_regs++;
+	  if ((reg_id >= T8xx::R1) && (reg_id <= T8xx::R15))
+	    {
+	      if (!RI.reg_empty (reg_id))
+		used_regs++;
+	    }
 	}
     }
   printf ("Function uses %i regs, Stack size = %i\n", used_regs, StackSize);
@@ -208,8 +211,11 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 	  if (reg_id > max_reg_id)
 	    max_reg_id = reg_id;
 
-	  if (!RI.reg_empty (reg_id))
-	    used_regs++;
+	  if ((reg_id >= T8xx::R1) && (reg_id <= T8xx::R15))
+	    {
+	      if (!RI.reg_empty (reg_id))
+		used_regs++;
+	    }
 	}
     }
   printf ("Function uses %i regs\n", used_regs);
