@@ -44,6 +44,7 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     /*	case LEGISD::MOVEi32:  return "MOVEi32";*/
   case T8xxISD::CALL:     return "CALL";
   case T8xxISD::LOAD_OP_STACK:     return "LOAD_OP_STACK";
+  case T8xxISD::ADD_WPTR:     return "ADD_WPTR";
   }
 }
 
@@ -197,14 +198,25 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // Instead negative indices should be used for function parameters that should
     // be put on the stack
 
+    // TODO: The resulting code looks like:
+    // ldlp -2
+    // stl %r2
+    // ldl %r1
+    // ldl %r2
+    // stnl
+    // I.e. the address of the frame location is first put into a
+    // register and then the actual parameter is copied
+    // via a stnl to that address
+    // Might be faster to use:
+    // ldl %r1
+    // stl -2
+    
     SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
-    SDValue PtrOff = DAG.getIntPtrConstant(-(VA.getLocMemOffset() + 4), Loc);
-    PtrOff = DAG.getNode(ISD::ADD, Loc, MVT::i32, StackPtr, PtrOff);
-    /* LEG Original
-    MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
-                                       MachinePointerInfo(), false, false, 0));
-    */
-    /* Sparc version */
+    assert (VA.getLocMemOffset() % 4 == 0 &&
+	    "Only 4 byte aligned offset allowed");
+    SDValue PtrOff = DAG.getIntPtrConstant(-(VA.getLocMemOffset() / 4 + 1), Loc);
+    PtrOff = DAG.getNode(T8xxISD::ADD_WPTR, Loc, MVT::i32, StackPtr, PtrOff);
+
     MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
                                        MachinePointerInfo()));
   }

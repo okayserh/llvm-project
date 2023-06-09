@@ -53,6 +53,11 @@ def SDT_SPRet     : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
 def T8xxRetFlag     : SDNode<"T8xxISD::RET_FLAG", SDTNone,
                            [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
+// Custom add for workspace pointer
+def SDT_AddWptr     : SDTypeProfile<1, 2, [SDTCisPtrTy<0>, SDTCisPtrTy<1>, SDTCisVT<1, i32>]>;
+
+def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
+
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
@@ -284,7 +289,7 @@ def ADDimmr  : T8InstImm<0x12,
 		(outs IntRegs:$dst),
        	 	(ins IntRegs:$src1, i32imm:$src2),
 		"ldl $src1 \n\tadc $src2 \n\tstl $dst \n",
-		[(set i32:$dst, (add i32:$src1, imm:$src2))]> {
+		[(set IntRegs:$dst, (add IntRegs:$src1, imm:$src2))]> {
 		let isCodeGenOnly = 1;
 		let op2 = 0x00;
 		}
@@ -486,6 +491,17 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
     let isCodeGenOnly = 1;
   }
 }
+
+
+def AddWptrImm : T8Inst<(outs IntRegs:$dst),
+    		    (ins WptrRegs:$src, i32imm:$val),
+                    "ldlp $val \n\tstl $dst \n",
+		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, imm:$val))]> {
+    let op1 = 0x20;
+    let op2 = 0x23;
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+  }
 
 
 //===----------------------------------------------------------------------===//
