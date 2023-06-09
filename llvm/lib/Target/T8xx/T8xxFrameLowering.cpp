@@ -156,7 +156,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 
   /* Real adjustment via AJW */
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-    .addImm(-(StackSize + (used_regs + 1) * 4))
+    .addImm(-((StackSize / 4) + used_regs + 1))
         .setMIFlag(MachineInstr::FrameSetup);
 
 }
@@ -224,7 +224,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   // Restore the stack pointer to what it was at the beginning of the function.
   /* Real stack adjustment */
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-    .addImm(StackSize + (used_regs + 1) * 4)
+    .addImm((StackSize / 4) + used_regs + 1)
         .setMIFlag(MachineInstr::FrameSetup);
 
   printf ("emitEpilogue End\n");
