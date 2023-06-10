@@ -446,5 +446,26 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return true;
     }
     break;
-   }
+
+  case T8xx::LEA_ADDri:
+    {
+      // LEA_ADDri has three operands REG(IntReg), REG(WptrReg), IMM
+      // If the immediate can be divided by four, no further action is needed
+      // for unaligned operations, the command needs to be divided into
+      // a ldlp 0 and an adc imm.
+      if (MI.getOperand(2).isImm ())
+	{
+	  if (MI.getOperand(2).getImm() % 4 != 0)
+	    {
+	      BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(0); // Difference
+	      BuildMI(MBB, MI, DL, get(T8xx::ADC)).addImm(MI.getOperand(2).getImm()); // Difference
+	      storeRegStack (MI, 0);
+	      MBB.erase(MI);
+	      return (true);
+	    }
+	}
+      return (false);
+    }
+    break;
+  }
 }
