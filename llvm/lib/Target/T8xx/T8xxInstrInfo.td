@@ -381,8 +381,8 @@ defm LDRi32 : T8Load<"ldl $addr \n", load>;
 defm LDRzi8 :  T8Load<"ldlp $addr \n\tlb \n", zextloadi8>;
 defm LDRzi16 : T8Load<"ldl $addr \n", zextloadi16>;
 
-defm LDRsi8 :  T8Load<"ldlp $addr \n\tlb \n\tldc #80 \n\txword \n", sextloadi8>;
-defm LDRsi16 : T8Load<"ldl $addr \n\tldc #8000 \n\txword \n", sextloadi16>;
+defm LDRsi8 :  T8Load<"ldlp $addr \n\tlb \n\tldc #128 \n\txword \n", sextloadi8>;
+defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
 
 
 // Load from global addresses
@@ -406,8 +406,8 @@ defm LDRi32mem : T8LoadMem<"ldl $addr MEM \n\tldnl 0 \n", load>;
 defm LDRzi8mem :  T8LoadMem<"ldl $addr MEM \n\tlb \n", zextloadi8>;
 defm LDRzi16mem :  T8LoadMem<"ldl $addr MEM \n\tldnl 0 \n\tldc #FFFF \n\tand \n", zextloadi16>;
 
-defm LDRsi8mem :  T8LoadMem<"ldl $addr MEM \n\tlb \n\tldc #80 \n\txword \n", sextloadi8>;
-defm LDRsi16mem :  T8LoadMem<"ldl $addr MEM \n\tldc #8000 \n\txword \n", sextloadi16>;
+defm LDRsi8mem :  T8LoadMem<"ldl $addr MEM \n\tlb \n\tldc #128 \n\txword \n", sextloadi8>;
+defm LDRsi16mem :  T8LoadMem<"ldl $addr MEM \n\tldc #32768 \n\txword \n", sextloadi16>;
 
 
 // Store instructions on frame
@@ -462,8 +462,8 @@ def immop : T8xxPseudoInst<
 }
 
 defm STRi8mem :  T8StorageMem<"\tldl $addr \n\tsb \n" , truncstorei8>;
-defm STRi16mem : T8StorageMem<"\tldc #FFFF \n and \n\tldl $addr \n\tstnl \n" ,truncstorei16>;
-defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl \n" ,store>;
+defm STRi16mem : T8StorageMem<"\tldc #FFFF \n and \n\tldl $addr \n\tstnl 0 \n" ,truncstorei16>;
+defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl 0 \n" ,store>;
 
 
 // Taken from SparcInstrInfo.td
@@ -471,6 +471,7 @@ defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl \n" ,store>;
 
 def LEA_ADDri   : T8Inst<(outs IntRegs:$rd),
       		    (ins WPtrSrc:$addr),
+// TODO: Find a way to save the "adc" when offset is aligned		    
                      "ldlp $addr \n\tstl $rd \n",
                      [(set iPTR:$rd, ADDRri:$addr)]> {
 		   let isCodeGenOnly = 1;
@@ -530,7 +531,7 @@ def AddWptrImm : T8Inst<(outs IntRegs:$dst),
 // right destination "Frame-Register"
 let isCall = 1 in {
   def CALL : T8Inst<(outs), (ins i32imm:$addr),
-                      "ldc $addr \n\tldpi \n\tgcall \n\trev \n",
+                      "ldcipr $addr \n\tadc -4 \n\tldpi \n\tgcall \n\trev \n",
                       [(call tglobaladdr:$addr)]> {
     let isCodeGenOnly = 1;
     let op1 = 0x22;
