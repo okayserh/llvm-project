@@ -65,6 +65,14 @@ T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
 }
 
 
+// Copied from old version
+inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align,
+                                   uint64_t Skew = 0) {
+  Skew %= Align;
+  return (Value + Align - 1 - Skew) / Align * Align + Skew;
+}
+
+
 bool
 T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                        int SPAdj, unsigned FIOperandNum,
@@ -148,17 +156,26 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // Get the size of parameters on the stack
   unsigned fixed_obj_size = 0;
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
-    fixed_obj_size += MFI.getObjectSize (i);
+    fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), 4);
   printf ("Fixed objects size = %i\n", fixed_obj_size);
   fixed_obj_size = (fixed_obj_size + 3) / 4 * 4;
   printf ("Aligned Fixed objects size = %i\n", fixed_obj_size);
+
+  /*
   unsigned obj_size = 0;
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
-    obj_size += MFI.getObjectSize (i) > 0 ? MFI.getObjectSize (i) : 0;
+    obj_size += MFI.getObjectSize (i) > 0 ? RoundUpToAlignment (MFI.getObjectSize (i), 4) : 0;
   printf ("Objects size = %i\n", obj_size);
   obj_size = (obj_size + 3) / 4 * 4;
   printf ("Aligned Objects size = %i\n", obj_size);
-
+  */
+  unsigned obj_size = 0;
+  for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
+    if (MFI.getObjectSize (i) > 0)
+      if (-MFI.getObjectOffset (i) > obj_size)
+	obj_size = -MFI.getObjectOffset (i);
+  printf ("Aligned Objects size = %i\n", obj_size);
+  
   int Offset = 0;
   // FI < 0 = fixed stack objects (i.e. call parameters)
   if (FI < 0)
@@ -167,7 +184,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     }
   else
     {
-      Offset = -MFI.getObjectOffset(FI) -MFI.getObjectSize(FI) + ImmOp.getImm() ;
+      Offset = obj_size + MFI.getObjectOffset(FI) + ImmOp.getImm() ;
     }
   
   // Note: getObjectOffset is positive for the function parameter (0, 4, 8)
@@ -185,7 +202,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // a double usage of certain stack positions.
   // Note: This error is back :-/. Presumably since WPTR is now
   // included as real register, the function also takes this up.
-  FIOp.ChangeToRegister(T8xx::WPTR, false);  // TODO: Just a fix to make it compile
+  FIOp.ChangeToRegister(T8xx::WPTR, false);
   ImmOp.setImm(Offset);
   
   printf ("After eliminateFrameIndex\n");

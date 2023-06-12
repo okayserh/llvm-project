@@ -399,15 +399,15 @@ def regop : T8xxPseudoInst<
 		}
 }
 
-defm LDRi8mem :  T8LoadMem<"ldl $addr MEM \n\tlb \n", extloadi8>;
-defm LDRi16mem : T8LoadMem<"ldl $addr MEM \n\tldnl 0 \n", extloadi16>;
-defm LDRi32mem : T8LoadMem<"ldl $addr MEM \n\tldnl 0 \n", load>;
+defm LDRi8mem :  T8LoadMem<"ldl $addr \n\tlb \n", extloadi8>;
+defm LDRi16mem : T8LoadMem<"ldl $addr \n\tldnl 0 \n", extloadi16>;
+defm LDRi32mem : T8LoadMem<"ldl $addr \n\tldnl 0 \n", load>;
 
-defm LDRzi8mem :  T8LoadMem<"ldl $addr MEM \n\tlb \n", zextloadi8>;
-defm LDRzi16mem :  T8LoadMem<"ldl $addr MEM \n\tldnl 0 \n\tldc #FFFF \n\tand \n", zextloadi16>;
+defm LDRzi8mem :  T8LoadMem<"ldl $addr \n\tlb \n", zextloadi8>;
+defm LDRzi16mem :  T8LoadMem<"ldl $addr \n\tldnl 0 \n\tldc #FFFF \n\tand \n", zextloadi16>;
 
-defm LDRsi8mem :  T8LoadMem<"ldl $addr MEM \n\tlb \n\tldc #128 \n\txword \n", sextloadi8>;
-defm LDRsi16mem :  T8LoadMem<"ldl $addr MEM \n\tldc #32768 \n\txword \n", sextloadi16>;
+defm LDRsi8mem :  T8LoadMem<"ldl $addr \n\tlb \n\tldc #128 \n\txword \n", sextloadi8>;
+defm LDRsi16mem :  T8LoadMem<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
 
 
 // Store instructions on frame
