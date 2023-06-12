@@ -173,8 +173,8 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
     /*    if (Size)
 	  emitSPAdjustment(MF, MBB, I, Size, T8xx::ADDrr, T8xx::ADDri); */
   }
-  //  return MBB.erase(I);
-  return MBB.end ();
+  return MBB.erase(I);
+  //  return MBB.end ();
 }
 
 

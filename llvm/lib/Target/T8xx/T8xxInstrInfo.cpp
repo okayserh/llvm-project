@@ -355,7 +355,6 @@ void T8xxInstrInfo::createComparison(MachineInstr &MI, const unsigned int OpX, c
   BuildMI(MBB, MI, DL, get(T8xx::GT));
   if (negate && (~diff))
     BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(0); // logical NOT
-  MBB.erase(MI);
 }
 
 
@@ -387,16 +386,20 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 	{
 	case ISD::SETLT:
 	  createComparison(MI, 2, 1, true, false);
+	  MBB.erase (MI);
 	  break;
 	case ISD::SETLE:
 	  createComparison(MI, 1, 2, false, false);
+	  MBB.erase (MI);
 	  break;
 
 	case ISD::SETGT:
 	  createComparison(MI, 1, 2, true, false);
+	  MBB.erase (MI);
 	  break;
 	case ISD::SETGE:
 	  createComparison(MI, 2, 1, false, false);
+	  MBB.erase (MI);
 	  break;
 
 	case ISD::SETEQ:
@@ -414,10 +417,11 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 		}
 	      else
 		{
-		  createComparison(MI, 1, 2, true, true);
+		  loadRegStack (MI, 1);
+		  loadRegStack (MI, 2);
+		  BuildMI(MBB, MI, DL, get(T8xx::DIFF)); // Difference
 		}
 	    }
-	  BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(0); // logical NOT
 	  MBB.erase(MI);
 	  break;
 
@@ -436,9 +440,12 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 		}
 	      else
 		{
-		  createComparison(MI, 1, 2, true, true);
+		  loadRegStack (MI, 1);
+		  loadRegStack (MI, 2);
+		  BuildMI(MBB, MI, DL, get(T8xx::DIFF)); // Difference
 		}
 	    }
+	  BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(0); // logical NOT
 	  MBB.erase(MI);
 	  break;
 	}
