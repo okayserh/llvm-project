@@ -180,7 +180,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // FI < 0 = fixed stack objects (i.e. call parameters)
   if (FI < 0)
     {
-      Offset = obj_size + MFI.getObjectOffset(FI) + ImmOp.getImm() ;
+      Offset = obj_size + fixed_obj_size - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm() ;
     }
   else
     {
