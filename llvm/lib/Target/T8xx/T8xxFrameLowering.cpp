@@ -78,10 +78,18 @@ uint64_t T8xxFrameLowering::computeStackSize(MachineFunction &MF) const {
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
     fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ());
   uint64_t obj_size = 0;
+  /* Old version, where the object size with stack alignment is used. Produces
+     incorrect results, when the larger alignments are requested the LLVM code */
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
     obj_size += MFI.getObjectSize (i) > 0 ?
       RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ()) : 0;
 
+  /* New version, Obj size is determined as the maximum negative index in the frame */
+  for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
+    if (MFI.getObjectSize (i) > 0)
+      if (-MFI.getObjectOffset (i) > obj_size)
+	obj_size = -MFI.getObjectOffset (i);
+  
   return (obj_size + fixed_obj_size);
 }
 

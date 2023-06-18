@@ -105,11 +105,22 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
 
 SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) const
 {
+  SDValue Result;
   EVT VT = Op.getValueType();
   GlobalAddressSDNode *GlobalAddr = cast<GlobalAddressSDNode>(Op.getNode());
-  SDValue TargetAddr =
-      DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), Op, MVT::i32);
-  return DAG.getNode(T8xxISD::LOAD_SYM, Op, VT, TargetAddr);
+  int64_t Offset = cast<GlobalAddressSDNode>(Op)->getOffset();
+
+  Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32);
+
+  Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
+
+  if (Offset != 0)
+    {
+      SDValue PtrOff = DAG.getIntPtrConstant(Offset, SDLoc(Op));
+      Result = DAG.getNode(ISD::ADD, SDLoc(Op), MVT::i32, Result, PtrOff);
+    }
+
+  return Result;
 }
 
 
