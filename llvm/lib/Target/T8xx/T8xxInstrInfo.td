@@ -374,15 +374,15 @@ def regop : T8xxPseudoInst<
 		}
 }
 
-defm LDRi8 :  T8Load<"ldlp $addr \n\tlb \n", extloadi8>;
 defm LDRi16 : T8Load<"ldl $addr \n", extloadi16>;
 defm LDRi32 : T8Load<"ldl $addr \n", load>;
-
-defm LDRzi8 :  T8Load<"ldlp $addr \n\tlb \n", zextloadi8>;
 defm LDRzi16 : T8Load<"ldl $addr \n", zextloadi16>;
-
-defm LDRsi8 :  T8Load<"ldlp $addr \n\tlb \n\tldc #128 \n\txword \n", sextloadi8>;
 defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
+
+// Note: These may face unaligned addresses and go into postprocessing
+defm LDRi8 :  T8Load<"lb \n", extloadi8>;
+defm LDRzi8 :  T8Load<"lb \n", zextloadi8>;
+defm LDRsi8 :  T8Load<"lb \n\tldc #128 \n\txword \n", sextloadi8>;
 
 
 // Load from global addresses
@@ -433,7 +433,9 @@ def immop : T8xxPseudoInst<
 		}
 }
 
+// Note: STRi8 may face unaligned addresses and go into postprocessing
 defm STRi8 :  T8Storage<"\tldlp $addr \n\tsb \n" , truncstorei8>;
+
 defm STRi16 : T8Storage<"ldc #FFFF \n and \n\tstl $addr \n" ,truncstorei16>;
 defm STRi32 : T8Storage<"\tstl $addr \n" ,store>;
 
@@ -469,10 +471,10 @@ defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl 0 \n" ,store>;
 // Taken from SparcInstrInfo.td
 // "LEA" forms of add (patterns to make tblgen happy)
 
+// Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
 def LEA_ADDri   : T8Inst<(outs IntRegs:$rd),
       		    (ins WPtrSrc:$addr),
-// TODO: Find a way to save the "adc" when offset is aligned		    
-                     "ldlp $addr \n\tstl $rd \n",
+                     "stl $rd \n",
                      [(set iPTR:$rd, ADDRri:$addr)]> {
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
@@ -494,6 +496,7 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 }
 
 
+// Special instruction, which is solely used in CallLowering
 def AddWptrImm : T8Inst<(outs IntRegs:$dst),
     		    (ins WptrRegs:$src, i32imm:$val),
                     "ldlp $val \n\tstl $dst \n",
