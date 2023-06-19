@@ -454,22 +454,44 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
-  case T8xx::LEA_ADDri:
+  case T8xx::STRi8regop:  // TODO: Does fix the ldlp issue, but does work overall as the "storebyte" assembler code is removed
+  case T8xx::STRi8immop:
     {
-      // LEA_ADDri has three operands REG(IntReg), REG(WptrReg), IMM
-      // If the immediate can be divided by four, no further action is needed
-      // for unaligned operations, the command needs to be divided into
-      // a ldlp 0 and an adc imm.
+      // Either load register or immediate
+      loadRegStack (MI, 0);
+
+      // These pseudo codes have three operands REG(IntReg), REG(WptrReg), IMM
+      // If the immediate can be divided by four, a "ldlp" is optimal and no further action
+      // is needed.
+      // For unaligned operations, the command needs to be divided into
+      // a ldlp imm / 4 and an adc imm.
       if (MI.getOperand(2).isImm ())
 	{
+	  BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(MI.getOperand(2).getImm () / 4);
 	  if (MI.getOperand(2).getImm() % 4 != 0)
-	    {
-	      BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(0); // Difference
-	      BuildMI(MBB, MI, DL, get(T8xx::ADC)).addImm(MI.getOperand(2).getImm()); // Difference
-	      storeRegStack (MI, 0);
-	      MBB.erase(MI);
-	      return (true);
-	    }
+	    BuildMI(MBB, MI, DL, get(T8xx::ADC)).addImm(MI.getOperand(2).getImm() % 4); // Difference
+	  BuildMI(MBB, MI, DL, get(T8xx::SB));
+	}
+      MBB.erase(MI);
+      return true;
+    }
+    
+  case T8xx::LDRi8regop:
+  case T8xx::LDRzi8regop:
+  case T8xx::LDRsi8regop:
+  case T8xx::LEA_ADDri:
+    {
+      // These pseudo codes have three operands REG(IntReg), REG(WptrReg), IMM
+      // If the immediate can be divided by four, a "ldlp" is optimal and no further action
+      // is needed.
+      // For unaligned operations, the command needs to be divided into
+      // a ldlp imm / 4 and an adc imm.
+      if (MI.getOperand(2).isImm ())
+	{
+	  BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(MI.getOperand(2).getImm () / 4);
+	  if (MI.getOperand(2).getImm() % 4 != 0)
+	    BuildMI(MBB, MI, DL, get(T8xx::ADC)).addImm(MI.getOperand(2).getImm() % 4); // Difference
+	  return (true);
 	}
       return (false);
     }
