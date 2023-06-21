@@ -34,18 +34,17 @@ static std::string computeDataLayout(const Triple &T) {
   Ret += "-m:e";
 
   // Some ABIs have 32bit pointers.
-  Ret += "-p:32:32";
+  Ret += "-p:32:32:32";
 
-  // Alignments for 32 bit integers.
-  Ret += "-i32:32"; // 32 bit integers should naturally be aligned 32 bit
-
-  Ret += "-i16:32"; // Unaligned 16 bit integers need substantial effort to convert and retrieve
-
-  Ret += "-i8:8";  // 8 bit integers can be accessed via sb/lb
+  // Alignments
+  // 8 bit can be accessed by special instructions,
+  // Unaligned 16 bit integers need substantial effort to convert and retrieve
+  // 32 bit is natural alignment
+  Ret += "-i8:8:8-i16:32:32-i32:32:32"; // 32 bit integers should naturally be aligned 32 bit
 
   // On T8xx 128 floats are aligned to 128 bits, on others only to 64.
   // On T8xxV9 registers can hold 64 or 32 bits, on others only 32.
-  Ret += "-f64:32-f32:32-n32";
+  Ret += "-f64:32:32-f32:32-n32";
 
   Ret += "-S32";
 
