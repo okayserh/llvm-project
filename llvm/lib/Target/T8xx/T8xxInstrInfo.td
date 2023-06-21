@@ -325,8 +325,7 @@ def regregop : T8InstWithOperands<
 		!strconcat (preop, "ldl $src1 \n", opstr1, "\tldl $src2 \n", opstr2, "\tstl $dst \n"),
 		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]>;
 
-
-def memmemop : T8InstWithOperands<
+def regmemop : T8InstWithOperands<
     	        pfix1, opval,
                 (outs IntRegs:$dst),
                 (ins IntRegs:$src1, WPtrSrc:$addr2),
