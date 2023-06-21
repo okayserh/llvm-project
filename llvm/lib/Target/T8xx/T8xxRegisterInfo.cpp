@@ -131,21 +131,22 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::STRi32immop:
 
   case T8xx::LEA_ADDri:
-  case T8xx::ADDmemmemop:
-  case T8xx::SUBmemmemop:
-  case T8xx::MULmemmemop:
-  case T8xx::SHLmemmemop:
-  case T8xx::SHRmemmemop:
-  case T8xx::SDIVmemmemop:
-  case T8xx::SREMmemmemop:
-  case T8xx::UDIVmemmemop:
-  case T8xx::UREMmemmemop:
-  case T8xx::SRAmemmemop:
-  case T8xx::ROTRmemmemop:
-  case T8xx::ROTLmemmemop:
-  case T8xx::XORmemmemop:
-  case T8xx::ORmemmemop:
-  case T8xx::ANDmemmemop:
+  case T8xx::ADDregmemop:
+  case T8xx::SUBregmemop:
+  case T8xx::MULregmemop:
+  case T8xx::SHLregmemop:
+  case T8xx::SHRregmemop:
+  case T8xx::SDIVregmemop:
+  case T8xx::SREMregmemop:
+  case T8xx::UDIVregmemop:
+  case T8xx::UREMregmemop:
+  case T8xx::SRAregmemop:
+  case T8xx::ROTRregmemop:
+  case T8xx::ROTLregmemop:
+  case T8xx::XORregmemop:
+  case T8xx::ORregmemop:
+  case T8xx::ANDregmemop:
+
     ImmOpIdx = FIOperandNum + 1;
     break;
   }
