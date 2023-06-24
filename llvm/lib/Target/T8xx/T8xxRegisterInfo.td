@@ -48,6 +48,12 @@ def CPSR  : T8xxReg<16, "cpsr">;
 // purpose to flag instructions that modify the processor stack.
 def PSTACK  : T8xxReg<17, "PSTACK">;
 
+// Floating point stack
+def FAreg : T8xxReg<0, "FAreg">, DwarfRegNum<[22]>;
+def FBreg : T8xxReg<1, "FBreg">, DwarfRegNum<[23]>;
+def FCreg : T8xxReg<2, "FCreg">, DwarfRegNum<[24]>;
+
+
 // Register classes.
 //
 // FIXME: the register order should be defined in terms of the preferred
