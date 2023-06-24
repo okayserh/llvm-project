@@ -22,3 +22,29 @@ void T8xxTargetInfo::getTargetDefines(const LangOptions &Opts,
                                      MacroBuilder &Builder) const {
   Builder.defineMacro("__t8xx__");
 }
+
+
+bool T8xxTargetInfo::validateAsmConstraint(const char *&Name,
+					   TargetInfo::ConstraintInfo &Info) const {
+  printf ("clang, validateAsmCons %s\n", Name);
+
+  switch (*Name) {
+  default:
+    break;
+  case 'c':
+    Name++;
+    return true;
+  case 'b':
+    Name++;
+    return true;
+  case 'a':
+    Name++;
+    return true;
+  case 'F':
+    Name += 4;
+    return true;
+  }
+  
+  return false;
+}
+
