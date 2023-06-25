@@ -476,3 +476,28 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   return ret;
 }
+
+
+//===----------------------------------------------------------------------===//
+//  Inline Assembler Implementation Methods
+//===----------------------------------------------------------------------===//
+
+std::pair<unsigned, const TargetRegisterClass *>
+T8xxTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+						 StringRef Constraint,
+						 MVT VT) const {
+  switch (Constraint.size()) {
+  case 1:
+    // GCC ARM Constraint Letters
+    switch (Constraint[0]) {
+    case 'r':
+      return std::make_pair(0U, &T8xx::IntRegsRegClass);
+    }
+    break;
+
+  default:
+    break;
+  }
+
+  return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+}
