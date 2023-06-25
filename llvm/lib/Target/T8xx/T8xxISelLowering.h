@@ -72,6 +72,13 @@ namespace llvm {
                         LLVMContext &Context) const override;
 
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
+
+    // Inline assembly
+    std::pair<unsigned, const TargetRegisterClass *>
+    getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+				 StringRef Constraint,
+				 MVT VT) const override;
+
   };
 } // end namespace llvm
 

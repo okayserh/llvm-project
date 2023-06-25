@@ -132,7 +132,8 @@ public:
     T8xx::R0, T8xx::R1, T8xx::R2, T8xx::R3,
     T8xx::R4, T8xx::R5, T8xx::R6, T8xx::R7,
     T8xx::R8, T8xx::R9, T8xx::R10, T8xx::R11,
-    T8xx::R12, T8xx::R13, T8xx::R14, T8xx::R15 };
+    T8xx::R12, T8xx::R13, T8xx::R14, T8xx::R15,
+    T8xx::AREG, T8xx::BREG, T8xx::CREG};
 
 
 namespace {
@@ -501,6 +502,12 @@ bool T8xxAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   SmallVector<MCInst, 8> Instructions;
   unsigned MatchResult = MatchInstructionImpl(Operands, Inst, ErrorInfo,
                                               MatchingInlineAsm);
+
+  // Debug ouput
+  printf ("MatchAndEmit\n");
+  for (auto T = Operands.begin (); T != Operands.end (); ++T)
+    (*T)->dump ();
+
   switch (MatchResult) {
   case Match_Success: {
     switch (Inst.getOpcode()) {
@@ -1028,6 +1035,9 @@ bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, MCRegister &Reg,
   int64_t intVal = 0;
   Reg = 0;
   RegKind = T8xxOperand::rk_None;
+
+  printf ("matchRegisterName called\n");
+
   /*
   if (Tok.is(AsmToken::Identifier)) {
     StringRef name = Tok.getString();
