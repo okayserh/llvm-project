@@ -283,6 +283,17 @@ def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
 def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
 */
 
+
+// Just test code for analysing the inline assembler. Needs to be removed
+def ADDraw  : T8InstImm<0x12,
+		(outs IntRegs:$dst),
+       	 	(ins IntRegs:$src1, i32imm:$src2),
+		"addraw",
+		[(set IntRegs:$dst, (add IntRegs:$src1, imm:$src2))]> {
+		let op2 = 0xEF;
+		}
+
+
 // Some special instructions to move or add immediate values
 
 def ADDimmr  : T8InstImm<0x12,
