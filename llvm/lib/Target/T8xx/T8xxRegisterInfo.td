@@ -71,6 +71,5 @@ def IntRegs : RegisterClass<"T8xx", [i32], 32,
 def WptrRegs : RegisterClass<"T8xx", [i32], 32,
                             (add WPTR)>;
 
-def OperandReg : RegisterClass<"T8xx", [i32], 32,
-                                (add AREG, BREG, CREG)>;
-
+def OReg : RegisterClass<"T8xx", [i32], 32,
+     	                  (add AREG, BREG, CREG)>;
