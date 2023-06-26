@@ -130,7 +130,11 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::STRi16immop:
   case T8xx::STRi32immop:
 
+  case T8xx::LDRi16wpop:
+  case T8xx::LDRi32wpop:
+
   case T8xx::LEA_ADDri:
+    /*
   case T8xx::ADDregmemop:
   case T8xx::SUBregmemop:
   case T8xx::MULregmemop:
@@ -146,7 +150,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::XORregmemop:
   case T8xx::ORregmemop:
   case T8xx::ANDregmemop:
-
+    */
     ImmOpIdx = FIOperandNum + 1;
     break;
   }

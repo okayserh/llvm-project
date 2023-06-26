@@ -285,13 +285,31 @@ def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
 
 
 // Just test code for analysing the inline assembler. Needs to be removed
+// TODO: RegConstraint! dst = src1 !
 def ADDraw  : T8InstImm<0x12,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src1, i32imm:$src2),
+		(outs OReg:$dst),
+       	 	(ins OReg:$src1, OReg:$src2),
 		"addraw",
-		[(set IntRegs:$dst, (add IntRegs:$src1, imm:$src2))]> {
+		[(set i32:$dst, (add i32:$src1, i32:$src2))]> {
 		let op2 = 0xEF;
 		}
+
+// Load from global addresses
+
+multiclass T8LoadMemOp<string opstr, SDPatternOperator opnode>{
+
+def wpop : T8xxPseudoInst<
+		(outs OReg:$val),
+       	 	(ins WPtrSrc:$addr),
+		opstr,
+		[(set i32:$val, (opnode ADDRri:$addr))]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+}
+
+defm LDRi16 : T8LoadMemOp<"ldl $addr", extloadi16>;
+defm LDRi32 : T8LoadMemOp<"ldl $addr", load>;
 
 
 // Some special instructions to move or add immediate values
@@ -335,16 +353,9 @@ def regregop : T8InstWithOperands<
        	 	(ins IntRegs:$src1, IntRegs:$src2),
 		!strconcat (preop, "ldl $src1 \n", opstr1, "\tldl $src2 \n", opstr2, "\tstl $dst \n"),
 		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]>;
-
-def regmemop : T8InstWithOperands<
-    	        pfix1, opval,
-                (outs IntRegs:$dst),
-                (ins IntRegs:$src1, WPtrSrc:$addr2),
-		!strconcat (preop, "ldl $src1 \n", opstr1, "\tldl $addr2 \n", opstr2, "\tstl $dst \n"),
-                [(set i32:$dst, (opnode i32:$src1, (load ADDRri:$addr2)))]>;
 }
 
-defm ADD : T8BinaryOp<0x00, 0xF5, "", "", "\tadd \n", add>;  // #05
+//defm ADD : T8BinaryOp<0x00, 0xF5, "", "", "\tadd \n", add>;  // #05
 defm SUB : T8BinaryOp<0x00, 0xFC, "", "", "\tsub \n", sub>;  // #05
 defm MUL : T8BinaryOp<0x25, 0xF4, "", "", "\tmul \n", mul>;  // #53
 defm SHL : T8BinaryOp<0x24, 0xF1, "", "", "\tshl \n", shl>;  // #53
