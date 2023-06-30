@@ -67,7 +67,7 @@ def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 // MIOperandInfo. It is a register and an immediate.
 
 def MemSrc : Operand<i32> {
-  let MIOperandInfo = (ops IntRegs);
+  let MIOperandInfo = (ops OReg);
   let PrintMethod = "printOperand";
   let EncoderMethod = "getMemSrcValue";
 }
@@ -285,12 +285,13 @@ def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
 
 
 // Just test code for analysing the inline assembler. Needs to be removed
-// TODO: RegConstraint! dst = src1 !
 def ADDraw  : T8InstImm<0x12,
 		(outs OReg:$dst),
        	 	(ins OReg:$src1, OReg:$src2),
-		"addraw",
-		[(set i32:$dst, (add i32:$src1, i32:$src2))]> {
+		"add",
+		[(set i32:$dst, (add i32:$src1, i32:$src2))]>
+		 {
+		 let Constraints = "$dst = $src1";
 		let op2 = 0xEF;
 		}
 
@@ -312,21 +313,68 @@ defm LDRi16 : T8LoadMemOp<"ldl $addr", extloadi16>;
 defm LDRi32 : T8LoadMemOp<"ldl $addr", load>;
 
 
+// Store instructions on frame
+
+def STRi8regop : T8xxPseudoInst<
+		(outs),
+       	 	(ins OReg:$val, MemSrc:$addr),
+		"sb",
+		[(truncstorei8 i32:$val, ADDRr:$addr)]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+
+def STRi32regop : T8xxPseudoInst<
+		(outs),
+       	 	(ins OReg:$val, WPtrSrc:$addr),
+		"stl $addr",
+		[(store i32:$val, ADDRri:$addr)]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+
+// Maybe decompose into a trunc and then a store instruction
+//defm STRi16 : T8Storage<"ldc #FFFF \n and \n\tstl $addr \n" ,truncstorei16>;
+//defm STRi32 : T8Storage<"\tstl $addr \n" ,store>;
+
+
+// Store instructions on global memory
+
+multiclass T8StorageMem<string opstr, SDPatternOperator opnode>{
+
+def regop : T8xxPseudoInst<
+		(outs),
+       	 	(ins OReg:$val, MemSrc:$addr),
+		!strconcat ("ldl $val \n", opstr),
+		[(opnode i32:$val, ADDRr:$addr)]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+
+}
+
+defm STRi8mem :  T8StorageMem<"\tldl $addr \n\tsb \n" , truncstorei8>;
+defm STRi16mem : T8StorageMem<"\tldc #FFFF \n and \n\tldl $addr \n\tstnl 0 \n" ,truncstorei16>;
+defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl 0 \n" ,store>;
+
+
+
 // Some special instructions to move or add immediate values
 
 def ADDimmr  : T8InstImm<0x12,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src1, i32imm:$src2),
-		"ldl $src1 \n\tadc $src2 \n\tstl $dst \n",
-		[(set IntRegs:$dst, (add IntRegs:$src1, imm:$src2))]> {
+		(outs OReg:$dst),
+       	 	(ins OReg:$src1, i32imm:$src2),
+		"adc $src2",
+		[(set OReg:$dst, (add OReg:$src1, imm:$src2))]> {
 		let isCodeGenOnly = 1;
+		let Constraints = "$dst = $src1";
 		let op2 = 0x00;
 		}
 
-def MOVimmr  : T8xxPseudoInst<(outs IntRegs:$dst),
+def MOVimmr  : T8xxPseudoInst<(outs OReg:$dst),
        	 	(ins i32imm:$src),
-		"ldc $src \n\tstl $dst \n",
-		[(set i32:$dst, imm:$src)]> {
+		"ldc $src",
+		[(set OReg:$dst, imm:$src)]> {
 		let isCodeGenOnly = 1;
 		let op2 = 0x00;
 		}
@@ -338,44 +386,37 @@ def MOVimmr  : T8xxPseudoInst<(outs IntRegs:$dst),
 // - Immediate
 // - Memory (relativ to register)
 
-multiclass T8BinaryOp<bits<8> pfix1, bits<8> opval, string preop, string opstr1, string opstr2, SDNode opnode>{
-
-def regimmop : T8InstWithOperands<
-    	        pfix1, opval,
-		(outs IntRegs:$dst),
-       	 	(ins IntRegs:$src1, i32imm:$src2),
-		!strconcat (preop, "ldl $src1 \n", opstr1, "\tldc $src2 \n", opstr2, "\tstl $dst \n"),
-		[(set i32:$dst, (opnode i32:$src1, imm:$src2))]>;
+multiclass T8BinaryOp<bits<8> pfix1, bits<8> opval, string opstr, SDNode opnode>{
 
 def regregop : T8InstWithOperands<
     	        pfix1, opval,
-                (outs IntRegs:$dst),
-       	 	(ins IntRegs:$src1, IntRegs:$src2),
-		!strconcat (preop, "ldl $src1 \n", opstr1, "\tldl $src2 \n", opstr2, "\tstl $dst \n"),
+                (outs OReg:$dst),
+       	 	(ins OReg:$src1, OReg:$src2),
+		opstr,
 		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]>;
 }
 
-//defm ADD : T8BinaryOp<0x00, 0xF5, "", "", "\tadd \n", add>;  // #05
-defm SUB : T8BinaryOp<0x00, 0xFC, "", "", "\tsub \n", sub>;  // #05
-defm MUL : T8BinaryOp<0x25, 0xF4, "", "", "\tmul \n", mul>;  // #53
-defm SHL : T8BinaryOp<0x24, 0xF1, "", "", "\tshl \n", shl>;  // #53
-defm SHR : T8BinaryOp<0x24, 0xF0, "", "", "\tshr \n", srl>;  // #53
+defm ADD : T8BinaryOp<0x00, 0xF5, "add", add>;  // #05
+defm SUB : T8BinaryOp<0x00, 0xFC, "sub", sub>;  // #05
+defm MUL : T8BinaryOp<0x25, 0xF4, "mul", mul>;  // #53
+defm SHL : T8BinaryOp<0x24, 0xF1, "shl", shl>;  // #53
+defm SHR : T8BinaryOp<0x24, 0xF0, "shr", srl>;  // #53
 
-defm SDIV : T8BinaryOp<0x22, 0xFC, "", "", "\tdiv \n", sdiv>; 
-defm SREM : T8BinaryOp<0x21, 0xFF, "", "", "\trem \n", srem>;
+defm SDIV : T8BinaryOp<0x22, 0xFC, "div", sdiv>; 
+defm SREM : T8BinaryOp<0x21, 0xFF, "rem", srem>;
 
-defm UDIV : T8BinaryOp<0x21, 0xFA, "ldc 0 \n\t", "", "\tldiv \n", udiv>;   // Pseudo code, ldiv (Section 5.7.2 Compiler writer guide)
-defm UREM : T8BinaryOp<0x21, 0xFB, "ldc 0 \n\t", "", "\tldiv \n\trev \n", urem>;   // Pseudo code, ldiv
+defm UDIV : T8BinaryOp<0x21, 0xFA, "ldiv", udiv>;   // Pseudo code, ldiv (Section 5.7.2 Compiler writer guide)
+defm UREM : T8BinaryOp<0x21, 0xFB, "ldiv", urem>;   // Pseudo code, ldiv -> TODO
 
-defm SRA : T8BinaryOp<0x01, 0x21, "", "\txdble \n", "\tlshr \n", sra>;  // #53   (Pseudo Code, needs transformation)
-defm ROTR : T8BinaryOp<0x01, 0x22, "", "\tldc 0 \n", "\tlshr \n\tor \n", rotr>;
-defm ROTL : T8BinaryOp<0x01, 0x23, "ldc 0 \n\t", "", "\tlshr \t\tor \n", rotl>;
+defm SRA : T8BinaryOp<0x01, 0x21, "lshr", sra>;  // #53   (Pseudo Code, needs transformation)
+defm ROTR : T8BinaryOp<0x01, 0x22, "lshr", rotr>;
+defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
 
-defm XOR : T8BinaryOp<0x01, 0x24, "", "", "\txor \n", xor>;  // #53
-defm OR  : T8BinaryOp<0x01, 0x25, "", "", "\tor \n", or>;  // #53
-defm AND : T8BinaryOp<0x01, 0x26, "", "", "\tand \n", and>;  // #53
+defm XOR : T8BinaryOp<0x01, 0x24, "xor", xor>;  // #53
+defm OR  : T8BinaryOp<0x01, 0x25, "or", or>;  // #53
+defm AND : T8BinaryOp<0x01, 0x26, "and", and>;  // #53
 
-def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, IntRegs:$lhs, IntRegs:$rhs),
+def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, OReg:$lhs, OReg:$rhs),
                     "cmp$cc $lhs, $rhs", []> {
   let Defs = [CPSR];
 }
@@ -386,7 +427,7 @@ def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, IntRegs:$lhs, IntRegs:$rhs),
 multiclass T8Load<string opstr, SDPatternOperator opnode>{
 
 def regop : T8xxPseudoInst<
-		(outs IntRegs:$val),
+		(outs OReg:$val),
        	 	(ins WPtrSrc:$addr),
 		!strconcat (opstr, "\tstl $val \n"),
 		[(set i32:$val, (opnode ADDRri:$addr))]> {
@@ -411,7 +452,7 @@ defm LDRsi8 :  T8Load<"lb \n\tldc #128 \n\txword \n", sextloadi8>;
 multiclass T8LoadMem<string opstr, SDPatternOperator opnode>{
 
 def regop : T8xxPseudoInst<
-		(outs IntRegs:$val),
+		(outs OReg:$val),
        	 	(ins MemSrc:$addr),
 		!strconcat (opstr, "\tstl $val \n"),
 		[(set i32:$val, (opnode ADDRr:$addr))]> {
@@ -431,71 +472,13 @@ defm LDRsi8mem :  T8LoadMem<"ldl $addr \n\tlb \n\tldc #128 \n\txword \n", sextlo
 defm LDRsi16mem :  T8LoadMem<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
 
 
-// Store instructions on frame
-
-multiclass T8Storage<string opstr, SDPatternOperator opnode>{
-
-def regop : T8xxPseudoInst<
-		(outs),
-       	 	(ins IntRegs:$val, WPtrSrc:$addr),
-		!strconcat ("ldl $val \n", opstr),
-		[(opnode i32:$val, ADDRri:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-
-def immop : T8xxPseudoInst<
-		(outs),
-       	 	(ins i32imm:$val, WPtrSrc:$addr),
-		!strconcat ("ldc $val \n", opstr),
-		[(opnode imm:$val, ADDRri:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-}
-
-// Note: STRi8 may face unaligned addresses and go into postprocessing
-defm STRi8 :  T8Storage<"\tldlp $addr \n\tsb \n" , truncstorei8>;
-
-defm STRi16 : T8Storage<"ldc #FFFF \n and \n\tstl $addr \n" ,truncstorei16>;
-defm STRi32 : T8Storage<"\tstl $addr \n" ,store>;
-
-
-// Store instructions on global memory
-
-multiclass T8StorageMem<string opstr, SDPatternOperator opnode>{
-
-def regop : T8xxPseudoInst<
-		(outs),
-       	 	(ins IntRegs:$val, MemSrc:$addr),
-		!strconcat ("ldl $val \n", opstr),
-		[(opnode i32:$val, ADDRr:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-
-def immop : T8xxPseudoInst<
-		(outs),
-       	 	(ins i32imm:$val, MemSrc:$addr),
-		!strconcat ("ldc $val \n", opstr),
-		[(opnode imm:$val, ADDRr:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-}
-
-defm STRi8mem :  T8StorageMem<"\tldl $addr \n\tsb \n" , truncstorei8>;
-defm STRi16mem : T8StorageMem<"\tldc #FFFF \n and \n\tldl $addr \n\tstnl 0 \n" ,truncstorei16>;
-defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl 0 \n" ,store>;
-
-
 // Taken from SparcInstrInfo.td
 // "LEA" forms of add (patterns to make tblgen happy)
 
 // Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
-def LEA_ADDri   : T8Inst<(outs IntRegs:$rd),
+def LEA_ADDri   : T8Inst<(outs OReg:$rd),
       		    (ins WPtrSrc:$addr),
-                     "stl $rd \n",
+                     "ldlp $addr \n",
                      [(set iPTR:$rd, ADDRri:$addr)]> {
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
@@ -518,7 +501,7 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 
 
 // Special instruction, which is solely used in CallLowering
-def AddWptrImm : T8Inst<(outs IntRegs:$dst),
+def AddWptrImm : T8Inst<(outs OReg:$dst),
     		    (ins WptrRegs:$src, i32imm:$val),
                     "ldlp $val \n\tstl $dst \n",
 		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, imm:$val))]> {
@@ -538,7 +521,7 @@ def AddWptrImm : T8Inst<(outs IntRegs:$dst),
 
 // Working version (passed through register)
 //let isCall = 1, Uses = [R15] in {
-//  def CALL : T8Inst<(outs), (ins IntRegs:$addr),
+//  def CALL : T8Inst<(outs), (ins OReg:$addr),
 //                      "call $addr",
 //                      [(call i32:$addr)]> {
 //    let op1 = 0x22;

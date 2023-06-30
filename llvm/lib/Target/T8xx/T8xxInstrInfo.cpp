@@ -42,8 +42,7 @@ T8xxInstrInfo::T8xxInstrInfo(T8xxSubtarget &ST)
 /// any side effects other than loading from the stack slot.
 unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
-  if (MI.getOpcode() == T8xx::LDRi32regop || MI.getOpcode() == T8xx::LDRi8regop ||
-      MI.getOpcode() == T8xx::LDRzi8regop || MI.getOpcode() == T8xx::LDRsi8regop) {
+  if (MI.getOpcode() == T8xx::LDRi32wpop || MI.getOpcode() == T8xx::LDRi16wpop) {
     if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
         MI.getOperand(2).getImm() == 0) {
       FrameIndex = MI.getOperand(1).getIndex();
@@ -60,7 +59,7 @@ unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 /// any side effects other than storing to the stack slot.
 unsigned T8xxInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                             int &FrameIndex) const {
-  if (MI.getOpcode() == T8xx::STRi32regop || MI.getOpcode() == T8xx::STRi32immop/* ||
+  if (MI.getOpcode() == T8xx::STRi32regop /*|| MI.getOpcode() == T8xx::STRi32immop ||
 								      MI.getOpcode() == T8xx::STRi16*/) {
     if (MI.getOperand(0).isFI() && MI.getOperand(1).isImm() &&
         MI.getOperand(1).getImm() == 0) {
@@ -218,14 +217,25 @@ storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                     const TargetRegisterClass *RC,
                     const TargetRegisterInfo *TRI,
 		    Register VReg) const {
+  printf ("Store %u into %u\n", SrcReg, VReg);
+  if (SrcReg.isVirtual ())
+    printf ("Src Virt\n");
+  if (VReg.isVirtual ())
+    printf ("VReg Virt\n");
+
+  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STRi32regop)).addReg(SrcReg, getKillRegState(isKill))
+    .addFrameIndex(FI).addImm(0);
+
+  /* TODO: See how to deal with these cases.
   uint16_t hweSrcReg = TRI->getEncodingValue (SrcReg.asMCReg());
 
-  /* With Stack relative to WPTR */
+  // With Stack relative to WPTR
   BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL)).addImm(hweSrcReg);
   if (FI % 4 == 0)
     BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL)).addImm(FI / 4);
   else
     printf ("Error: storeRegToStackSlot, unaligned frame access\n");
+  */
 }
 
 void T8xxInstrInfo::
@@ -234,14 +244,26 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                      const TargetRegisterClass *RC,
                      const TargetRegisterInfo *TRI,
 		     Register VReg) const {
+  printf ("Load %u from %u\n", DestReg, VReg);
+  if (DestReg.isVirtual ())
+    printf ("Dest Virt\n");
+  if (VReg.isVirtual ())
+    printf ("VReg Virt\n");
+
+  if (RC == &T8xx::ORegRegClass)
+    BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDRi32wpop), DestReg).addFrameIndex(FI).addImm(0);
+  else
+    llvm_unreachable("Can't load this register from stack slot");
+  /*
   uint16_t hweDestReg = TRI->getEncodingValue (DestReg.asMCReg());
 
-  /* With Stack relative to WPTR */
+  // With Stack relative to WPTR
   if (FI % 4 == 0)
     BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL)).addImm(FI / 4);
   else
     printf ("Error: loadRegFromStackSlot, unaligned frame access\n");
   BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL)).addImm(hweDestReg);
+  */
 }
 
 
@@ -453,9 +475,9 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return true;
     }
     break;
-
+    /*
   case T8xx::STRi8regop:  // TODO: Does fix the ldlp issue, but does work overall as the "storebyte" assembler code is removed
-  case T8xx::STRi8immop:
+    //  case T8xx::STRi8immop:
     {
       // Either load register or immediate
       loadRegStack (MI, 0);
@@ -475,7 +497,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       MBB.erase(MI);
       return true;
     }
-    
+
   case T8xx::LDRi8regop:
   case T8xx::LDRzi8regop:
   case T8xx::LDRsi8regop:
@@ -496,5 +518,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return (false);
     }
     break;
+    */
+
   }
 }
