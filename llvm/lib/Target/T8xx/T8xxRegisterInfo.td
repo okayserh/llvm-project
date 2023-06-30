@@ -63,8 +63,10 @@ def FCreg : T8xxReg<2, "FCreg">, DwarfRegNum<[24]>;
 // register class for that. The i64 type is included here to allow i64 patterns
 // using the integer instructions.
 
+/*
 def IntRegs : RegisterClass<"T8xx", [i32], 32,
                             (add (sequence "R%u", 1, 15))>;
+*/
 
 // The frame pointer or workspace pointer is special
 // in that it is used in special adressing modes

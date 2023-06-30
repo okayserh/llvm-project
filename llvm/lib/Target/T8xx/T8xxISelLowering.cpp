@@ -55,7 +55,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
 
   // Set up the register classes.
-  addRegisterClass(MVT::i32, &T8xx::IntRegsRegClass);
+  addRegisterClass(MVT::i32, &T8xx::ORegRegClass);
 
   computeRegisterProperties(Subtarget->getRegisterInfo());
 
@@ -365,7 +365,7 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
       assert(RegVT.getSimpleVT().SimpleTy == MVT::i32 &&
              "Only support MVT::i32 register passing");
 
-      const unsigned VReg = RegInfo.createVirtualRegister(&T8xx::IntRegsRegClass);
+      const unsigned VReg = RegInfo.createVirtualRegister(&T8xx::ORegRegClass);
 
       RegInfo.addLiveIn(VA.getLocReg(), VReg);
       SDValue ArgIn = DAG.getCopyFromReg(Chain, DL, VReg, RegVT);
@@ -491,7 +491,7 @@ T8xxTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
     // GCC ARM Constraint Letters
     switch (Constraint[0]) {
     case 'r':
-      return std::make_pair(0U, &T8xx::IntRegsRegClass);
+      return std::make_pair(0U, &T8xx::ORegRegClass);
     }
     break;
 

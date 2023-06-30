@@ -61,7 +61,7 @@ T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
                                       unsigned Kind) const {
   const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
   //  return &T8xx::IntRegsRegClass;
-  return &T8xx::IntRegsRegClass;
+  return &T8xx::ORegRegClass;
 }
 
 
@@ -124,11 +124,11 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::LDRsi16regop:
 
   case T8xx::STRi8regop:
-  case T8xx::STRi16regop:
+    //  case T8xx::STRi16regop:
   case T8xx::STRi32regop:
-  case T8xx::STRi8immop:
-  case T8xx::STRi16immop:
-  case T8xx::STRi32immop:
+    //  case T8xx::STRi8immop:
+    //  case T8xx::STRi16immop:
+    //  case T8xx::STRi32immop:
 
   case T8xx::LDRi16wpop:
   case T8xx::LDRi32wpop:
