@@ -223,7 +223,11 @@ storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   if (VReg.isVirtual ())
     printf ("VReg Virt\n");
 
+  /*
   BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STRi32regop)).addReg(SrcReg, getKillRegState(isKill))
+    .addFrameIndex(FI).addImm(0);
+  */
+  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STRi32regop)).addReg(SrcReg, getKillRegState(true))
     .addFrameIndex(FI).addImm(0);
 
   /* TODO: See how to deal with these cases.

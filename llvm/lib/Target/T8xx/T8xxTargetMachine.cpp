@@ -26,6 +26,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
 
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializeT8xxDAGToDAGISelPass(PR);
+  initializeT8xxStackPassPass(PR);
 }
 
 static std::string computeDataLayout(const Triple &T) {
@@ -136,15 +137,30 @@ public:
     return getTM<T8xxTargetMachine>();
   }
 
+  FunctionPass *createTargetRegisterAllocator(bool) override;
+  
   void addIRPasses() override;
   bool addInstSelector() override;
   void addPostRegAlloc() override;
   void addPreEmitPass() override;
+
+
+  // No reg alloc
+  bool addRegAssignAndRewriteFast() override { return false; }
+
+  // No reg alloc
+  bool addRegAssignAndRewriteOptimized() override { return false; }
+
 };
 } // namespace
 
 TargetPassConfig *T8xxTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new T8xxPassConfig(*this, PM);
+}
+
+// OKH, Taken from WebAssembly. See what comes out ...
+FunctionPass *T8xxPassConfig::createTargetRegisterAllocator(bool) {
+  return nullptr; // No reg alloc
 }
 
 void T8xxPassConfig::addIRPasses() {
@@ -162,7 +178,8 @@ void T8xxPassConfig::addPostRegAlloc() {
   // TODO: Initially intended to do an allocation of the
   // processor stack registers.
   // Not working and seems to lead to problems.
-  //  addPass(createT8xxStackifyIntPass());
+  printf ("Added T8xx Stack Pass\n");
+  addPass(createT8xxStackPass());
 }
 
 
