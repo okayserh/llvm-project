@@ -47,6 +47,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <bitset>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "t8xx-codegen"
@@ -54,12 +55,13 @@ using namespace llvm;
 STATISTIC(NumFXCH, "Number of fxch instructions inserted");
 STATISTIC(NumFP  , "Number of floating point instructions");
 
-namespace {
-  const unsigned ScratchFPReg = 7;
+const unsigned ScratchFPReg = 7;
 
-  struct T8xxStackPass : public MachineFunctionPass {
-    static char ID;
-    T8xxStackPass() : MachineFunctionPass(ID) {
+namespace llvm {
+
+struct T8xxStackPass : public MachineFunctionPass {
+  static char ID;
+  T8xxStackPass() : MachineFunctionPass(ID) {
       // This is really only to keep valgrind quiet.
       // The logic in isLive() is too much for it.
       /*
@@ -79,8 +81,11 @@ namespace {
     bool runOnMachineFunction(MachineFunction &MF) override;
 
     MachineFunctionProperties getRequiredProperties() const override {
+      return MachineFunctionProperties();
+      /*
       return MachineFunctionProperties().set(
           MachineFunctionProperties::Property::NoVRegs);
+      */
     }
 
     StringRef getPassName() const override { return "T8xx INT Stackifier"; }
@@ -204,13 +209,13 @@ namespace {
     /// getSTReg - Return the X86::ST(i) register which contains the specified
     /// FP<RegNo> register.
     unsigned getSTReg(unsigned RegNo) const {
-      return StackTop - 1 - getSlot(RegNo) + T8xx::AREG;
+      return StackTop - 1 - getSlot(RegNo) + T8xx::STA;
     }
 
     // pushReg - Push the specified FP<n> register onto the stack.
     void pushReg(unsigned Reg) {
       assert(Reg < NumFPRegs && "Register number out of range!");
-      if (StackTop >= 8)
+      if (StackTop >= 3)
         report_fatal_error("Stack overflow!");
       Stack[StackTop] = Reg;
       RegMap[Reg] = StackTop++;
@@ -280,57 +285,69 @@ namespace {
 
     bool processBasicBlock(MachineFunction &MF, MachineBasicBlock &MBB);
 
-    void handleCall(MachineBasicBlock::iterator &I);
-    void handleReturn(MachineBasicBlock::iterator &I);
-    void handleZeroArgFP(MachineBasicBlock::iterator &I);
-    void handleOneArgFP(MachineBasicBlock::iterator &I);
-    void handleOneArgFPRW(MachineBasicBlock::iterator &I);
-    void handleTwoArgFP(MachineBasicBlock::iterator &I);
-    void handleCompareFP(MachineBasicBlock::iterator &I);
-    void handleCondMovFP(MachineBasicBlock::iterator &I);
-    void handleSpecialFP(MachineBasicBlock::iterator &I);
+  void handleCall(MachineBasicBlock::iterator &I);
+  void handleReturn(MachineBasicBlock::iterator &I);
+  void handleZeroArgFP(MachineBasicBlock::iterator &I);
+  void handleOneArgFP(MachineBasicBlock::iterator &I);
+  void handleOneArgFPRW(MachineBasicBlock::iterator &I);
+  void handleTwoArgFP(MachineBasicBlock::iterator &I);
+  void handleCompareFP(MachineBasicBlock::iterator &I);
+  void handleCondMovFP(MachineBasicBlock::iterator &I);
+  void handleSpecialFP(MachineBasicBlock::iterator &I);
 
-    // Check if a COPY instruction is using FP registers.
-    static bool isFPCopy(MachineInstr &MI) {
-      /*
+  // Check if a COPY instruction is using FP registers.
+  static bool isFPCopy(MachineInstr &MI) {
+    /*
       Register DstReg = MI.getOperand(0).getReg();
       Register SrcReg = MI.getOperand(1).getReg();
-
+      
       return X86::RFP80RegClass.contains(DstReg) ||
-        X86::RFP80RegClass.contains(SrcReg);
-      */
-      return false; // TODO
-    }
+      X86::RFP80RegClass.contains(SrcReg);
+    */
+    return false; // TODO
+  }
 
-    void setKillFlags(MachineBasicBlock &MBB) const;
-  };
-}
+  void setKillFlags(MachineBasicBlock &MBB) const;
+};
+
+} // end anonymous namespace
+
+
+using namespace llvm;
 
 char T8xxStackPass::ID = 0;
 
-/*
-INITIALIZE_PASS_BEGIN(FPS, DEBUG_TYPE, "T8xx INT Stackifier",
+INITIALIZE_PASS_BEGIN(T8xxStackPass, "t8xxstackifier", "T8xx INT Stackifier",
                       false, false)
-//INITIALIZE_PASS_DEPENDENCY(EdgeBundles)
-INITIALIZE_PASS_END(FPS, DEBUG_TYPE, "T8xx INT Stackifier",
+INITIALIZE_PASS_DEPENDENCY(EdgeBundles)
+INITIALIZE_PASS_END(T8xxStackPass, "t8xxstackifier", "T8xx INT Stackifier",
                     false, false)
+/*
+INITIALIZE_PASS(T8xxStackPass, "t8xxstackifier", "T8xx INT Stackifier",
+                      false, false)
 */
 
-FunctionPass *llvm::createT8xxStackifyIntPass() { return new T8xxStackPass(); }
+FunctionPass *llvm::createT8xxStackPass() {
+  return new T8xxStackPass();
+}
 
 /// getFPReg - Return the X86::FPx register number for the specified operand.
 /// For example, this returns 3 for X86::FP3.
 static unsigned getFPReg(const MachineOperand &MO) {
   assert(MO.isReg() && "Expected an FP register!");
   Register Reg = MO.getReg();
-  assert(Reg >= T8xx::R1 && Reg <= T8xx::R15 && "Expected FP register!");
-  return Reg - T8xx::R1;
+  assert(Reg >= T8xx::AREG && Reg <= T8xx::CREG && "Expected FP register!");
+  return Reg - T8xx::AREG;
 }
 
 /// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
 /// register references into FP stack references.
 ///
 bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
+
+  printf ("runOnMachineFUnction\n");
+
+  /* Checks whether FP registers are used
   // We only need to run this pass if there are any FP registers used in this
   // function.  If it is all integer, there is nothing for us to do!
   bool FPIsUsed = false;
@@ -345,6 +362,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
   // Early exit.
   if (!FPIsUsed) return false;
+  */
 
   Bundles = &getAnalysis<EdgeBundles>();
   TII = MF.getSubtarget().getInstrInfo();
@@ -354,14 +372,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
   StackTop = 0;
 
-  // Process the function in depth first order so that we process at least one
-  // of the predecessors for every reachable block in the function.
-  df_iterator_default_set<MachineBasicBlock*> Processed;
-  MachineBasicBlock *Entry = &MF.front();
-
-  LiveBundle &Bundle =
-    LiveBundles[Bundles->getBundle(Entry->getNumber(), false)];
-
+#if 0
   /*
   // In regcall convention, some FP registers may not be passed through
   // the stack, so they will need to be assigned to the stack first
@@ -379,16 +390,27 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     Bundle.FixStack[0] = 0;
   }
   */
+#endif
+
+  // Process the function in depth first order so that we process at least one
+  // of the predecessors for every reachable block in the function.
+  df_iterator_default_set<MachineBasicBlock*> Processed;
+  MachineBasicBlock *Entry = &MF.front();
+
+  LiveBundle &Bundle =
+    LiveBundles[Bundles->getBundle(Entry->getNumber(), false)];
 
   bool Changed = false;
   for (MachineBasicBlock *BB : depth_first_ext(Entry, Processed))
     Changed |= processBasicBlock(MF, *BB);
 
   // Process any unreachable blocks in arbitrary order now.
+  /*
   if (MF.size() != Processed.size())
     for (MachineBasicBlock &BB : MF)
       if (Processed.insert(&BB).second)
         Changed |= processBasicBlock(MF, BB);
+  */
 
   LiveBundles.clear();
 
@@ -431,7 +453,9 @@ bool T8xxStackPass::processBasicBlock(MachineFunction &MF, MachineBasicBlock &BB
     MachineInstr &MI = *I;
     uint64_t Flags = MI.getDesc().TSFlags;
 
+    // Debug stuff
     MI.dump ();
+
     /*    
     unsigned FPInstClass = Flags & X86II::FPTypeMask;
     if (MI.isInlineAsm())
@@ -449,6 +473,7 @@ bool T8xxStackPass::processBasicBlock(MachineFunction &MF, MachineBasicBlock &BB
 
     if (FPInstClass == X86II::NotFP)
       continue;  // Efficiently ignore non-fp insts!
+    */
 
     MachineInstr *PrevMI = nullptr;
     if (I != BB.begin())
@@ -464,6 +489,26 @@ bool T8xxStackPass::processBasicBlock(MachineFunction &MF, MachineBasicBlock &BB
       if (MO.isReg() && MO.isDead())
         DeadRegs.push_back(MO.getReg());
 
+    if ((MI.getOpcode() == T8xx::LDRi16wpop) ||
+	(MI.getOpcode() == T8xx::LDRi32wpop) ||
+	(MI.getOpcode() == T8xx::LEA_ADDri))
+      {
+	handleZeroArgFP (I);
+      }
+
+    if ((MI.getOpcode() == T8xx::STRi32regop) ||
+	(MI.getOpcode() == T8xx::STRi8regop))
+      handleOneArgFP (I);
+
+    /*
+    if (MI.getOpcode() == T8xx::ADDimmr)
+      handleOneArgFPRW (I);
+    
+    if (MI.getOpcode() == T8xx::ADDraw)
+      handleTwoArgFP (I);
+    */
+
+    /*    
     switch (FPInstClass) {
     case X86II::ZeroArgFP:  handleZeroArgFP(I); break;
     case X86II::OneArgFP:   handleOneArgFP(I);  break;  // fstp ST(0)
@@ -474,19 +519,23 @@ bool T8xxStackPass::processBasicBlock(MachineFunction &MF, MachineBasicBlock &BB
     case X86II::SpecialFP:  handleSpecialFP(I); break;
     default: llvm_unreachable("Unknown FP Type!");
     }
+    */
+
 
     // Check to see if any of the values defined by this instruction are dead
     // after definition.  If so, pop them.
+    /*
     for (unsigned i = 0, e = DeadRegs.size(); i != e; ++i) {
       unsigned Reg = DeadRegs[i];
       // Check if Reg is live on the stack. An inline-asm register operand that
       // is in the clobber list and marked dead might not be live on the stack.
-      static_assert(X86::FP7 - X86::FP0 == 7, "sequential FP regnumbers");
-      if (Reg >= X86::FP0 && Reg <= X86::FP6 && isLive(Reg-X86::FP0)) {
-        LLVM_DEBUG(dbgs() << "Register FP#" << Reg - X86::FP0 << " is dead!\n");
-        freeStackSlotAfter(I, Reg-X86::FP0);
+      static_assert(T8xx::CREG - T8xx::AREG == 3, "sequential Stack regnumbers");
+      if (Reg >= T8xx::AREG && Reg <= T8xx::CREG && isLive(Reg-T8xx::AREG)) {
+        LLVM_DEBUG(dbgs() << "Register FP#" << Reg - T8xx::AREG << " is dead!\n");
+        freeStackSlotAfter(I, Reg-T8xx::AREG);
       }
     }
+    */
 
     // Print out all of the instructions expanded to if -debug
     LLVM_DEBUG({
@@ -506,7 +555,6 @@ bool T8xxStackPass::processBasicBlock(MachineFunction &MF, MachineBasicBlock &BB
       dumpStack();
     });
     (void)PrevMI;
-    */
 
     Changed = true;
   }
@@ -994,6 +1042,8 @@ void T8xxStackPass::handleReturn(MachineBasicBlock::iterator &I) {
   StackTop = 0;
 }
 
+#endif
+
 /// handleZeroArgFP - ST(0) = fld0    ST(0) = flds <mem>
 ///
 void T8xxStackPass::handleZeroArgFP(MachineBasicBlock::iterator &I) {
@@ -1001,10 +1051,11 @@ void T8xxStackPass::handleZeroArgFP(MachineBasicBlock::iterator &I) {
   unsigned DestReg = getFPReg(MI.getOperand(0));
 
   // Change from the pseudo instruction to the concrete instruction.
-  MI.removeOperand(0); // Remove the explicit ST(0) operand
-  MI.setDesc(TII->get(getConcreteOpcode(MI.getOpcode())));
-  MI.addOperand(
-      MachineOperand::CreateReg(X86::ST0, /*isDef*/ true, /*isImp*/ true));
+  //  MI.removeOperand(0); // Remove the explicit ST(0) operand
+  MI.getOperand(0).setReg (T8xx::STA);
+  //  MI.setDesc(TII->get(getConcreteOpcode(MI.getOpcode())));
+  //  MI.addOperand(
+  //    MachineOperand::CreateReg(T8xx::STA, /*isDef*/ true, /*isImp*/ true));
 
   // Result gets pushed on the stack.
   pushReg(DestReg);
@@ -1012,17 +1063,20 @@ void T8xxStackPass::handleZeroArgFP(MachineBasicBlock::iterator &I) {
   MI.dropDebugNumber();
 }
 
+
 /// handleOneArgFP - fst <mem>, ST(0)
 ///
 void T8xxStackPass::handleOneArgFP(MachineBasicBlock::iterator &I) {
   MachineInstr &MI = *I;
   unsigned NumOps = MI.getDesc().getNumOperands();
+  /* TODO: See if we need this
   assert((NumOps == X86::AddrNumOperands + 1 || NumOps == 1) &&
          "Can only handle fst* & ftst instructions!");
+  */
 
   // Is this the last use of the source register?
   unsigned Reg = getFPReg(MI.getOperand(NumOps - 1));
-  bool KillsSrc = MI.killsRegister(X86::FP0 + Reg);
+  bool KillsSrc = MI.killsRegister(T8xx::AREG + Reg);
 
   // FISTP64m is strange because there isn't a non-popping versions.
   // If we have one _and_ we don't want to pop the operand, duplicate the value
@@ -1030,6 +1084,7 @@ void T8xxStackPass::handleOneArgFP(MachineBasicBlock::iterator &I) {
   // always ok.
   // Ditto FISTTP16m, FISTTP32m, FISTTP64m, ST_FpP80m.
   //
+  /*
   if (!KillsSrc && (MI.getOpcode() == X86::IST_Fp64m32 ||
                     MI.getOpcode() == X86::ISTT_Fp16m32 ||
                     MI.getOpcode() == X86::ISTT_Fp32m32 ||
@@ -1047,13 +1102,15 @@ void T8xxStackPass::handleOneArgFP(MachineBasicBlock::iterator &I) {
   } else {
     moveToTop(Reg, I);            // Move to the top of the stack...
   }
+  */
 
   // Convert from the pseudo instruction to the concrete instruction.
   MI.removeOperand(NumOps - 1); // Remove explicit ST(0) operand
   MI.setDesc(TII->get(getConcreteOpcode(MI.getOpcode())));
   MI.addOperand(
-      MachineOperand::CreateReg(X86::ST0, /*isDef*/ false, /*isImp*/ true));
+      MachineOperand::CreateReg(T8xx::STA, /*isDef*/ false, /*isImp*/ true));
 
+  /*
   if (MI.getOpcode() == X86::IST_FP64m || MI.getOpcode() == X86::ISTT_FP16m ||
       MI.getOpcode() == X86::ISTT_FP32m || MI.getOpcode() == X86::ISTT_FP64m ||
       MI.getOpcode() == X86::ST_FP80m) {
@@ -1063,10 +1120,13 @@ void T8xxStackPass::handleOneArgFP(MachineBasicBlock::iterator &I) {
   } else if (KillsSrc) { // Last use of operand?
     popStackAfter(I);
   }
+  */
 
   MI.dropDebugNumber();
 }
 
+
+#if 0
 
 /// handleOneArgFPRW: Handle instructions that read from the top of stack and
 /// replace the value with a newly computed value.  These instructions may have

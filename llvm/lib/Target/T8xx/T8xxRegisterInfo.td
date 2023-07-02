@@ -33,9 +33,15 @@ def R13 : T8xxReg<13, "R13">, DwarfRegNum<[13]>;
 def R14 : T8xxReg<14, "R14">, DwarfRegNum<[14]>;
 def R15 : T8xxReg<15, "R15">, DwarfRegNum<[15]>;
 
+// Regular representation of operand registers
 def AREG : T8xxReg<0, "AREG">, DwarfRegNum<[16]>;
 def BREG : T8xxReg<1, "BREG">, DwarfRegNum<[17]>;
 def CREG : T8xxReg<2, "CREG">, DwarfRegNum<[18]>;
+
+// Stack representation of operand registers
+def STA : T8xxReg<0, "STA">, DwarfRegNum<[22]>;
+def STB : T8xxReg<1, "STB">, DwarfRegNum<[23]>;
+def STC : T8xxReg<2, "STC">, DwarfRegNum<[24]>;
 
 def OREG : T8xxReg<3, "OREG">, DwarfRegNum<[19]>;
 
@@ -74,4 +80,4 @@ def WptrRegs : RegisterClass<"T8xx", [i32], 32,
                             (add WPTR)>;
 
 def OReg : RegisterClass<"T8xx", [i32], 32,
-     	                  (add AREG, BREG, CREG)>;
+     	                  (add AREG, BREG)>;

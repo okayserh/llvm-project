@@ -164,6 +164,9 @@ void T8xxInstPrinter::printMemOperand(const MCInst *MI, int opNum,
 void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
 					  const MCSubtargetInfo &STI,
 					  raw_ostream &O) {
+  MI->dump ();
+  printf ("Op Num %i\n", OpNum);
+  
   const MCOperand &Op1 = MI->getOperand(OpNum);
   const MCOperand &Op2 = MI->getOperand(OpNum + 1);
   O << "[";
