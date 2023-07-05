@@ -291,7 +291,7 @@ def ADDraw  : T8InstImm<0x12,
 		"add",
 		[(set i32:$dst, (add i32:$src1, i32:$src2))]>
 		 {
-		 let Constraints = "$dst = $src1";
+//		 let Constraints = "$dst = $src1";
 		let op2 = 0xEF;
 		}
 
@@ -367,7 +367,7 @@ def ADDimmr  : T8InstImm<0x12,
 		"adc $src2",
 		[(set OReg:$dst, (add OReg:$src1, imm:$src2))]> {
 		let isCodeGenOnly = 1;
-		let Constraints = "$dst = $src1";
+//		let Constraints = "$dst = $src1";
 		let op2 = 0x00;
 		}
 
