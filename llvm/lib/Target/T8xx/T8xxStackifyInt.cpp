@@ -24,6 +24,7 @@
 
 #include "T8xx.h"
 #include "T8xxInstrInfo.h"
+#include "T8xxMachineFunctionInfo.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -32,7 +33,9 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/EdgeBundles.h"
 #include "llvm/CodeGen/LivePhysRegs.h"
+#include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
@@ -73,7 +76,9 @@ struct T8xxStackPass : public MachineFunctionPass {
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.setPreservesCFG();
       AU.addRequired<EdgeBundles>();
+      AU.addRequired<LiveIntervals>();
       AU.addPreservedID(MachineLoopInfoID);
+      AU.addPreservedID(LiveVariablesID);
       AU.addPreservedID(MachineDominatorsID);
       MachineFunctionPass::getAnalysisUsage(AU);
     }
@@ -340,6 +345,100 @@ static unsigned getFPReg(const MachineOperand &MO) {
   return Reg - T8xx::AREG;
 }
 
+
+
+namespace {
+/// A stack for walking the tree of instructions being built, visiting the
+/// MachineOperands in DFS order.
+class TreeWalkerState {
+  using mop_iterator = MachineInstr::mop_iterator;
+  using mop_reverse_iterator = std::reverse_iterator<mop_iterator>;
+  using RangeTy = iterator_range<mop_reverse_iterator>;
+  SmallVector<RangeTy, 4> Worklist;
+
+public:
+  explicit TreeWalkerState(MachineInstr *Insert) {
+    const iterator_range<mop_iterator> &Range = Insert->explicit_uses();
+    if (!Range.empty())
+      Worklist.push_back(reverse(Range));
+  }
+
+  bool done() const { return Worklist.empty(); }
+
+  MachineOperand &pop() {
+    RangeTy &Range = Worklist.back();
+    MachineOperand &Op = *Range.begin();
+    Range = drop_begin(Range);
+    if (Range.empty())
+      Worklist.pop_back();
+    assert((Worklist.empty() || !Worklist.back().empty()) &&
+           "Empty ranges shouldn't remain in the worklist");
+    return Op;
+  }
+
+  /// Push Instr's operands onto the stack to be visited.
+  void pushOperands(MachineInstr *Instr) {
+    const iterator_range<mop_iterator> &Range(Instr->explicit_uses());
+    if (!Range.empty())
+      Worklist.push_back(reverse(Range));
+  }
+
+  /// Some of Instr's operands are on the top of the stack; remove them and
+  /// re-insert them starting from the beginning (because we've commuted them).
+  void resetTopOperands(MachineInstr *Instr) {
+    assert(hasRemainingOperands(Instr) &&
+           "Reseting operands should only be done when the instruction has "
+           "an operand still on the stack");
+    Worklist.back() = reverse(Instr->explicit_uses());
+  }
+
+  /// Test whether Instr has operands remaining to be visited at the top of
+  /// the stack.
+  bool hasRemainingOperands(const MachineInstr *Instr) const {
+    if (Worklist.empty())
+      return false;
+    const RangeTy &Range = Worklist.back();
+    return !Range.empty() && Range.begin()->getParent() == Instr;
+  }
+
+  /// Test whether the given register is present on the stack, indicating an
+  /// operand in the tree that we haven't visited yet. Moving a definition of
+  /// Reg to a point in the tree after that would change its value.
+  ///
+  /// This is needed as a consequence of using implicit local.gets for
+  /// uses and implicit local.sets for defs.
+  bool isOnStack(unsigned Reg) const {
+    for (const RangeTy &Range : Worklist)
+      for (const MachineOperand &MO : Range)
+        if (MO.isReg() && MO.getReg() == Reg)
+          return true;
+    return false;
+  }
+};
+
+} // end anonymous namespace
+
+
+// Identify the definition for this register at this point. This is a
+// generalization of MachineRegisterInfo::getUniqueVRegDef that uses
+// LiveIntervals to handle complex cases.
+static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
+                                const MachineRegisterInfo &MRI,
+                                const LiveIntervals &LIS) {
+  // Most registers are in SSA form here so we try a quick MRI query first.
+  if (MachineInstr *Def = MRI.getUniqueVRegDef(Reg))
+    return Def;
+
+  // MRI doesn't know what the Def is. Try asking LIS.
+  if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
+          LIS.getInstructionIndex(*Insert)))
+    return LIS.getInstructionFromIndex(ValNo->def);
+
+  return nullptr;
+}
+
+
+
 /// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
 /// register references into FP stack references.
 ///
@@ -347,73 +446,242 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
   printf ("runOnMachineFUnction\n");
 
-  /* Checks whether FP registers are used
-  // We only need to run this pass if there are any FP registers used in this
-  // function.  If it is all integer, there is nothing for us to do!
-  bool FPIsUsed = false;
-
-  static_assert(T8xx::R15 == T8xx::R0+15, "Register enums aren't sorted right!");
-  const MachineRegisterInfo &MRI = MF.getRegInfo();
-  for (unsigned i = 0; i <= 6; ++i)
-    if (!MRI.reg_nodbg_empty(T8xx::R1 + i)) {
-      FPIsUsed = true;
-      break;
-    }
-
-  // Early exit.
-  if (!FPIsUsed) return false;
-  */
-
-  Bundles = &getAnalysis<EdgeBundles>();
-  TII = MF.getSubtarget().getInstrInfo();
-
-  // Prepare cross-MBB liveness.
-  bundleCFGRecomputeKillFlags(MF);
-
-  StackTop = 0;
-
-#if 0
-  /*
-  // In regcall convention, some FP registers may not be passed through
-  // the stack, so they will need to be assigned to the stack first
-  if ((Entry->getParent()->getFunction().getCallingConv() ==
-    CallingConv::X86_RegCall) && (Bundle.Mask && !Bundle.FixCount)) {
-    // In the register calling convention, up to one FP argument could be
-    // saved in the first FP register.
-    // If bundle.mask is non-zero and Bundle.FixCount is zero, it means
-    // that the FP registers contain arguments.
-    // The actual value is passed in FP0.
-    // Here we fix the stack and mark FP0 as pre-assigned register.
-    assert((Bundle.Mask & 0xFE) == 0 &&
-      "Only FP0 could be passed as an argument");
-    Bundle.FixCount = 1;
-    Bundle.FixStack[0] = 0;
-  }
-  */
-#endif
-
-  // Process the function in depth first order so that we process at least one
-  // of the predecessors for every reachable block in the function.
-  df_iterator_default_set<MachineBasicBlock*> Processed;
-  MachineBasicBlock *Entry = &MF.front();
-
-  LiveBundle &Bundle =
-    LiveBundles[Bundles->getBundle(Entry->getNumber(), false)];
+  LLVM_DEBUG(dbgs() << "********** Register Stackifying **********\n"
+                       "********** Function: "
+                    << MF.getName() << '\n');
 
   bool Changed = false;
-  for (MachineBasicBlock *BB : depth_first_ext(Entry, Processed))
-    Changed |= processBasicBlock(MF, *BB);
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
+  const auto *TII = MF.getSubtarget().getInstrInfo();
+  const auto *TRI = MF.getSubtarget().getRegisterInfo();
+  //  auto &MDT = getAnalysis<MachineDominatorTree>();
+  auto &LIS = getAnalysis<LiveIntervals>();
 
-  // Process any unreachable blocks in arbitrary order now.
-  /*
-  if (MF.size() != Processed.size())
-    for (MachineBasicBlock &BB : MF)
-      if (Processed.insert(&BB).second)
-        Changed |= processBasicBlock(MF, BB);
-  */
+  // LiveInterval dump
+  LIS.dump ();
+  
+  // Walk the instructions from the bottom up. Currently we don't look past
+  // block boundaries, and the blocks aren't ordered so the block visitation
+  // order isn't significant, but we may want to change this in the future.
+  for (MachineBasicBlock &MBB : MF) {
+    // Don't use a range-based for loop, because we modify the list as we're
+    // iterating over it and the end iterator may change.
+    for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII) {
+      MachineInstr *Insert = &*MII;
+      // Don't nest anything inside an inline asm, because we don't have
+      // constraints for $push inputs.
+      if (Insert->isInlineAsm())
+        continue;
 
-  LiveBundles.clear();
+      // Ignore debugging intrinsics.
+      if (Insert->isDebugValue())
+        continue;
+      
+      // Iterate through the inputs in reverse order, since we'll be pulling
+      // operands off the stack in LIFO order.
+      //      CommutingState Commuting;
 
+      // ###################################################
+      // Idea for an algorithm:
+      // Put value on stack and continue with subsequent
+      // instructions until either the stack space (3 operand registers)
+      // is exceeded or the virtual register needs to be accessed and is
+      // not in a suitable position on the stack.
+      // If either of the above cases happens, spill the register.
+
+      // These push one element to the stack
+      if ((MI.getOpcode() == T8xx::LDRi16wpop) ||
+	  (MI.getOpcode() == T8xx::LDRi32wpop) ||
+	  (MI.getOpcode() == T8xx::LEA_ADDri))
+	{
+	  unsigned DestReg = getFPReg(MI.getOperand(0));
+	  //	  MI.getOperand(0).setReg (T8xx::STA);
+	  pushReg(DestReg);
+	}
+
+      // Modify the top element of the stack
+      if (MI.getOpcode() == T8xx::STRi32regop)
+	{
+	  handleOneArgFP (I);
+	}
+
+      
+      // These pop one elements from the stack
+      if (MI.getOpcode() == T8xx::STRi32regop)
+	{
+	  handleOneArgFP (I);
+	}
+	
+      // Pops two elements from the stack
+      if (MI.getOpcode() == T8xx::STRi8regop)
+	{
+	}
+
+
+#if 0
+
+      TreeWalkerState TreeWalker(Insert);
+      while (!TreeWalker.done()) {
+        MachineOperand &Use = TreeWalker.pop();
+
+	// Debug
+	printf ("MO dump\n");
+	Insert->dump ();
+
+	// We're only interested in explicit virtual register operands.
+        if (!Use.isReg())
+          continue;
+
+        Register Reg = Use.getReg();
+        assert(Use.isUse() && "explicit_uses() should only iterate over uses");
+        assert(!Use.isImplicit() &&
+               "explicit_uses() should only iterate over explicit operands");
+        if (Reg.isPhysical())
+          continue;
+
+        // Identify the definition for this register at this point.
+        MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
+        if (!DefI)
+          continue;
+
+	// Debug
+	printf ("Defined by \n");
+	DefI->dump ();	
+
+	// Don't nest an INLINE_ASM def into anything, because we don't have
+        // constraints for $pop outputs.
+        if (DefI->isInlineAsm())
+          continue;
+
+        // Argument instructions represent live-in registers and not real
+        // instructions.
+        if (WebAssembly::isArgument(DefI->getOpcode()))
+          continue;
+
+        MachineOperand *Def = DefI->findRegisterDefOperand(Reg);
+        assert(Def != nullptr);
+
+        // Decide which strategy to take. Prefer to move a single-use value
+        // over cloning it, and prefer cloning over introducing a tee.
+        // For moving, we require the def to be in the same block as the use;
+        // this makes things simpler (LiveIntervals' handleMove function only
+        // supports intra-block moves) and it's MachineSink's job to catch all
+        // the sinking opportunities anyway.
+        bool SameBlock = DefI->getParent() == &MBB;
+        bool CanMove = SameBlock && isSafeToMove(Def, &Use, Insert, MFI, MRI) &&
+                       !TreeWalker.isOnStack(Reg);
+        if (CanMove && hasOneNonDBGUse(Reg, DefI, MRI, MDT, LIS)) {
+          Insert = moveForSingleUse(Reg, Use, DefI, MBB, Insert, LIS, MFI, MRI);
+
+          // If we are removing the frame base reg completely, remove the debug
+          // info as well.
+          // TODO: Encode this properly as a stackified value.
+          if (MFI.isFrameBaseVirtual() && MFI.getFrameBaseVreg() == Reg)
+            MFI.clearFrameBaseVreg();
+        } else if (shouldRematerialize(*DefI, TII)) {
+          Insert =
+              rematerializeCheapDef(Reg, Use, *DefI, MBB, Insert->getIterator(),
+                                    LIS, MFI, MRI, TII, TRI);
+        } else if (CanMove && oneUseDominatesOtherUses(Reg, Use, MBB, MRI, MDT,
+                                                       LIS, MFI)) {
+          Insert = moveAndTeeForMultiUse(Reg, Use, DefI, MBB, Insert, LIS, MFI,
+                                         MRI, TII);
+        } else {
+          // We failed to stackify the operand. If the problem was ordering
+          // constraints, Commuting may be able to help.
+          if (!CanMove && SameBlock)
+            Commuting.maybeCommute(Insert, TreeWalker, TII);
+          // Proceed to the next operand.
+          continue;
+        }
+
+        // Stackifying a multivalue def may unlock in-place stackification of
+        // subsequent defs. TODO: Handle the case where the consecutive uses are
+        // not all in the same instruction.
+        auto *SubsequentDef = Insert->defs().begin();
+        auto *SubsequentUse = &Use;
+        while (SubsequentDef != Insert->defs().end() &&
+               SubsequentUse != Use.getParent()->uses().end()) {
+          if (!SubsequentDef->isReg() || !SubsequentUse->isReg())
+            break;
+          Register DefReg = SubsequentDef->getReg();
+          Register UseReg = SubsequentUse->getReg();
+          // TODO: This single-use restriction could be relaxed by using tees
+          if (DefReg != UseReg || !MRI.hasOneNonDBGUse(DefReg))
+            break;
+          MFI.stackifyVReg(MRI, DefReg);
+          ++SubsequentDef;
+          ++SubsequentUse;
+        }
+
+        // If the instruction we just stackified is an IMPLICIT_DEF, convert it
+        // to a constant 0 so that the def is explicit, and the push/pop
+        // correspondence is maintained.
+        if (Insert->getOpcode() == TargetOpcode::IMPLICIT_DEF)
+          convertImplicitDefToConstZero(Insert, MRI, TII, MF, LIS);
+	
+        // We stackified an operand. Add the defining instruction's operands to
+        // the worklist stack now to continue to build an ever deeper tree.
+        Commuting.reset();
+#endif
+        TreeWalker.pushOperands(Insert);
+      }
+
+      /*
+      // If we stackified any operands, skip over the tree to start looking for
+      // the next instruction we can build a tree on.
+      if (Insert != &*MII) {
+        imposeStackOrdering(&*MII);
+        MII = MachineBasicBlock::iterator(Insert).getReverse();
+        Changed = true;
+      }
+      */
+
+    }
+  }
+
+#if 0
+  // If we used VALUE_STACK anywhere, add it to the live-in sets everywhere so
+  // that it never looks like a use-before-def.
+  if (Changed) {
+    MF.getRegInfo().addLiveIn(WebAssembly::VALUE_STACK);
+    for (MachineBasicBlock &MBB : MF)
+      MBB.addLiveIn(WebAssembly::VALUE_STACK);
+  }
+
+#ifndef NDEBUG
+  // Verify that pushes and pops are performed in LIFO order.
+  SmallVector<unsigned, 0> Stack;
+  for (MachineBasicBlock &MBB : MF) {
+    for (MachineInstr &MI : MBB) {
+      if (MI.isDebugInstr())
+        continue;
+      for (MachineOperand &MO : reverse(MI.explicit_uses())) {
+        if (!MO.isReg())
+          continue;
+        Register Reg = MO.getReg();
+        if (MFI.isVRegStackified(Reg))
+          assert(Stack.pop_back_val() == Reg &&
+                 "Register stack pop should be paired with a push");
+      }
+      for (MachineOperand &MO : MI.defs()) {
+        if (!MO.isReg())
+          continue;
+        Register Reg = MO.getReg();
+        if (MFI.isVRegStackified(Reg))
+          Stack.push_back(MO.getReg());
+      }
+    }
+    // TODO: Generalize this code to support keeping values on the stack across
+    // basic block boundaries.
+    assert(Stack.empty() &&
+           "Register stack pushes and pops should be balanced");
+  }
+#endif
+
+#endif
+  
   return Changed;
 }
 
