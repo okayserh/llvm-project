@@ -13,6 +13,7 @@
 #define LLVM_LIB_TARGET_SPARC_SPARCMACHINEFUNCTIONINFO_H
 
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 
 namespace llvm {
 
@@ -30,6 +31,15 @@ namespace llvm {
 
     /// IsLeafProc - True if the function is a leaf procedure.
     bool IsLeafProc;
+
+    /// A mapping from CodeGen vreg index to a boolean value indicating whether
+    /// the given register is considered to be "stackified", meaning it has been
+    /// determined or made to meet the stack requirements:
+    ///   - single use (per path)
+    ///   - single def (per path)
+    ///   - defined and used in LIFO order with other stack registers
+    BitVector VRegStackified;
+
   public:
     T8xxMachineFunctionInfo()
       : GlobalBaseReg(0), VarArgsFrameOffset(0), SRetReturnReg(0),
@@ -54,6 +64,28 @@ namespace llvm {
 
     void setLeafProc(bool rhs) { IsLeafProc = rhs; }
     bool isLeafProc() const { return IsLeafProc; }
+
+    // Copied from WebAssemblyMachineFunctionInfo.h
+    void stackifyVReg(MachineRegisterInfo &MRI, unsigned VReg) {
+      assert(MRI.getUniqueVRegDef(VReg));
+      auto I = Register::virtReg2Index(VReg);
+      if (I >= VRegStackified.size())
+	VRegStackified.resize(I + 1);
+      VRegStackified.set(I);
+    }
+    void unstackifyVReg(unsigned VReg) {
+      auto I = Register::virtReg2Index(VReg);
+      if (I < VRegStackified.size())
+	VRegStackified.reset(I);
+    }
+    bool isVRegStackified(unsigned VReg) const {
+      auto I = Register::virtReg2Index(VReg);
+      if (I >= VRegStackified.size())
+	return false;
+      return VRegStackified.test(I);
+    }
+
+
   };
 }
 

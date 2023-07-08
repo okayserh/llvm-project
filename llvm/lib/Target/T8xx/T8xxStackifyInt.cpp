@@ -24,6 +24,7 @@
 
 #include "T8xx.h"
 #include "T8xxInstrInfo.h"
+#include "T8xxSubtarget.h"
 #include "T8xxMachineFunctionInfo.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/STLExtras.h"
@@ -75,11 +76,13 @@ struct T8xxStackPass : public MachineFunctionPass {
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.setPreservesCFG();
+      AU.addRequired<MachineDominatorTree>();
       AU.addRequired<EdgeBundles>();
       AU.addRequired<LiveIntervals>();
       AU.addPreservedID(MachineLoopInfoID);
       AU.addPreservedID(LiveVariablesID);
       AU.addPreservedID(MachineDominatorsID);
+      AU.addPreserved<MachineDominatorTree>();
       MachineFunctionPass::getAnalysisUsage(AU);
     }
 
@@ -162,7 +165,7 @@ struct T8xxStackPass : public MachineFunctionPass {
     // to model that exactly. Usually, each live register corresponds to an
     // FP<n> register, but when dealing with calls, returns, and inline
     // assembly, it is sometimes necessary to have live scratch registers.
-    unsigned Stack[3];          // FP<n> Registers in each stack slot...
+    unsigned Stack[30];          // FP<n> Registers in each stack slot...
     unsigned StackTop = 0;      // The current top of the FP stack.
 
     enum {
@@ -181,15 +184,16 @@ struct T8xxStackPass : public MachineFunctionPass {
     // Shuffle live registers to match the expectations of successor blocks.
     void finishBlockStack();
 
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  //#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
     void dumpStack() const {
       dbgs() << "Stack contents:";
       for (unsigned i = 0; i != StackTop; ++i) {
         dbgs() << " FP" << Stack[i];
-        assert(RegMap[Stack[i]] == i && "Stack[] doesn't match RegMap[]!");
+	//        assert(RegMap[Stack[i]] == i && "Stack[] doesn't match RegMap[]!");
       }
+      dbgs() << "\n";
     }
-#endif
+  //#endif
 
     /// getSlot - Return the stack slot number a particular register number is
     /// in.
@@ -219,18 +223,31 @@ struct T8xxStackPass : public MachineFunctionPass {
 
     // pushReg - Push the specified FP<n> register onto the stack.
     void pushReg(unsigned Reg) {
-      assert(Reg < NumFPRegs && "Register number out of range!");
+      //assert(Reg < NumFPRegs && "Register number out of range!");
+      /*
       if (StackTop >= 3)
         report_fatal_error("Stack overflow!");
+      */
+      if (StackTop >= 3)
+	printf ("Stack overflow!\n");
+
       Stack[StackTop] = Reg;
-      RegMap[Reg] = StackTop++;
+      //      RegMap[Reg] = StackTop++;
+      StackTop++;
     }
 
     // popReg - Pop a register from the stack.
     void popReg() {
+      /*
       if (StackTop == 0)
         report_fatal_error("Cannot pop empty stack!");
       RegMap[Stack[--StackTop]] = ~0;     // Update state
+      */
+      if (StackTop > 0)
+	--StackTop;
+	//	RegMap[Stack[--StackTop]] = ~0;     // Update state
+      else
+	printf ("Cannot pop empty stack\n");
     }
 
     bool isAtTop(unsigned RegNo) const { return getSlot(RegNo) == StackTop-1; }
@@ -339,10 +356,13 @@ FunctionPass *llvm::createT8xxStackPass() {
 /// getFPReg - Return the X86::FPx register number for the specified operand.
 /// For example, this returns 3 for X86::FP3.
 static unsigned getFPReg(const MachineOperand &MO) {
-  assert(MO.isReg() && "Expected an FP register!");
+  //  assert(MO.isReg() && "Expected an FP register!");
   Register Reg = MO.getReg();
+  /*
   assert(Reg >= T8xx::AREG && Reg <= T8xx::CREG && "Expected FP register!");
   return Reg - T8xx::AREG;
+  */
+  return Reg;
 }
 
 
@@ -357,6 +377,11 @@ class TreeWalkerState {
   SmallVector<RangeTy, 4> Worklist;
 
 public:
+  // This puts an iterator to the "explicit_used" operands on the stack
+  //  iterator_range<mop_iterator> explicit_uses() {
+  //  return make_range(operands_begin() + getNumExplicitDefs(),
+  //                    operands_begin() + getNumExplicitOperands());
+  //}
   explicit TreeWalkerState(MachineInstr *Insert) {
     const iterator_range<mop_iterator> &Range = Insert->explicit_uses();
     if (!Range.empty())
@@ -365,6 +390,7 @@ public:
 
   bool done() const { return Worklist.empty(); }
 
+  // Get next operand from top element from back of list
   MachineOperand &pop() {
     RangeTy &Range = Worklist.back();
     MachineOperand &Op = *Range.begin();
@@ -439,6 +465,222 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
 
 
 
+static bool isSafeToMove(const MachineOperand *Def, const MachineOperand *Use,
+                         const MachineInstr *Insert,
+                         const T8xxMachineFunctionInfo &MFI,
+                         const MachineRegisterInfo &MRI) {
+
+  // TODO: Implement the functionality here
+  // For initial test, just assume that the block can be moved
+  return true;
+}
+
+
+// Test whether Def is safe and profitable to rematerialize.
+static bool shouldRematerialize(const MachineInstr &Def,
+                                const T8xxInstrInfo *TII) {
+  //  return Def.isAsCheapAsAMove() && TII->isTriviallyReMaterializable(Def);
+  return TII->isTriviallyReMaterializable(Def);
+}
+
+
+/// Test whether OneUse, a use of Reg, dominates all of Reg's other uses.
+static bool oneUseDominatesOtherUses(unsigned Reg, const MachineOperand &OneUse,
+                                     const MachineBasicBlock &MBB,
+                                     const MachineRegisterInfo &MRI,
+                                     const MachineDominatorTree &MDT,
+                                     LiveIntervals &LIS,
+                                     T8xxMachineFunctionInfo &MFI) {
+  const LiveInterval &LI = LIS.getInterval(Reg);
+
+  const MachineInstr *OneUseInst = OneUse.getParent();
+  VNInfo *OneUseVNI = LI.getVNInfoBefore(LIS.getInstructionIndex(*OneUseInst));
+
+  for (const MachineOperand &Use : MRI.use_nodbg_operands(Reg)) {
+    if (&Use == &OneUse)
+      continue;
+
+    const MachineInstr *UseInst = Use.getParent();
+    VNInfo *UseVNI = LI.getVNInfoBefore(LIS.getInstructionIndex(*UseInst));
+
+    if (UseVNI != OneUseVNI)
+      continue;
+
+    if (UseInst == OneUseInst) {
+      // Another use in the same instruction. We need to ensure that the one
+      // selected use happens "before" it.
+      if (&OneUse > &Use)
+        return false;
+    } else {
+      // Test that the use is dominated by the one selected use.
+      while (!MDT.dominates(OneUseInst, UseInst)) {
+        // Actually, dominating is over-conservative. Test that the use would
+        // happen after the one selected use in the stack evaluation order.
+        //
+        // This is needed as a consequence of using implicit local.gets for
+        // uses and implicit local.sets for defs.
+        if (UseInst->getDesc().getNumDefs() == 0)
+          return false;
+        const MachineOperand &MO = UseInst->getOperand(0);
+        if (!MO.isReg())
+          return false;
+        Register DefReg = MO.getReg();
+        if (!DefReg.isVirtual() || !MFI.isVRegStackified(DefReg))
+          return false;
+        assert(MRI.hasOneNonDBGUse(DefReg));
+        const MachineOperand &NewUse = *MRI.use_nodbg_begin(DefReg);
+        const MachineInstr *NewUseInst = NewUse.getParent();
+        if (NewUseInst == OneUseInst) {
+          if (&OneUse > &NewUse)
+            return false;
+          break;
+        }
+        UseInst = NewUseInst;
+      }
+    }
+  }
+  return true;
+}
+
+
+// Test whether Reg, as defined at Def, has exactly one use. This is a
+// generalization of MachineRegisterInfo::hasOneNonDBGUse that uses
+// LiveIntervals to handle complex cases.
+static bool hasOneNonDBGUse(unsigned Reg, MachineInstr *Def,
+                            MachineRegisterInfo &MRI, MachineDominatorTree &MDT,
+                            LiveIntervals &LIS) {
+  // Most registers are in SSA form here so we try a quick MRI query first.
+  if (MRI.hasOneNonDBGUse(Reg))
+    return true;
+
+  bool HasOne = false;
+  const LiveInterval &LI = LIS.getInterval(Reg);
+  const VNInfo *DefVNI =
+      LI.getVNInfoAt(LIS.getInstructionIndex(*Def).getRegSlot());
+  assert(DefVNI);
+  for (auto &I : MRI.use_nodbg_operands(Reg)) {
+    const auto &Result = LI.Query(LIS.getInstructionIndex(*I.getParent()));
+    if (Result.valueIn() == DefVNI) {
+      if (!Result.isKill())
+        return false;
+      if (HasOne)
+        return false;
+      HasOne = true;
+    }
+  }
+  return HasOne;
+}
+
+
+/// A single-use def in the same block with no intervening memory or register
+/// dependencies; move the def down and nest it with the current instruction.
+static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
+                                      MachineInstr *Def, MachineBasicBlock &MBB,
+                                      MachineInstr *Insert, LiveIntervals &LIS,
+                                      T8xxMachineFunctionInfo &MFI,
+                                      MachineRegisterInfo &MRI) {
+  LLVM_DEBUG(dbgs() << "Move for single use: "; Def->dump());
+
+  //  WebAssemblyDebugValueManager DefDIs(Def);
+  //  DefDIs.sink(Insert);
+  LIS.handleMove(*Def);
+
+  if (MRI.hasOneDef(Reg) && MRI.hasOneNonDBGUse(Reg)) {
+    // No one else is using this register for anything so we can just stackify
+    // it in place.
+    //    MFI.stackifyVReg(MRI, Reg);
+    printf ("Reg Stackified %u\n", Reg);
+  } else {
+    // The register may have unrelated uses or defs; create a new register for
+    // just our one def and use so that we can stackify it.
+    Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
+    Op.setReg(NewReg);
+    //    DefDIs.updateReg(NewReg);
+
+    // Tell LiveIntervals about the new register.
+    LIS.createAndComputeVirtRegInterval(NewReg);
+
+    // Tell LiveIntervals about the changes to the old register.
+    LiveInterval &LI = LIS.getInterval(Reg);
+    LI.removeSegment(LIS.getInstructionIndex(*Def).getRegSlot(),
+                     LIS.getInstructionIndex(*Op.getParent()).getRegSlot(),
+                     /*RemoveDeadValNo=*/true);
+
+    // TODO:
+    //MFI.stackifyVReg(MRI, NewReg);
+
+    LLVM_DEBUG(dbgs() << " - Replaced register: "; Def->dump());
+  }
+
+  //  imposeStackOrdering(Def);
+  return Def;
+}
+
+
+static MachineInstr *getPrevNonDebugInst(MachineInstr *MI) {
+  for (auto *I = MI->getPrevNode(); I; I = I->getPrevNode())
+    if (!I->isDebugInstr())
+      return I;
+  return nullptr;
+}
+
+// Shrink LI to its uses, cleaning up LI.
+static void shrinkToUses(LiveInterval &LI, LiveIntervals &LIS) {
+  if (LIS.shrinkToUses(&LI)) {
+    SmallVector<LiveInterval *, 4> SplitLIs;
+    LIS.splitSeparateComponents(LI, SplitLIs);
+  }
+}
+
+
+
+/// A trivially cloneable instruction; clone it and nest the new copy with the
+/// current instruction.
+static MachineInstr *rematerializeCheapDef(
+    unsigned Reg, MachineOperand &Op, MachineInstr &Def, MachineBasicBlock &MBB,
+    MachineBasicBlock::instr_iterator Insert, LiveIntervals &LIS,
+    T8xxMachineFunctionInfo &MFI, MachineRegisterInfo &MRI,
+    const T8xxInstrInfo *TII, const T8xxRegisterInfo *TRI) {
+  LLVM_DEBUG(dbgs() << "Rematerializing cheap def: "; Def.dump());
+  LLVM_DEBUG(dbgs() << " - for use in "; Op.getParent()->dump());
+
+  //  WebAssemblyDebugValueManager DefDIs(&Def);
+
+  Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
+  //  DefDIs.cloneSink(&*Insert, NewReg);
+  Op.setReg(NewReg);
+  MachineInstr *Clone = getPrevNonDebugInst(&*Insert);
+  assert(Clone);
+  LIS.InsertMachineInstrInMaps(*Clone);
+  LIS.createAndComputeVirtRegInterval(NewReg);
+  MFI.stackifyVReg(MRI, NewReg);
+  //  imposeStackOrdering(Clone);
+
+  LLVM_DEBUG(dbgs() << " - Cloned to "; Clone->dump());
+
+  // Shrink the interval.
+  bool IsDead = MRI.use_empty(Reg);
+  if (!IsDead) {
+    LiveInterval &LI = LIS.getInterval(Reg);
+    shrinkToUses(LI, LIS);
+    IsDead = !LI.liveAt(LIS.getInstructionIndex(Def).getDeadSlot());
+  }
+
+  // If that was the last use of the original, delete the original.
+  if (IsDead) {
+    LLVM_DEBUG(dbgs() << " - Deleting original\n");
+    SlotIndex Idx = LIS.getInstructionIndex(Def).getRegSlot();
+    // ??
+    //    LIS.removePhysRegDefAt(MCRegister::from(WebAssembly::ARGUMENTS), Idx);
+    LIS.removeInterval(Reg);
+    LIS.RemoveMachineInstrFromMaps(Def);
+    // DefDIs.removeDef();
+  }
+
+  return Clone;
+}
+
+
 /// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
 /// register references into FP stack references.
 ///
@@ -453,14 +695,15 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
   MachineRegisterInfo &MRI = MF.getRegInfo();
   T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
-  const auto *TII = MF.getSubtarget().getInstrInfo();
-  const auto *TRI = MF.getSubtarget().getRegisterInfo();
-  //  auto &MDT = getAnalysis<MachineDominatorTree>();
+  const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
+  const auto *TRI = MF.getSubtarget<T8xxSubtarget>().getRegisterInfo();
+  auto &MDT = getAnalysis<MachineDominatorTree>();
   auto &LIS = getAnalysis<LiveIntervals>();
 
   // LiveInterval dump
   LIS.dump ();
   
+
   // Walk the instructions from the bottom up. Currently we don't look past
   // block boundaries, and the blocks aren't ordered so the block visitation
   // order isn't significant, but we may want to change this in the future.
@@ -468,7 +711,9 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     // Don't use a range-based for loop, because we modify the list as we're
     // iterating over it and the end iterator may change.
     for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII) {
+    //    for (auto MII = MBB.begin(); MII != MBB.end(); ++MII) {
       MachineInstr *Insert = &*MII;
+      MachineInstr &MI = *MII;
       // Don't nest anything inside an inline asm, because we don't have
       // constraints for $push inputs.
       if (Insert->isInlineAsm())
@@ -482,18 +727,71 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       // operands off the stack in LIFO order.
       //      CommutingState Commuting;
 
+#if 0
       // ###################################################
       // Idea for an algorithm:
       // Put value on stack and continue with subsequent
-      // instructions until either the stack space (3 operand registers)
-      // is exceeded or the virtual register needs to be accessed and is
-      // not in a suitable position on the stack.
+      // instructions until:
+      // - Stack space (3 operand registers) is exceeded
+      // - virtual register needs to be accessed and is
+      //   not in a suitable position on the stack.
+      // - Virtual register is read more than once
       // If either of the above cases happens, spill the register.
 
+      MI.dump ();
+
+      // Print register live ranges
+      //unsigned int vrn = MRI.getNumVirtRegs ();
+      printf ("Op dump begin \n");
+      //      const iterator_range<MachineInstr::mop_iterator> &Range = Insert->explicit_uses();
+      const iterator_range<MachineInstr::mop_iterator> &Range = Insert->defs();
+      MachineInstr::mop_iterator miter;
+      for (miter = Range.begin (); miter != Range.end (); ++miter)
+	{
+	  miter->dump ();
+	  MachineOperand &Use = *miter;
+	  if (!Use.isReg())
+	    continue;
+	  Register Reg = Use.getReg();
+	  if (MRI.hasOneUse (Reg))
+	    {
+	      LIS.getInterval(Reg).dump ();
+	      MachineInstrBundleIterator<llvm::MachineInstr> inst_iter = MII;
+	      inst_iter++;
+	      inst_iter->dump ();
+
+	      SmallVector<MachineInstr::mop_iterator, 4> Worklist;
+	      Worklist.push_back (miter);
+
+	      
+
+	      printf ("One use!\n");
+	    }
+	}
+      printf ("Op dump end \n");
+
+      /*
+	   MachineOperand &Use = TreeWalker.pop();
+      if (!Use.isReg())
+	continue;
+
+      Register Reg = Use.getReg();
+      
+      // Only registers with a single use qualify for elimination by clever usage of
+      // stack registers
+      if (MRI.hasOneUse (RegNo))
+	{
+	}
+       
+      */
+
+      dumpStack ();
+      
       // These push one element to the stack
       if ((MI.getOpcode() == T8xx::LDRi16wpop) ||
 	  (MI.getOpcode() == T8xx::LDRi32wpop) ||
-	  (MI.getOpcode() == T8xx::LEA_ADDri))
+	  (MI.getOpcode() == T8xx::LEA_ADDri) ||
+	  (MI.getOpcode() == T8xx::MOVimmr))
 	{
 	  unsigned DestReg = getFPReg(MI.getOperand(0));
 	  //	  MI.getOperand(0).setReg (T8xx::STA);
@@ -501,26 +799,44 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	}
 
       // Modify the top element of the stack
-      if (MI.getOpcode() == T8xx::STRi32regop)
+      if (MI.getOpcode() == T8xx::ADDimmr)
 	{
-	  handleOneArgFP (I);
+	  unsigned DstReg = getFPReg(MI.getOperand(0));
+	  unsigned SrcReg = getFPReg(MI.getOperand(1));
+	  popReg();
+	  pushReg(DstReg);
 	}
-
       
       // These pop one elements from the stack
       if (MI.getOpcode() == T8xx::STRi32regop)
 	{
-	  handleOneArgFP (I);
+	  popReg();	  
 	}
-	
+
       // Pops two elements from the stack
       if (MI.getOpcode() == T8xx::STRi8regop)
 	{
+	  popReg();	  
+	  popReg();	  
 	}
 
+	  // Pops two elements from the stack and pushes one result to the stack
+	  if ((MI.getOpcode() == T8xx::SHLregregop) ||
+	      (MI.getOpcode() == T8xx::ORregregop) ||
+	      (MI.getOpcode() == T8xx::ADDraw))
+	{
+	  unsigned DstReg = getFPReg(MI.getOperand(0));
+	  popReg();	  
+	  popReg();
+	  pushReg (DstReg);
+	}
 
-#if 0
+      printf ("After Stackify\n");
+      dumpStack ();
+#endif
 
+
+      //  Insert iterator to the used operands (may be registers)
       TreeWalkerState TreeWalker(Insert);
       while (!TreeWalker.done()) {
         MachineOperand &Use = TreeWalker.pop();
@@ -554,15 +870,22 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         if (DefI->isInlineAsm())
           continue;
 
+	/*
         // Argument instructions represent live-in registers and not real
         // instructions.
         if (WebAssembly::isArgument(DefI->getOpcode()))
           continue;
+	*/
 
         MachineOperand *Def = DefI->findRegisterDefOperand(Reg);
         assert(Def != nullptr);
 
-        // Decide which strategy to take. Prefer to move a single-use value
+	printf ("Operand\n");
+	Def->dump ();
+	/* OKH: DefI is the instruction that defines the register, Def is the defined operand */
+
+	
+	// Decide which strategy to take. Prefer to move a single-use value
         // over cloning it, and prefer cloning over introducing a tee.
         // For moving, we require the def to be in the same block as the use;
         // this makes things simpler (LiveIntervals' handleMove function only
@@ -571,31 +894,52 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         bool SameBlock = DefI->getParent() == &MBB;
         bool CanMove = SameBlock && isSafeToMove(Def, &Use, Insert, MFI, MRI) &&
                        !TreeWalker.isOnStack(Reg);
-        if (CanMove && hasOneNonDBGUse(Reg, DefI, MRI, MDT, LIS)) {
+
+	printf ("Move for single use SameBlock %i   CanMove %i\n", SameBlock, CanMove);
+
+	if (CanMove && hasOneNonDBGUse(Reg, DefI, MRI, MDT, LIS)) {
           Insert = moveForSingleUse(Reg, Use, DefI, MBB, Insert, LIS, MFI, MRI);
 
           // If we are removing the frame base reg completely, remove the debug
           // info as well.
           // TODO: Encode this properly as a stackified value.
+	  /*
           if (MFI.isFrameBaseVirtual() && MFI.getFrameBaseVreg() == Reg)
             MFI.clearFrameBaseVreg();
-        } else if (shouldRematerialize(*DefI, TII)) {
+	  */
+        }
+	/*
+	else
+	  {
+	    printf ("MultiUse\n");
+	    // TODO:
+	    Insert = DefI;
+	  }
+	*/	
+
+	else if (shouldRematerialize(*DefI, TII)) {
+	  printf ("Rematerialize\n");
           Insert =
               rematerializeCheapDef(Reg, Use, *DefI, MBB, Insert->getIterator(),
                                     LIS, MFI, MRI, TII, TRI);
         } else if (CanMove && oneUseDominatesOtherUses(Reg, Use, MBB, MRI, MDT,
                                                        LIS, MFI)) {
-          Insert = moveAndTeeForMultiUse(Reg, Use, DefI, MBB, Insert, LIS, MFI,
-                                         MRI, TII);
+	  printf ("MoveAndTeeForMultiUse\n");
+	  /*          Insert = moveAndTeeForMultiUse(Reg, Use, DefI, MBB, Insert, LIS, MFI,
+		      MRI, TII);*/
+	    Insert = DefI;
         } else {
           // We failed to stackify the operand. If the problem was ordering
           // constraints, Commuting may be able to help.
+	  /*
           if (!CanMove && SameBlock)
             Commuting.maybeCommute(Insert, TreeWalker, TII);
+	  */
           // Proceed to the next operand.
           continue;
         }
-
+	
+	/*
         // Stackifying a multivalue def may unlock in-place stackification of
         // subsequent defs. TODO: Handle the case where the consecutive uses are
         // not all in the same instruction.
@@ -620,11 +964,11 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         // correspondence is maintained.
         if (Insert->getOpcode() == TargetOpcode::IMPLICIT_DEF)
           convertImplicitDefToConstZero(Insert, MRI, TII, MF, LIS);
+	*/
 	
         // We stackified an operand. Add the defining instruction's operands to
         // the worklist stack now to continue to build an ever deeper tree.
-        Commuting.reset();
-#endif
+	//        Commuting.reset();
         TreeWalker.pushOperands(Insert);
       }
 
@@ -638,8 +982,8 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       }
       */
 
-    }
-  }
+    }  // MachineInstruction
+  } // MachineBasicBlock
 
 #if 0
   // If we used VALUE_STACK anywhere, add it to the live-in sets everywhere so
@@ -682,7 +1026,8 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 #endif
   
-  return Changed;
+  //  return Changed;
+  return false;
 }
 
 /// bundleCFG - Scan all the basic blocks to determine consistent live-in and
