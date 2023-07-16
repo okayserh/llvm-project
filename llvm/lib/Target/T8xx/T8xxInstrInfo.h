@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_SPARCINSTRINFO_H
-#define LLVM_LIB_TARGET_SPARC_SPARCINSTRINFO_H
+#ifndef LLVM_LIB_TARGET_T8XX_T8XXINSTRINFO_H
+#define LLVM_LIB_TARGET_T8XX_T8XXINSTRINFO_H
 
 #include "T8xxRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
