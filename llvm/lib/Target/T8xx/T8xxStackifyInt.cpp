@@ -59,9 +59,14 @@ STATISTIC(NumFP  , "Number of floating point instructions");
 
 namespace llvm {
 
-struct T8xxStackPass : public MachineFunctionPass {
-  static char ID;
-  T8xxStackPass() : MachineFunctionPass(ID) {
+  struct T8xxStackPass : public MachineFunctionPass {
+
+  protected:
+    
+  public:
+    static char ID;
+    
+    T8xxStackPass() : MachineFunctionPass(ID) {
     }
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -73,6 +78,10 @@ struct T8xxStackPass : public MachineFunctionPass {
       AU.addPreservedID(LiveVariablesID);
       AU.addPreservedID(MachineDominatorsID);
       AU.addPreserved<MachineDominatorTree>();
+
+      AU.addRequired<VirtRegMap>();
+      AU.addPreserved<VirtRegMap>();
+
       MachineFunctionPass::getAnalysisUsage(AU);
     }
 
@@ -458,7 +467,13 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   auto &MDT = getAnalysis<MachineDominatorTree>();
   auto &LIS = getAnalysis<LiveIntervals>();
 
+  // OKH: Try to use the virtual register map
+  auto &VRM = getAnalysis<VirtRegMap>();
+  printf ("############ Register Map\n");
+  VRM.dump ();
+
   // LiveInterval dump
+  printf ("############ LiveInterval Map\n");
   LIS.dump ();
 
   // Some map to keep track of registers that have already been created as
@@ -565,18 +580,21 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	}
 	else {
 	  // Simply introduce a workspace register
-	  if (wp_reg_map.find (Reg) == wp_reg_map.end ())
-	    {
-	      printf ("No wp reg created for %u\n", Reg);
-	      wp_reg_map[Reg] = wp_reg_map.size ();
-	    }
+	  if (VRM.isAssignedReg (Reg))
+	    VRM.assignVirt2StackSlot (Reg);
 
-	  // Insert a "ldl" for the workspace register
+	  VRM.dump ();
+	  
+	  // Insert a "ldl" for the workspace register before the instruction
 	  DebugLoc DL = Insert->getDebugLoc();
-	  BuildMI(MBB, *Insert, DL, TII->get(T8xx::LDL)).addImm(wp_reg_map[Reg]);
+	  MachineBasicBlock::iterator MBBI = *Insert;
+	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDRi32regop),Reg).addImm(0);
+
+	  // Move iterator to "LDL"
+	  --MBBI;
+	  Insert = &(*MBBI);
 
 	  continue;
-	  //	  Insert = DefI;
 	}
 	
 #if 0
@@ -646,12 +664,15 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         Changed = true;
       }
 
+      /*
       // Terminate after 2 processed instructions
       count++;
       if (count > 1)
 	break;
+      */
       
 	}  // MachineInstruction
+
 
   /*
   } // MachineBasicBlock
@@ -697,7 +718,11 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 #endif
 
 #endif
-  
+
+
+  printf ("############ Register Map\n");
+  VRM.dump ();
+
   //  return Changed;
   return false;
 }
