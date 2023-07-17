@@ -582,13 +582,13 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  // Simply introduce a workspace register
 	  if (VRM.isAssignedReg (Reg))
 	    VRM.assignVirt2StackSlot (Reg);
-
+	      
 	  VRM.dump ();
 	  
 	  // Insert a "ldl" for the workspace register before the instruction
 	  DebugLoc DL = Insert->getDebugLoc();
 	  MachineBasicBlock::iterator MBBI = *Insert;
-	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDRi32regop),Reg).addImm(0);
+	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDRi32regop),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 
 	  // Move iterator to "LDL"
 	  --MBBI;
@@ -719,6 +719,61 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 #endif
 
+
+  // Insert some code to save the virtual register in a stack slot
+  // after the definition
+  printf ("############ Register Usage\n");
+
+  for (auto MII = MBB.begin(); MII != MBB.end(); ++MII) {
+      MachineInstr *Instr = &*MII;
+
+      // Don't nest anything inside an inline asm, because we don't have
+      // constraints for $push inputs.
+      if (Instr->isInlineAsm())
+        continue;
+
+      // Ignore debugging intrinsics.
+      if (Instr->isDebugValue())
+        continue;
+
+      if (Instr->getNumExplicitDefs () > 0)
+	{
+	  const iterator_range<MachineInstr::mop_iterator> &Range(Instr->defs());
+	  if (Range.begin()->isReg())
+	    {
+	      Register Reg = Range.begin()->getReg();
+	      
+	      if (Reg.isVirtual() && !VRM.isAssignedReg(Reg))
+		{
+		  dbgs() << printReg(Reg, TRI) << "\n";
+		  Instr->dump ();
+
+		  DebugLoc DL = Instr->getDebugLoc();
+		  MachineBasicBlock::iterator MBBI = *Instr;
+		  BuildMI(MBB, ++MBBI, DL, TII->get(T8xx::STRi32regop)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		}
+	    }
+	}
+  }
+
+  /*
+  for (unsigned i = 0, e = MRI.getNumVirtRegs(); i != e; ++i) {
+    Register Reg = Register::index2VirtReg(i);
+    if (!VRM.isAssignedReg(Reg))
+      {
+	dbgs() << printReg(Reg, TRI) << "\n";
+
+	// This one does some extra checks!?
+	//MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
+	MachineInstr *DefI = MRI.getUniqueVRegDef(Reg);
+	DefI->dump ();
+      }
+  }
+  */
+
+  /*  
+  */
+  
 
   printf ("############ Register Map\n");
   VRM.dump ();
