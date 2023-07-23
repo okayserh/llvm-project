@@ -72,7 +72,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   //  setTruncStoreAction(MVT::i64, MVT::i32, Expand);
   // setTruncStoreAction(MVT::i64, MVT::i16, Expand);
   //setTruncStoreAction(MVT::i64, MVT::i8, Expand);
-  // setTruncStoreAction(MVT::i32, MVT::i8, Expand);
+  //setTruncStoreAction(MVT::i32, MVT::i8, Expand);
   //  setTruncStoreAction(MVT::i16, MVT::i8, Expand);
 
   //  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
