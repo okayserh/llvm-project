@@ -25,11 +25,13 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
 using namespace llvm;
@@ -72,7 +74,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   //  setTruncStoreAction(MVT::i64, MVT::i32, Expand);
   // setTruncStoreAction(MVT::i64, MVT::i16, Expand);
   //setTruncStoreAction(MVT::i64, MVT::i8, Expand);
-  //setTruncStoreAction(MVT::i32, MVT::i8, Expand);
+  setTruncStoreAction(MVT::i32, MVT::i8, Custom);
   //  setTruncStoreAction(MVT::i16, MVT::i8, Expand);
 
   //  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
@@ -94,14 +96,91 @@ bool T8xxTargetLowering::useSoftFloat() const {
 
 
 SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
+  printf ("### Lower Operation ### %i\n", Op.getOpcode ());
+
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Unimplemented operand");
+
+  case ISD::STORE:
+    printf ("### Lower Store ###\n");
+    return LowerStore(Op, DAG);
+
   case ISD::GlobalAddress:
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
   }
 }
+
+
+// Technically, only truncated stores should come to this replacement
+SDValue T8xxTargetLowering::LowerStore(SDValue Op, SelectionDAG& DAG) const
+{
+  StoreSDNode *ST = cast<StoreSDNode>(Op.getNode());
+  SDValue Chain = ST->getChain();
+  SDValue Ptr = ST->getBasePtr();
+  SDLoc dl(Op.getNode ());
+
+  SDValue Value = ST->getValue();
+  //  MVT VT = Value.getSimpleValueType();
+  EVT VT = ST->getMemoryVT();
+  
+  // Storing a single byte works only towards addresses in
+  // an register operand
+	Chain.dump ();
+	Ptr.dump ();
+	Value.dump ();
+	VT.dump ();
+
+  if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Ptr)) {
+    if ((VT == MVT::i8) && (ST->isTruncatingStore ()))
+      {
+	printf ("### ISD:ADD ###\n");
+	SDValue Result;
+	EVT RoundVT = EVT::getIntegerVT(*DAG.getContext(), 8);
+
+	// This seems to produce the right code.
+	// However, when the offset is 0, the instruction is simply
+	// "optimized" away.
+	// Maybe a "CopyToReg" might helpin this context?
+
+	Result = DAG.getNode(ISD::ADD, dl, MVT::i32, Ptr,
+			     DAG.getConstant(2, dl, MVT::i32));
+	Result.dump ();
+
+	Result = DAG.getTruncStore(Chain, dl, Value, Result, ST->getPointerInfo(),
+				   RoundVT, ST->getOriginalAlign());
+	Result.dump ();
+
+	return Result;
+	//return (Ptr);
+    }
+  }
+
+  /* Some sample code of how to build instruction sequences in the DAG
+  Hi = DAG.getNode(ISD::SRL, dl, Value.getValueType(), Value,
+		   DAG.getConstant(ExtraWidth, dl, 
+				   TLI.getShiftAmountTy(Value.getValueType(), DL)));
+  Hi = DAG.getTruncStore(Chain, dl, Hi, Ptr, ST->getPointerInfo(), RoundVT,
+			 ST->getOriginalAlign(), MMOFlags, AAInfo);
+
+  // Store the remaining ExtraWidth bits.
+  IncrementSize = RoundWidth / 8;
+  Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
+		    DAG.getConstant(IncrementSize, dl,
+				    Ptr.getValueType()));
+  Lo = DAG.getTruncStore(Chain, dl, Value, Ptr,
+			 ST->getPointerInfo().getWithOffset(IncrementSize),
+			 ExtraVT, ST->getOriginalAlign(), MMOFlags, AAInfo);
+  */
+  //  print ("Store Value Type %i\n");
+  
+  
+  //Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32);
+
+  return Op;
+}
+  
 
 SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) const
 {
@@ -179,7 +258,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SmallVector<std::pair<unsigned, SDValue>, 8> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
 
-  printf ("ArgLocs %i\n", ArgLocs.size());
+  printf ("ArgLocs %li\n", ArgLocs.size());
 
   printf ("Before ArgLocs\n");
   DAG.dump ();
@@ -439,7 +518,7 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   SDValue Flag;
   SmallVector<SDValue, 4> RetOps(1, Chain);
 
-  printf ("Temp A, RVLocs Size %i\n", RVLocs.size());
+  printf ("Temp A, RVLocs Size %li\n", RVLocs.size());
 
   // OKH: General remark, in Webassembly, the operands are directly
   // used for return. However, the return instruction follows after
