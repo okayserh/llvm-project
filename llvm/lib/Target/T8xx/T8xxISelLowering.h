@@ -71,6 +71,8 @@ namespace llvm {
                         const SmallVectorImpl<ISD::OutputArg> &Outs,
                         LLVMContext &Context) const override;
 
+    SDValue LowerStore(SDValue Op, SelectionDAG &DAG) const;
+
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
 
     // Inline assembly
