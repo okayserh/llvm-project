@@ -472,6 +472,7 @@ defm LDRsi8mem :  T8LoadMem<"ldl $addr \n\tlb \n\tldc #128 \n\txword \n", sextlo
 defm LDRsi16mem :  T8LoadMem<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
 
 
+
 // Taken from SparcInstrInfo.td
 // "LEA" forms of add (patterns to make tblgen happy)
 
@@ -484,6 +485,11 @@ def LEA_ADDri   : T8Inst<(outs OReg:$rd),
 		   let isPseudo = 1;
 		   let op1 = 0x99;
 }
+
+/* Pattern to introduce an LEA in order to get the Framepointer
+ into a operand register */
+def : Pat<(truncstorei8 i32:$val, ADDRri:$addr),
+          (STRi8regop i32:$val, (LEA_ADDri ADDRri:$addr) )>;
 
 
 //===----------------------------------------------------------------------===//
