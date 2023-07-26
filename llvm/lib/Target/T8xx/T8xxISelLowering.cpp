@@ -74,7 +74,10 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   //  setTruncStoreAction(MVT::i64, MVT::i32, Expand);
   // setTruncStoreAction(MVT::i64, MVT::i16, Expand);
   //setTruncStoreAction(MVT::i64, MVT::i8, Expand);
-  setTruncStoreAction(MVT::i32, MVT::i8, Custom);
+
+  // Temporary disabled
+  //setTruncStoreAction(MVT::i32, MVT::i8, Custom);
+
   //  setTruncStoreAction(MVT::i16, MVT::i8, Expand);
 
   //  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
@@ -101,11 +104,11 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Unimplemented operand");
-
+    /* Temporary disabled to see whether this can be avoided
   case ISD::STORE:
     printf ("### Lower Store ###\n");
     return LowerStore(Op, DAG);
-
+    */
   case ISD::GlobalAddress:
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
