@@ -172,7 +172,7 @@ SDNode *T8xxDAGToDAGISel::SelectMoveImmediate(SDNode *N) {
       // Select the low part of the immediate move.
       SDValue ConstLo = CurDAG->getTargetConstant(ImmVal, N, MVT::i32);
       MachineSDNode *Move =
-	CurDAG->getMachineNode(T8xx::MOVimmr, N, MVT::i32, ConstLo);
+	CurDAG->getMachineNode(T8xx::LDC, N, MVT::i32, ConstLo);
 
       return Move;
     }

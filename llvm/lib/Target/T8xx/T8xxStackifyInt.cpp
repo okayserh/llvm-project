@@ -483,12 +483,10 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   // Walk the instructions from the bottom up. Currently we don't look past
   // block boundaries, and the blocks aren't ordered so the block visitation
   // order isn't significant, but we may want to change this in the future.
-  /*
   for (MachineBasicBlock &MBB : MF) {
-  */
 
   // For test purposes let's leave with going through the first instruction
-  MachineBasicBlock &MBB = *MF.begin();
+  //MachineBasicBlock &MBB = *MF.begin();
 
     // Don't use a range-based for loop, because we modify the list as we're
     // iterating over it and the end iterator may change.
@@ -588,7 +586,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  // Insert a "ldl" for the workspace register before the instruction
 	  DebugLoc DL = Insert->getDebugLoc();
 	  MachineBasicBlock::iterator MBBI = *Insert;
-	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDRi32regop),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDRi32wpop),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 
 	  // Move iterator to "LDL"
 	  --MBBI;
@@ -672,11 +670,47 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       */
       
 	}  // MachineInstruction
-
-
-  /*
   } // MachineBasicBlock
-      */
+  
+  // Insert some code to save the virtual register in a stack slot
+  // after the definition
+  printf ("############ Register Usage\n");
+
+  for (MachineBasicBlock &MBB : MF) {
+
+  for (auto MII = MBB.begin(); MII != MBB.end(); ++MII) {
+      MachineInstr *Instr = &*MII;
+
+      // Don't nest anything inside an inline asm, because we don't have
+      // constraints for $push inputs.
+      if (Instr->isInlineAsm())
+        continue;
+
+      // Ignore debugging intrinsics.
+      if (Instr->isDebugValue())
+        continue;
+
+      if (Instr->getNumExplicitDefs () > 0)
+	{
+	  const iterator_range<MachineInstr::mop_iterator> &Range(Instr->defs());
+	  if (Range.begin()->isReg())
+	    {
+	      Register Reg = Range.begin()->getReg();
+	      
+	      if (Reg.isVirtual() && !VRM.isAssignedReg(Reg))
+		{
+		  dbgs() << printReg(Reg, TRI) << "\n";
+		  Instr->dump ();
+
+		  DebugLoc DL = Instr->getDebugLoc();
+		  MachineBasicBlock::iterator MBBI = *Instr;
+		  BuildMI(MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		}
+	    }
+	}
+  } // MachineInstr
+  
+  } // MachineBasicBlock
 
 #if 0
   // If we used VALUE_STACK anywhere, add it to the live-in sets everywhere so
@@ -720,41 +754,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 #endif
 
 
-  // Insert some code to save the virtual register in a stack slot
-  // after the definition
-  printf ("############ Register Usage\n");
-
-  for (auto MII = MBB.begin(); MII != MBB.end(); ++MII) {
-      MachineInstr *Instr = &*MII;
-
-      // Don't nest anything inside an inline asm, because we don't have
-      // constraints for $push inputs.
-      if (Instr->isInlineAsm())
-        continue;
-
-      // Ignore debugging intrinsics.
-      if (Instr->isDebugValue())
-        continue;
-
-      if (Instr->getNumExplicitDefs () > 0)
-	{
-	  const iterator_range<MachineInstr::mop_iterator> &Range(Instr->defs());
-	  if (Range.begin()->isReg())
-	    {
-	      Register Reg = Range.begin()->getReg();
-	      
-	      if (Reg.isVirtual() && !VRM.isAssignedReg(Reg))
-		{
-		  dbgs() << printReg(Reg, TRI) << "\n";
-		  Instr->dump ();
-
-		  DebugLoc DL = Instr->getDebugLoc();
-		  MachineBasicBlock::iterator MBBI = *Instr;
-		  BuildMI(MBB, ++MBBI, DL, TII->get(T8xx::STRi32regop)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-		}
-	    }
-	}
-  }
 
   /*
   for (unsigned i = 0, e = MRI.getNumVirtRegs(); i != e; ++i) {
