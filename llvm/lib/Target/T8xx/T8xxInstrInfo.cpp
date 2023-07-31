@@ -59,7 +59,7 @@ unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 /// any side effects other than storing to the stack slot.
 unsigned T8xxInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                             int &FrameIndex) const {
-  if (MI.getOpcode() == T8xx::STRi32regop /*|| MI.getOpcode() == T8xx::STRi32immop ||
+  if (MI.getOpcode() == T8xx::STL /*|| MI.getOpcode() == T8xx::STRi32immop ||
 								      MI.getOpcode() == T8xx::STRi16*/) {
     if (MI.getOperand(0).isFI() && MI.getOperand(1).isImm() &&
         MI.getOperand(1).getImm() == 0) {
@@ -227,7 +227,7 @@ storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STRi32regop)).addReg(SrcReg, getKillRegState(isKill))
     .addFrameIndex(FI).addImm(0);
   */
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STRi32regop)).addReg(SrcReg, getKillRegState(true))
+  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL)).addReg(SrcReg, getKillRegState(true))
     .addFrameIndex(FI).addImm(0);
 
   /* TODO: See how to deal with these cases.
@@ -386,7 +386,7 @@ void T8xxInstrInfo::createComparison(MachineInstr &MI, const unsigned int OpX, c
 
 bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 {
-  printf ("expandPostRAPseudo %i %i\n", MI.getOpcode (), T8xx::MOVimmr);
+  printf ("expandPostRAPseudo %i %i\n", MI.getOpcode (), T8xx::LDC);
 
   MachineBasicBlock &MBB = *MI.getParent();
   const MachineFunction *MF = MBB.getParent();

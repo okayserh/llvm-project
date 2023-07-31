@@ -108,19 +108,19 @@ def ADDRri : ComplexPattern<iPTR, 2, "SelectADDRri", [frameindex], []>;
 // are located in the workspace.
 
 /* J 0x0 is left out */
-def LDLP  : T8InstDirect<0x1, "ldlp">;
+//def LDLP  : T8InstDirect<0x1, "ldlp">;
 /* PFIX 0x2 is left out */
 def LDNL  : T8InstDirect<0x3, "ldnl">;
-def LDC   : T8InstDirect<0x4, "ldc">;
+//def LDC   : T8InstDirect<0x4, "ldc">;
 def LDNLP : T8InstDirect<0x5, "ldnlp">;
 /* NFIX 0x6 is left out */
 def LDL   : T8InstDirect<0x7, "ldl">;
-def ADC   : T8InstDirect<0x8, "adc">;
+//def ADC   : T8InstDirect<0x8, "adc">;
 /* Call 0x9 */
 /* CJ 0xA */
 def AJW   : T8InstDirect<0xB, "ajw">;
 def EQC   : T8InstDirect<0xC, "eqc">;
-def STL   : T8InstDirect<0xD, "stl">;
+//def STL   : T8InstDirect<0xD, "stl">;
 def STNL  : T8InstDirect<0xE, "stnl">;
 /* OPR 0xF */
 
@@ -130,7 +130,7 @@ def LB :      T8InstShort<0xF1, "lb">;
 def BSUB :    T8InstShort<0xF2, "bsub">;
 def ENDP :    T8InstShort<0xF3, "endp">;
 def DIFF :    T8InstShort<0xF4, "diff">;
-def ADD :     T8InstShort<0xF5, "add">;
+//def ADD :     T8InstShort<0xF5, "add">;
 def GCALL :   T8InstShort<0xF6, "gcall">;
 def IN :      T8InstShort<0xF7, "in">;
 def PROD :    T8InstShort<0xF8, "prod">;
@@ -180,7 +180,7 @@ def LSUM :    T8InstOnePFix<0x23, 0xF7, "lsum">;
 def LSUB :    T8InstOnePFix<0x23, 0xF8, "lsub">;
 def RUNP :    T8InstOnePFix<0x23, 0xF9, "runp">;
 def XWORD :   T8InstOnePFix<0x23, 0xFA, "xword">;
-def SB :      T8InstOnePFix<0x23, 0xFB, "sb">;
+//def SB :      T8InstOnePFix<0x23, 0xFB, "sb">;
 def GAJW :    T8InstOnePFix<0x23, 0xFC, "gajw">;
 def SAVEL :   T8InstOnePFix<0x23, 0xFD, "savel">;
 def SAVEH :   T8InstOnePFix<0x23, 0xFE, "saveh">;
@@ -285,13 +285,12 @@ def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
 
 
 // Just test code for analysing the inline assembler. Needs to be removed
-def ADDraw  : T8InstImm<0x12,
+def ADD  : T8InstImm<0x12,
 		(outs OReg:$dst),
        	 	(ins OReg:$src1, OReg:$src2),
 		"add",
 		[(set i32:$dst, (add i32:$src1, i32:$src2))]>
 		 {
-//		 let Constraints = "$dst = $src1";
 		let op2 = 0xEF;
 		}
 
@@ -314,8 +313,8 @@ defm LDRi32 : T8LoadMemOp<"ldl $addr", load>;
 
 
 // Store instructions on frame
-
-def STRi8regop : T8xxPseudoInst<
+// Note: previously STRi8regop
+def SB : T8xxPseudoInst<
 		(outs),
        	 	(ins OReg:$val, MemSrc:$addr),
 		"sb",
@@ -324,7 +323,8 @@ def STRi8regop : T8xxPseudoInst<
 		let isPseudo = 1;
 		}
 
-def STRi32regop : T8xxPseudoInst<
+// Note: previously STRi32regop
+def STL : T8xxPseudoInst<
 		(outs),
        	 	(ins OReg:$val, WPtrSrc:$addr),
 		"stl $addr",
@@ -361,17 +361,16 @@ defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl 0 \n" ,store>;
 
 // Some special instructions to move or add immediate values
 
-def ADDimmr  : T8InstImm<0x12,
+def ADC  : T8InstImm<0x12,
 		(outs OReg:$dst),
        	 	(ins OReg:$src1, i32imm:$src2),
 		"adc $src2",
 		[(set OReg:$dst, (add OReg:$src1, imm:$src2))]> {
 		let isCodeGenOnly = 1;
-//		let Constraints = "$dst = $src1";
 		let op2 = 0x00;
 		}
 
-def MOVimmr  : T8xxPseudoInst<(outs OReg:$dst),
+def LDC  : T8xxPseudoInst<(outs OReg:$dst),
        	 	(ins i32imm:$src),
 		"ldc $src",
 		[(set OReg:$dst, imm:$src)]> {
@@ -422,8 +421,8 @@ def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, OReg:$lhs, OReg:$rhs),
 }
 
 
-// Load instructions
-
+// Load instructions (Redundant)
+/*
 multiclass T8Load<string opstr, SDPatternOperator opnode>{
 
 def regop : T8xxPseudoInst<
@@ -445,7 +444,7 @@ defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
 defm LDRi8 :  T8Load<"lb \n", extloadi8>;
 defm LDRzi8 :  T8Load<"lb \n", zextloadi8>;
 defm LDRsi8 :  T8Load<"lb \n\tldc #128 \n\txword \n", sextloadi8>;
-
+*/
 
 // Load from global addresses
 
@@ -477,7 +476,7 @@ defm LDRsi16mem :  T8LoadMem<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi1
 // "LEA" forms of add (patterns to make tblgen happy)
 
 // Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
-def LEA_ADDri   : T8Inst<(outs OReg:$rd),
+def LDLP   : T8Inst<(outs OReg:$rd),
       		    (ins WPtrSrc:$addr),
                      "ldlp $addr \n",
                      [(set iPTR:$rd, ADDRri:$addr)]> {
@@ -489,7 +488,7 @@ def LEA_ADDri   : T8Inst<(outs OReg:$rd),
 /* Pattern to introduce an LEA in order to get the Framepointer
  into a operand register */
 def : Pat<(truncstorei8 i32:$val, ADDRri:$addr),
-          (STRi8regop i32:$val, (LEA_ADDri ADDRri:$addr) )>;
+          (SB i32:$val, (LDLP ADDRri:$addr) )>;
 
 
 //===----------------------------------------------------------------------===//
@@ -552,7 +551,7 @@ let isCall = 1 in {
   }
 }
 
-def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(MOVimmr $addr)]>;
+def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
 
 
 
