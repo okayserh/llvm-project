@@ -159,8 +159,9 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   
   // Adjust the stack pointer.
   /* Save the return address on old stack position 0 */ 
-  BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL))
-    .addImm(0);
+  BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
+  /*  BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL))
+      .addImm(0);*/
 
   /* Real adjustment via AJW */
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))

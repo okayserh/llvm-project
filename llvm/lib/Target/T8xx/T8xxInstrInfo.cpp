@@ -42,7 +42,7 @@ T8xxInstrInfo::T8xxInstrInfo(T8xxSubtarget &ST)
 /// any side effects other than loading from the stack slot.
 unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
-  if (MI.getOpcode() == T8xx::LDRi32wpop || MI.getOpcode() == T8xx::LDRi16wpop) {
+  if (MI.getOpcode() == T8xx::LDL) {
     if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
         MI.getOperand(2).getImm() == 0) {
       FrameIndex = MI.getOperand(1).getIndex();
@@ -59,8 +59,7 @@ unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 /// any side effects other than storing to the stack slot.
 unsigned T8xxInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                             int &FrameIndex) const {
-  if (MI.getOpcode() == T8xx::STL /*|| MI.getOpcode() == T8xx::STRi32immop ||
-								      MI.getOpcode() == T8xx::STRi16*/) {
+  if (MI.getOpcode() == T8xx::STL) {
     if (MI.getOperand(0).isFI() && MI.getOperand(1).isImm() &&
         MI.getOperand(1).getImm() == 0) {
       FrameIndex = MI.getOperand(0).getIndex();
@@ -223,10 +222,6 @@ storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   if (VReg.isVirtual ())
     printf ("VReg Virt\n");
 
-  /*
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STRi32regop)).addReg(SrcReg, getKillRegState(isKill))
-    .addFrameIndex(FI).addImm(0);
-  */
   BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL)).addReg(SrcReg, getKillRegState(true))
     .addFrameIndex(FI).addImm(0);
 
@@ -255,7 +250,7 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     printf ("VReg Virt\n");
 
   if (RC == &T8xx::ORegRegClass)
-    BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDRi32wpop), DestReg).addFrameIndex(FI).addImm(0);
+    BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL), DestReg).addFrameIndex(FI).addImm(0);
   else
     llvm_unreachable("Can't load this register from stack slot");
   /*
