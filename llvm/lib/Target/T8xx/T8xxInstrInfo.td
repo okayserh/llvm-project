@@ -110,23 +110,23 @@ def ADDRri : ComplexPattern<iPTR, 2, "SelectADDRri", [frameindex], []>;
 /* J 0x0 is left out */
 //def LDLP  : T8InstDirect<0x1, "ldlp">;
 /* PFIX 0x2 is left out */
-def LDNL  : T8InstDirect<0x3, "ldnl">;
+//def LDNL  : T8InstDirect<0x3, "ldnl">;
 //def LDC   : T8InstDirect<0x4, "ldc">;
 def LDNLP : T8InstDirect<0x5, "ldnlp">;
 /* NFIX 0x6 is left out */
-def LDL   : T8InstDirect<0x7, "ldl">;
+//def LDL   : T8InstDirect<0x7, "ldl">;
 //def ADC   : T8InstDirect<0x8, "adc">;
 /* Call 0x9 */
 /* CJ 0xA */
 def AJW   : T8InstDirect<0xB, "ajw">;
 def EQC   : T8InstDirect<0xC, "eqc">;
 //def STL   : T8InstDirect<0xD, "stl">;
-def STNL  : T8InstDirect<0xE, "stnl">;
+//def STNL  : T8InstDirect<0xE, "stnl">;
 /* OPR 0xF */
 
 // Instructions with 1 byte length
 def REV :     T8InstShort<0xF0, "rev">;
-def LB :      T8InstShort<0xF1, "lb">;
+//def LB :      T8InstShort<0xF1, "lb">;
 def BSUB :    T8InstShort<0xF2, "bsub">;
 def ENDP :    T8InstShort<0xF3, "endp">;
 def DIFF :    T8InstShort<0xF4, "diff">;
@@ -179,7 +179,7 @@ def LSHL :    T8InstOnePFix<0x23, 0xF6, "lshl">;
 def LSUM :    T8InstOnePFix<0x23, 0xF7, "lsum">;
 def LSUB :    T8InstOnePFix<0x23, 0xF8, "lsub">;
 def RUNP :    T8InstOnePFix<0x23, 0xF9, "runp">;
-def XWORD :   T8InstOnePFix<0x23, 0xFA, "xword">;
+//def XWORD :   T8InstOnePFix<0x23, 0xFA, "xword">;
 //def SB :      T8InstOnePFix<0x23, 0xFB, "sb">;
 def GAJW :    T8InstOnePFix<0x23, 0xFC, "gajw">;
 def SAVEL :   T8InstOnePFix<0x23, 0xFD, "savel">;
@@ -192,7 +192,7 @@ def MINT :    T8InstOnePFix<0x24, 0xF2, "mint">;
 def ALT :     T8InstOnePFix<0x24, 0xF3, "alt">;
 def ALTWT :   T8InstOnePFix<0x24, 0xF4, "altwt">;
 def ALTEND :  T8InstOnePFix<0x24, 0xF5, "altend">;
-def AND :     T8InstOnePFix<0x24, 0xF6, "and">;
+//def AND :     T8InstOnePFix<0x24, 0xF6, "and">;
 def ENBT :    T8InstOnePFix<0x24, 0xF7, "enbt">;
 def ENBC :    T8InstOnePFix<0x24, 0xF8, "enbc">;
 def ENBS :    T8InstOnePFix<0x24, 0xF9, "enbs">;
@@ -284,81 +284,6 @@ def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
 */
 
 
-// Just test code for analysing the inline assembler. Needs to be removed
-def ADD  : T8InstImm<0x12,
-		(outs OReg:$dst),
-       	 	(ins OReg:$src1, OReg:$src2),
-		"add",
-		[(set i32:$dst, (add i32:$src1, i32:$src2))]>
-		 {
-		let op2 = 0xEF;
-		}
-
-// Load from global addresses
-
-multiclass T8LoadMemOp<string opstr, SDPatternOperator opnode>{
-
-def wpop : T8xxPseudoInst<
-		(outs OReg:$val),
-       	 	(ins WPtrSrc:$addr),
-		opstr,
-		[(set i32:$val, (opnode ADDRri:$addr))]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-}
-
-defm LDRi16 : T8LoadMemOp<"ldl $addr", extloadi16>;
-defm LDRi32 : T8LoadMemOp<"ldl $addr", load>;
-
-
-// Store instructions on frame
-// Note: previously STRi8regop
-def SB : T8xxPseudoInst<
-		(outs),
-       	 	(ins OReg:$val, MemSrc:$addr),
-		"sb",
-		[(truncstorei8 i32:$val, ADDRr:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-
-// Note: previously STRi32regop
-def STL : T8xxPseudoInst<
-		(outs),
-       	 	(ins OReg:$val, WPtrSrc:$addr),
-		"stl $addr",
-		[(store i32:$val, ADDRri:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-
-// Maybe decompose into a trunc and then a store instruction
-//defm STRi16 : T8Storage<"ldc #FFFF \n and \n\tstl $addr \n" ,truncstorei16>;
-//defm STRi32 : T8Storage<"\tstl $addr \n" ,store>;
-
-
-// Store instructions on global memory
-
-multiclass T8StorageMem<string opstr, SDPatternOperator opnode>{
-
-def regop : T8xxPseudoInst<
-		(outs),
-       	 	(ins OReg:$val, MemSrc:$addr),
-		!strconcat ("ldl $val \n", opstr),
-		[(opnode i32:$val, ADDRr:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-
-}
-
-defm STRi8mem :  T8StorageMem<"\tldl $addr \n\tsb \n" , truncstorei8>;
-defm STRi16mem : T8StorageMem<"\tldc #FFFF \n and \n\tldl $addr \n\tstnl 0 \n" ,truncstorei16>;
-defm STRi32mem : T8StorageMem<"\tldl $addr \n\tstnl 0 \n" ,store>;
-
-
-
 // Some special instructions to move or add immediate values
 
 def ADC  : T8InstImm<0x12,
@@ -376,6 +301,150 @@ def LDC  : T8xxPseudoInst<(outs OReg:$dst),
 		[(set OReg:$dst, imm:$src)]> {
 		let isCodeGenOnly = 1;
 		let op2 = 0x00;
+		}
+
+// Taken from SparcInstrInfo.td
+// "LEA" forms of add (patterns to make tblgen happy)
+
+// Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
+def LDLP   : T8Inst<(outs OReg:$rd),
+      		    (ins WPtrSrc:$addr),
+                     "ldlp $addr \n",
+                     [(set iPTR:$rd, ADDRri:$addr)]> {
+		   let isCodeGenOnly = 1;
+		   let isPseudo = 1;
+		   let op1 = 0x99;
+}
+
+
+// TODO: Put these binary ops together in a multiclass
+// Just test code for analysing the inline assembler. Needs to be removed
+def ADD  : T8InstImm<0x12,
+		(outs OReg:$dst),
+       	 	(ins OReg:$src1, OReg:$src2),
+		"add",
+		[(set i32:$dst, (add i32:$src1, i32:$src2))]>
+		 {
+		let op2 = 0xEF;
+		}
+
+
+def AND  : T8InstImm<0x12,
+		(outs OReg:$dst),
+       	 	(ins OReg:$src1, OReg:$src2),
+		"and",
+		[(set i32:$dst, (and i32:$src1, i32:$src2))]>
+		 {
+		let op2 = 0xF6;
+		}
+
+
+def XWORD  : T8InstImm<0x12,
+		(outs OReg:$dst),
+       	 	(ins OReg:$src1, OReg:$src2),
+		"xword",
+		[]>
+		 {
+		let op2 = 0xFA;
+		}
+
+
+// Load i32 from frame index
+def LDL : T8xxPseudoInst<
+		(outs OReg:$val),
+       	 	(ins WPtrSrc:$addr),
+		"ldl $addr",
+		[(set i32:$val, (load ADDRri:$addr))]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+
+
+// Load i32 from global address
+// TODO: See if the offset via the immediate can be utilized
+def LDNL : T8xxPseudoInst<
+		(outs OReg:$val),
+       	 	(ins MemSrc:$addr),
+		"ldnl 0",
+		[(set i32:$val, (load ADDRr:$addr))]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+
+/*
+defm LDRzi8mem :  T8LoadMem<"ldl $addr \n\tlb \n", zextloadi8>;
+defm LDRzi16mem :  T8LoadMem<"ldl $addr \n\tldnl 0 \n\tldc #FFFF \n\tand \n", zextloadi16>;
+
+defm LDRsi8mem :  T8LoadMem<"ldl $addr \n\tlb \n\tldc #128 \n\txword \n", sextloadi8>;
+defm LDRsi16mem :  T8LoadMem<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
+*/
+
+// Load i8 from global address
+def LB : T8xxPseudoInst<
+		(outs OReg:$val),
+       	 	(ins MemSrc:$addr),
+		"lb",
+		[(set i32:$val, (extloadi8 ADDRr:$addr))]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+
+def : Pat<(extloadi8 ADDRri:$addr),
+          (LB (LDLP ADDRri:$addr) )>;
+
+//defm LDRi8 :  T8Load<"lb \n", extloadi8>;
+//defm LDRzi8 :  T8Load<"lb \n", zextloadi8>;
+//defm LDRsi8 :  T8Load<"lb \n\tldc #128 \n\txword \n", sextloadi8>;
+
+//defm LDRzi16 : T8Load<"ldl $addr \n", zextloadi16>;
+//defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
+
+
+def : Pat<(zextloadi8 ADDRr:$addr),
+          (LB ADDRr:$addr)>;
+
+def : Pat<(zextloadi8 ADDRri:$addr),
+          (LB (LDLP ADDRri:$addr) )>;
+
+def : Pat<(sextloadi8 ADDRr:$addr),
+          (XWORD (LDC 128), (LB ADDRr:$addr) )>;
+
+def : Pat<(sextloadi8 ADDRri:$addr),
+          (XWORD (LDC 128), (LB (LDLP ADDRri:$addr) ) )>;
+
+
+
+// Store i32 onto frame
+// Note: previously STRi32regop
+def STL : T8xxPseudoInst<
+		(outs),
+       	 	(ins OReg:$val, WPtrSrc:$addr),
+		"stl $addr",
+		[(store i32:$val, ADDRri:$addr)]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+
+// Store i32 to global address
+// TODO: See if immediate offset can be utilized
+def STNL : T8xxPseudoInst<
+		(outs),
+       	 	(ins OReg:$val, MemSrc:$addr),
+		"stnl 0",
+		[(store i32:$val, ADDRr:$addr)]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+		}
+
+// Store i8 to global address
+// Note: previously STRi8regop
+def SB : T8xxPseudoInst<
+		(outs),
+       	 	(ins OReg:$val, MemSrc:$addr),
+		"sb",
+		[(truncstorei8 i32:$val, ADDRr:$addr)]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
 		}
 
 
@@ -415,75 +484,13 @@ defm XOR : T8BinaryOp<0x01, 0x24, "xor", xor>;  // #53
 defm OR  : T8BinaryOp<0x01, 0x25, "or", or>;  // #53
 defm AND : T8BinaryOp<0x01, 0x26, "and", and>;  // #53
 
+
+
 def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, OReg:$lhs, OReg:$rhs),
                     "cmp$cc $lhs, $rhs", []> {
   let Defs = [CPSR];
 }
 
-
-// Load instructions (Redundant)
-/*
-multiclass T8Load<string opstr, SDPatternOperator opnode>{
-
-def regop : T8xxPseudoInst<
-		(outs OReg:$val),
-       	 	(ins WPtrSrc:$addr),
-		!strconcat (opstr, "\tstl $val \n"),
-		[(set i32:$val, (opnode ADDRri:$addr))]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-}
-
-defm LDRi16 : T8Load<"ldl $addr \n", extloadi16>;
-defm LDRi32 : T8Load<"ldl $addr \n", load>;
-defm LDRzi16 : T8Load<"ldl $addr \n", zextloadi16>;
-defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
-
-// Note: These may face unaligned addresses and go into postprocessing
-defm LDRi8 :  T8Load<"lb \n", extloadi8>;
-defm LDRzi8 :  T8Load<"lb \n", zextloadi8>;
-defm LDRsi8 :  T8Load<"lb \n\tldc #128 \n\txword \n", sextloadi8>;
-*/
-
-// Load from global addresses
-
-multiclass T8LoadMem<string opstr, SDPatternOperator opnode>{
-
-def regop : T8xxPseudoInst<
-		(outs OReg:$val),
-       	 	(ins MemSrc:$addr),
-		!strconcat (opstr, "\tstl $val \n"),
-		[(set i32:$val, (opnode ADDRr:$addr))]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
-}
-
-defm LDRi8mem :  T8LoadMem<"ldl $addr \n\tlb \n", extloadi8>;
-defm LDRi16mem : T8LoadMem<"ldl $addr \n\tldnl 0 \n", extloadi16>;
-defm LDRi32mem : T8LoadMem<"ldl $addr \n\tldnl 0 \n", load>;
-
-defm LDRzi8mem :  T8LoadMem<"ldl $addr \n\tlb \n", zextloadi8>;
-defm LDRzi16mem :  T8LoadMem<"ldl $addr \n\tldnl 0 \n\tldc #FFFF \n\tand \n", zextloadi16>;
-
-defm LDRsi8mem :  T8LoadMem<"ldl $addr \n\tlb \n\tldc #128 \n\txword \n", sextloadi8>;
-defm LDRsi16mem :  T8LoadMem<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
-
-
-
-// Taken from SparcInstrInfo.td
-// "LEA" forms of add (patterns to make tblgen happy)
-
-// Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
-def LDLP   : T8Inst<(outs OReg:$rd),
-      		    (ins WPtrSrc:$addr),
-                     "ldlp $addr \n",
-                     [(set iPTR:$rd, ADDRri:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op1 = 0x99;
-}
 
 /* Pattern to introduce an LEA in order to get the Framepointer
  into a operand register */

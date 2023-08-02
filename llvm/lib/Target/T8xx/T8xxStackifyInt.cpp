@@ -95,6 +95,11 @@ namespace llvm {
       */
     }
 
+    MachineFunctionProperties getSetProperties() const override {
+      return MachineFunctionProperties().set(
+          MachineFunctionProperties::Property::NoVRegs);
+    }
+    
     StringRef getPassName() const override { return "T8xx INT Stackifier"; }
 
   private:
@@ -586,7 +591,9 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  // Insert a "ldl" for the workspace register before the instruction
 	  DebugLoc DL = Insert->getDebugLoc();
 	  MachineBasicBlock::iterator MBBI = *Insert;
-	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDRi32wpop),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	  // Note: The AREG is used later to identify this as a special code segment
+	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	  //BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 
 	  // Move iterator to "LDL"
 	  --MBBI;
@@ -618,27 +625,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
           continue;
         }
 #endif
-	
-	/*
-        // Stackifying a multivalue def may unlock in-place stackification of
-        // subsequent defs. TODO: Handle the case where the consecutive uses are
-        // not all in the same instruction.
-        auto *SubsequentDef = Insert->defs().begin();
-        auto *SubsequentUse = &Use;
-        while (SubsequentDef != Insert->defs().end() &&
-               SubsequentUse != Use.getParent()->uses().end()) {
-          if (!SubsequentDef->isReg() || !SubsequentUse->isReg())
-            break;
-          Register DefReg = SubsequentDef->getReg();
-          Register UseReg = SubsequentUse->getReg();
-          // TODO: This single-use restriction could be relaxed by using tees
-          if (DefReg != UseReg || !MRI.hasOneNonDBGUse(DefReg))
-            break;
-          MFI.stackifyVReg(MRI, DefReg);
-          ++SubsequentDef;
-          ++SubsequentUse;
-        }
-	*/
 
         // If the instruction we just stackified is an IMPLICIT_DEF, convert it
         // to a constant 0 so that the def is explicit, and the push/pop
@@ -674,7 +660,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   
   // Insert some code to save the virtual register in a stack slot
   // after the definition
-  printf ("############ Register Usage\n");
+  printf ("############ Convert to stack registers\n");
 
   for (MachineBasicBlock &MBB : MF) {
 
@@ -711,6 +697,61 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   } // MachineInstr
   
   } // MachineBasicBlock
+
+
+  // ######### Replace virtual registers with the stack registers
+
+    for (MachineBasicBlock &MBB : MF) {
+
+  for (auto MII = MBB.begin(); MII != MBB.end(); ++MII) {
+      MachineInstr *Instr = &*MII;
+
+      // Don't nest anything inside an inline asm, because we don't have
+      // constraints for $push inputs.
+      if (Instr->isInlineAsm())
+        continue;
+
+      // Ignore debugging intrinsics.
+      if (Instr->isDebugValue())
+        continue;
+
+      // Definition is always AREG
+      const iterator_range<MachineInstr::mop_iterator> &Range_defs(Instr->defs());
+      for (auto OP = Range_defs.begin(); OP != Range_defs.end (); ++OP)
+	{
+	  if (OP->isReg())
+	    {
+	      Register Reg = OP->getReg();
+	  
+	      if (Reg.isVirtual())
+		{
+		  OP->setReg(T8xx::AREG);
+		}
+	    }
+	}
+
+      // Input operands are numbered from AREG up to CREG ...
+      const iterator_range<MachineInstr::mop_iterator> &Range(Instr->explicit_uses());
+      int RegAdd = 0;
+      for (auto OP = Range.begin(); OP != Range.end (); ++OP)
+	{
+	  if (OP->isReg())
+	    {
+	      Register Reg = OP->getReg();
+	      
+	      if (Reg.isVirtual())
+		{
+		  OP->setReg(T8xx::AREG+RegAdd);
+		  ++RegAdd;
+		}
+	    }
+	}
+
+  } // MachineInstr
+  
+  } // MachineBasicBlock
+
+
 
 #if 0
   // If we used VALUE_STACK anywhere, add it to the live-in sets everywhere so

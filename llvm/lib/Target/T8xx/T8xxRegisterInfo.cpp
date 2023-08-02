@@ -115,38 +115,9 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   default:
     // Not supported yet.
     return false;
-    /*
-  case T8xx::LDRi8regop:
-  case T8xx::LDRi16regop:
-  case T8xx::LDRi32regop:
-  case T8xx::LDRzi8regop:
-  case T8xx::LDRzi16regop:
-  case T8xx::LDRsi8regop:
-  case T8xx::LDRsi16regop:
-    */
   case T8xx::STL:
-
-  case T8xx::LDRi16wpop:
-  case T8xx::LDRi32wpop:
-
+  case T8xx::LDL:
   case T8xx::LDLP:
-    /*
-  case T8xx::ADDregmemop:
-  case T8xx::SUBregmemop:
-  case T8xx::MULregmemop:
-  case T8xx::SHLregmemop:
-  case T8xx::SHRregmemop:
-  case T8xx::SDIVregmemop:
-  case T8xx::SREMregmemop:
-  case T8xx::UDIVregmemop:
-  case T8xx::UREMregmemop:
-  case T8xx::SRAregmemop:
-  case T8xx::ROTRregmemop:
-  case T8xx::ROTLregmemop:
-  case T8xx::XORregmemop:
-  case T8xx::ORregmemop:
-  case T8xx::ANDregmemop:
-    */
     ImmOpIdx = FIOperandNum + 1;
     break;
   }
