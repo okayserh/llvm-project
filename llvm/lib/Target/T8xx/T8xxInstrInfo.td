@@ -108,268 +108,336 @@ def ADDRri : ComplexPattern<iPTR, 2, "SelectADDRri", [frameindex], []>;
 // are located in the workspace.
 
 /* J 0x0 is left out */
-//def LDLP  : T8InstDirect<0x1, "ldlp">;
+//def LDLP  : T8InstImm<0x1, "ldlp">;
 /* PFIX 0x2 is left out */
-//def LDNL  : T8InstDirect<0x3, "ldnl">;
-//def LDC   : T8InstDirect<0x4, "ldc">;
-def LDNLP : T8InstDirect<0x5, "ldnlp">;
+//def LDNL  : T8InstImm<0x3, "ldnl">;
+//def LDC   : T8InstImm<0x4, "ldc">;
+
+def LDNLP : T8InstImm<0x5,
+		(outs OReg:$dst),
+		(ins OReg:$src, i32imm:$src2),
+		"ldnlp $src2",
+		[]> {
+		let imm = 0x0;
+		}
+
 /* NFIX 0x6 is left out */
-//def LDL   : T8InstDirect<0x7, "ldl">;
-//def ADC   : T8InstDirect<0x8, "adc">;
+//def LDL   : T8InstImm<0x7, "ldl">;
+//def ADC   : T8InstImm<0x8, "adc">;
 /* Call 0x9 */
 /* CJ 0xA */
-def AJW   : T8InstDirect<0xB, "ajw">;
-def EQC   : T8InstDirect<0xC, "eqc">;
-//def STL   : T8InstDirect<0xD, "stl">;
-//def STNL  : T8InstDirect<0xE, "stnl">;
-/* OPR 0xF */
+/* Check if this makes sense?
+def AJW   : T8InstImm<0xB,
+		(outs WptrRegs:$dst),
+		(ins WptrRegs:$src1, i32imm:$src2),
+		"ajw $src2",
+		[]> {
+		let imm = 0x0;
+		}
+*/
+def AJW   : T8InstImm<0xB,
+		(outs),
+		(ins i32imm:$src2),
+		"ajw $src2",
+		[]> {
+		let imm = 0x0;
+		}
 
-// Instructions with 1 byte length
-def REV :     T8InstShort<0xF0, "rev">;
-//def LB :      T8InstShort<0xF1, "lb">;
-def BSUB :    T8InstShort<0xF2, "bsub">;
-def ENDP :    T8InstShort<0xF3, "endp">;
-def DIFF :    T8InstShort<0xF4, "diff">;
-//def ADD :     T8InstShort<0xF5, "add">;
-def GCALL :   T8InstShort<0xF6, "gcall">;
-def IN :      T8InstShort<0xF7, "in">;
-def PROD :    T8InstShort<0xF8, "prod">;
-def GT :      T8InstShort<0xF9, "gt">;
-def WSUB :    T8InstShort<0xFA, "wsub">;
-def OUT :     T8InstShort<0xFB, "out">;
-def SUB :     T8InstShort<0xFC, "sub">;
-def STARTP :  T8InstShort<0xFD, "startp">;
-def OUTBYTE : T8InstShort<0xFE, "outbyte">;
-def OUTWORD : T8InstShort<0xFF, "outword">;
+def EQC   : T8InstImm<0xC,
+		(outs OReg:$dst),
+		(ins OReg:$src1, i32imm:$src2),
+		"eqc $src2",
+		[]> {
+		let imm = 0x0;
+		}
 
-// Instructions with 2 byte length
-def SETERR :  T8InstOnePFix<0x21, 0xF0, "seterr">;
-def RESETCH : T8InstOnePFix<0x21, 0xF2, "resetch">;
-def CSUB0 :   T8InstOnePFix<0x21, 0xF3, "csub0">;
-def STOPP :   T8InstOnePFix<0x21, 0xF5, "stopp">;
-def LADD :    T8InstOnePFix<0x21, 0xF6, "ladd">;
-def STLB :    T8InstOnePFix<0x21, 0xF7, "stlb">;
-def STHF :    T8InstOnePFix<0x21, 0xF8, "sthf">;
-def NORM :    T8InstOnePFix<0x21, 0xF9, "norm">;
-def LDIV :    T8InstOnePFix<0x21, 0xFA, "ldiv">;
-def LDPI :    T8InstOnePFix<0x21, 0xFB, "ldpi">;
-def STLF :    T8InstOnePFix<0x21, 0xFC, "stlf">;
-def XDBLE :   T8InstOnePFix<0x21, 0xFD, "xdble">;
-def LDPRI :   T8InstOnePFix<0x21, 0xFE, "ldpri">;
-def REM :     T8InstOnePFix<0x21, 0xFF, "rem">;
 
-// TODO: Machine definition vs. return instruction
-//def RET :   T8InstOnePFix<0x22, 0xF0, "ret">;
-def LEND :    T8InstOnePFix<0x22, 0xF1, "lend">;
-def LDTIMER : T8InstOnePFix<0x22, 0xF2, "ltimer">;
-def TESTERR : T8InstOnePFix<0x22, 0xF9, "testerr">;
-def TESTPRANAL : T8InstOnePFix<0x22, 0xFA, "testpranal">;
-def TIN :     T8InstOnePFix<0x22, 0xFB, "tin">;
-def DIV :     T8InstOnePFix<0x22, 0xFC, "div">;
-def DIST :    T8InstOnePFix<0x22, 0xFE, "dist">;
-def DISC :    T8InstOnePFix<0x22, 0xFF, "disc">;
+def DIFF :    T8InstOp4<0x4,
+                (outs OReg:$dst),
+       	 	(ins OReg:$src1, OReg:$src2),
+		"diff",
+		[]>;
 
-def DISS :    T8InstOnePFix<0x23, 0xF0, "diss">;
-def LMUL :    T8InstOnePFix<0x23, 0xF1, "lmul">;
-def NOT :     T8InstOnePFix<0x23, 0xF2, "not">;
-def XOR :     T8InstOnePFix<0x23, 0xF3, "xor">;
-def BCNT :    T8InstOnePFix<0x23, 0xF4, "bcnt">;
-def LSHR :    T8InstOnePFix<0x23, 0xF5, "lshr">;
-def LSHL :    T8InstOnePFix<0x23, 0xF6, "lshl">;
-def LSUM :    T8InstOnePFix<0x23, 0xF7, "lsum">;
-def LSUB :    T8InstOnePFix<0x23, 0xF8, "lsub">;
-def RUNP :    T8InstOnePFix<0x23, 0xF9, "runp">;
-//def XWORD :   T8InstOnePFix<0x23, 0xFA, "xword">;
-//def SB :      T8InstOnePFix<0x23, 0xFB, "sb">;
-def GAJW :    T8InstOnePFix<0x23, 0xFC, "gajw">;
-def SAVEL :   T8InstOnePFix<0x23, 0xFD, "savel">;
-def SAVEH :   T8InstOnePFix<0x23, 0xFE, "saveh">;
-def WCNT :    T8InstOnePFix<0x23, 0xFF, "wcnt">;
-
-def SHR :     T8InstOnePFix<0x24, 0xF0, "shr">;
-def SHL :     T8InstOnePFix<0x24, 0xF1, "shl">;
-def MINT :    T8InstOnePFix<0x24, 0xF2, "mint">;
-def ALT :     T8InstOnePFix<0x24, 0xF3, "alt">;
-def ALTWT :   T8InstOnePFix<0x24, 0xF4, "altwt">;
-def ALTEND :  T8InstOnePFix<0x24, 0xF5, "altend">;
-//def AND :     T8InstOnePFix<0x24, 0xF6, "and">;
-def ENBT :    T8InstOnePFix<0x24, 0xF7, "enbt">;
-def ENBC :    T8InstOnePFix<0x24, 0xF8, "enbc">;
-def ENBS :    T8InstOnePFix<0x24, 0xF9, "enbs">;
-def MOVE :    T8InstOnePFix<0x24, 0xFA, "move">;
-def OR :      T8InstOnePFix<0x24, 0xFB, "or">;
-def CSNGL :   T8InstOnePFix<0x24, 0xFC, "csgnl">;
-def CCNT1 :   T8InstOnePFix<0x24, 0xFD, "ccnt1">;
-def TALT :    T8InstOnePFix<0x24, 0xFE, "talt">;
-def LDIFF :   T8InstOnePFix<0x24, 0xFF, "ldiff">;
-
-def STHB :        T8InstOnePFix<0x25, 0xF0, "sthb">;
-def TALTWT :      T8InstOnePFix<0x25, 0xF1, "taltwt">;
-def SUM :         T8InstOnePFix<0x25, 0xF2, "sum">;
-def MUL :         T8InstOnePFix<0x25, 0xF3, "mul">;
-def STTIMER :     T8InstOnePFix<0x25, 0xF4, "sttimer">;
-def STOPERR :     T8InstOnePFix<0x25, 0xF5, "stoperr">;
-def CWORD :       T8InstOnePFix<0x25, 0xF6, "cword">;
-def CLRHALTERR :  T8InstOnePFix<0x25, 0xF7, "clrhalterr">;
-def SETHALTERR :  T8InstOnePFix<0x25, 0xF8, "sethalterr">;
-def TESTHALTERR : T8InstOnePFix<0x25, 0xF9, "testhalterr">;
-def DUP :         T8InstOnePFix<0x25, 0xFA, "dup">;
-def MOVE2DINIT :  T8InstOnePFix<0x25, 0xFB, "move2dinit">;
-def MOVE2DALL :   T8InstOnePFix<0x25, 0xFC, "move2dall">;
-def MOVE2DNONZERO : T8InstOnePFix<0x25, 0xFD, "move2dnonzero">;
-def MOVE2DZERO :  T8InstOnePFix<0x25, 0xFE, "move2dzero">;
-
-def UNPACKSN :   T8InstOnePFix<0x26, 0xF3, "unpacksn">;
-def POSTNORMSN : T8InstOnePFix<0x26, 0xFC, "postnormsn">;
-def ROUNDSN :    T8InstOnePFix<0x26, 0xFD, "roundsn">;
-
-def LDINF :       T8InstOnePFix<0x27, 0xF1, "ldinf">;
-def FMUL :        T8InstOnePFix<0x27, 0xF2, "fmul">;
-def CFLERR :      T8InstOnePFix<0x27, 0xF3, "cflerr">;
-def CRCWORD :     T8InstOnePFix<0x27, 0xF4, "crcword">;
-def CRCBYTE :     T8InstOnePFix<0x27, 0xF5, "crcbyte">;
-def BITCNT :      T8InstOnePFix<0x27, 0xF6, "bitcnt">;
-def BITREVWORD :  T8InstOnePFix<0x27, 0xF7, "bitrevword">;
-def BITREVNBITS : T8InstOnePFix<0x27, 0xF8, "bitrevnbits">;
-
-def WSUBDB :     T8InstOnePFix<0x28, 0xF1, "wsubdb">;
-def FPLDNLDBI :  T8InstOnePFix<0x28, 0xF2, "fpldnldbi">;
-def FPCHKERR :   T8InstOnePFix<0x28, 0xF3, "fpchkerr">;
-def FPSTNLDB :   T8InstOnePFix<0x28, 0xF4, "fpstnldb">;
-def FPLDNLSNI :  T8InstOnePFix<0x28, 0xF6, "fpldnlsni">;
-def FPADD :      T8InstOnePFix<0x28, 0xF7, "fpadd">;
-def FPSTNLSN :   T8InstOnePFix<0x28, 0xF8, "fpstnlsn">;
-def FPSUB :      T8InstOnePFix<0x28, 0xF9, "fpsub">;
-def FPLDNLDB :   T8InstOnePFix<0x28, 0xFA, "fpldnldb">;
-def FPMUL :      T8InstOnePFix<0x28, 0xFB, "fpmul">;
-def FPDIV :      T8InstOnePFix<0x28, 0xFC, "fpdiv">;
-def FPLDNLSN :   T8InstOnePFix<0x28, 0xFE, "fpldnlsn">;
-def FPREMFIRST : T8InstOnePFix<0x28, 0xFF, "fpremfirst">;
-
-def FPREMSTEP :   T8InstOnePFix<0x29, 0xF0, "fpremstep">;
-def FPNAN :       T8InstOnePFix<0x29, 0xF1, "fpnan">;
-def FPORDERED :   T8InstOnePFix<0x29, 0xF2, "fpordered">;
-def FPNOTFINITE : T8InstOnePFix<0x29, 0xF3, "fpnotfinite">;
-def FPGT :        T8InstOnePFix<0x29, 0xF4, "fpgt">;
-def FPEQ :        T8InstOnePFix<0x29, 0xF5, "fpeq">;
-def FPI32TOR32 :  T8InstOnePFix<0x29, 0xF6, "fpi32tor32">;
-def FPI32TOR64 :  T8InstOnePFix<0x29, 0xF8, "fpi32tor64">;
-def FPB32TOR64 :  T8InstOnePFix<0x29, 0xFA, "fpb32tor64">;
-def FPTESTERR :   T8InstOnePFix<0x29, 0xFC, "fptesterr">;
-def FPRTOI32 :    T8InstOnePFix<0x29, 0xFD, "fprtoi32">;
-def FPSTNLI32 :   T8InstOnePFix<0x29, 0xFE, "fpstnli32">;
-def FPLDZEROSN :  T8InstOnePFix<0x29, 0xFF, "fpldzerosn">;
-
-def FPLDZERODB :  T8InstOnePFix<0x2A, 0xF0, "fpldnldbi">;
-def FPINT :       T8InstOnePFix<0x2A, 0xF1, "fpldnldbi">;
-def FPDUP :       T8InstOnePFix<0x2A, 0xF3, "fpldnldbi">;
-def FPREV :       T8InstOnePFix<0x2A, 0xF4, "fpldnldbi">;
-def FPLDNLADDDB : T8InstOnePFix<0x2A, 0xF6, "fpldnldbi">;
-def FPLDNLMULDB : T8InstOnePFix<0x2A, 0xF8, "fpldnldbi">;
-def FPLDNLADDSN : T8InstOnePFix<0x2A, 0xFA, "fpldnldbi">;
-def FPENTRY :     T8InstOnePFix<0x2A, 0xFB, "fpldnldbi">;
-def FPLDNLMULSN : T8InstOnePFix<0x2A, 0xFC, "fpldnldbi">;
+def GT :      T8InstOp4<0x9,
+                (outs OReg:$dst),
+       	 	(ins OReg:$src1, OReg:$src2),
+		"gt",
+		[]>;
 
 /*
-def FPUSQRTFIRST : T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPUSQRTSTEP :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPUSQRTLAST :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPURP :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPURM :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPURZ :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPUR32TOR64 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
-def FPUR64TOR32 :  T8InstOnePFix<0x2A, 0xF2, "fpldnldbi">;
+
+//def STL   : T8InstImm<0xD, "stl">;
+//def STNL  : T8InstImm<0xE, "stnl">;
+// OPR 0xF
+
+// Instructions with 1 byte length
+def REV :     T8InstOp4<0x0, "rev">;
+//def LB :      T8InstOp4<0x1, "lb">;
+def BSUB :    T8InstOp4<0x2, "bsub">;
+def ENDP :    T8InstOp4<0x3, "endp">;
+//def ADD :     T8InstOp4<0x5, "add">;
+def GCALL :   T8InstOp4<0x6, "gcall">;
+def IN :      T8InstOp4<0x7, "in">;
+def PROD :    T8InstOp4<0x8, "prod">;
+def WSUB :    T8InstOp4<0xA, "wsub">;
+def OUT :     T8InstOp4<0xB, "out">;
+//def SUB :     T8InstOp4<0xC, "sub">;
+def STARTP :  T8InstOp4<0xD, "startp">;
+def OUTBYTE : T8InstOp4<0xE, "outbyte">;
+def OUTWORD : T8InstOp4<0xF, "outword">;
+
+// Instructions with 2 byte length
+def SETERR :  T8InstOp8<0x10, "seterr">;
+def RESETCH : T8InstOp8<0x12, "resetch">;
+def CSUB0 :   T8InstOp8<0x13, "csub0">;
+def STOPP :   T8InstOp8<0x15, "stopp">;
+def LADD :    T8InstOp8<0x16, "ladd">;
+def STLB :    T8InstOp8<0x17, "stlb">;
+def STHF :    T8InstOp8<0x18, "sthf">;
+def NORM :    T8InstOp8<0x19, "norm">;
+def LDIV :    T8InstOp8<0x1A, "ldiv">;
+def LDPI :    T8InstOp8<0x1B, "ldpi">;
+def STLF :    T8InstOp8<0x1C, "stlf">;
+def XDBLE :   T8InstOp8<0x1D, "xdble">;
+def LDPRI :   T8InstOp8<0x1E, "ldpri">;
+//def REM :     T8InstOp8<0x1F, "rem">;
+
+// TODO: Machine definition vs. return instruction
+//def RET :   T8InstOp8<0x20, "ret">;
+def LEND :    T8InstOp8<0x21, "lend">;
+def LDTIMER : T8InstOp8<0x22, "ltimer">;
+def TESTERR : T8InstOp8<0x29, "testerr">;
+def TESTPRANAL : T8InstOp8<0x2A, "testpranal">;
+def TIN :     T8InstOp8<0x2B, "tin">;
+//def DIV :     T8InstOp8<0x2C, "div">;
+def DIST :    T8InstOp8<0x2E, "dist">;
+def DISC :    T8InstOp8<0x2F, "disc">;
+
+def DISS :    T8InstOp8<0x30, "diss">;
+def LMUL :    T8InstOp8<0x31, "lmul">;
+def NOT :     T8InstOp8<0x32, "not">;
+//def XOR :     T8InstOp8<0x33, "xor">;
+def BCNT :    T8InstOp8<0x34, "bcnt">;
+def LSHR :    T8InstOp8<0x35, "lshr">;
+def LSHL :    T8InstOp8<0x36, "lshl">;
+def LSUM :    T8InstOp8<0x37, "lsum">;
+def LSUB :    T8InstOp8<0x38, "lsub">;
+def RUNP :    T8InstOp8<0x39, "runp">;
+//def XWORD :   T8InstOp8<0x3A, "xword">;
+//def SB :      T8InstOp8<0x3B, "sb">;
+def GAJW :    T8InstOp8<0x3C, "gajw">;
+def SAVEL :   T8InstOp8<0x3D, "savel">;
+def SAVEH :   T8InstOp8<0x3E, "saveh">;
+def WCNT :    T8InstOp8<0x3F, "wcnt">;
+
+//def SHR :     T8InstOp8<0x40, "shr">;
+//def SHL :     T8InstOp8<0x41, "shl">;
+def MINT :    T8InstOp8<0x42, "mint">;
+def ALT :     T8InstOp8<0x43, "alt">;
+def ALTWT :   T8InstOp8<0x44, "altwt">;
+def ALTEND :  T8InstOp8<0x45, "altend">;
+//def AND :     T8InstOp8<0x46, "and">;
+def ENBT :    T8InstOp8<0x47, "enbt">;
+def ENBC :    T8InstOp8<0x48, "enbc">;
+def ENBS :    T8InstOp8<0x49, "enbs">;
+def MOVE :    T8InstOp8<0x4A, "move">;
+//def OR :      T8InstOp8<0x4B, "or">;
+def CSNGL :   T8InstOp8<0x4C, "csgnl">;
+def CCNT1 :   T8InstOp8<0x4D, "ccnt1">;
+def TALT :    T8InstOp8<0x4E, "talt">;
+def LDIFF :   T8InstOp8<0x4F, "ldiff">;
+
+def STHB :        T8InstOp8<0x50, "sthb">;
+def TALTWT :      T8InstOp8<0x51, "taltwt">;
+def SUM :         T8InstOp8<0x52, "sum">;
+//def MUL :         T8InstOp8<0x53, "mul">;
+def STTIMER :     T8InstOp8<0x54, "sttimer">;
+def STOPERR :     T8InstOp8<0x55, "stoperr">;
+def CWORD :       T8InstOp8<0x56, "cword">;
+def CLRHALTERR :  T8InstOp8<0x57, "clrhalterr">;
+def SETHALTERR :  T8InstOp8<0x58, "sethalterr">;
+def TESTHALTERR : T8InstOp8<0x59, "testhalterr">;
+def DUP :         T8InstOp8<0x5A, "dup">;
+def MOVE2DINIT :  T8InstOp8<0x5B, "move2dinit">;
+def MOVE2DALL :   T8InstOp8<0x5C, "move2dall">;
+def MOVE2DNONZERO : T8InstOp8<0x5D, "move2dnonzero">;
+def MOVE2DZERO :  T8InstOp8<0x5E, "move2dzero">;
+
+def UNPACKSN :   T8InstOp8<0x63, "unpacksn">;
+def POSTNORMSN : T8InstOp8<0x6C, "postnormsn">;
+def ROUNDSN :    T8InstOp8<0x6D, "roundsn">;
+
+def LDINF :       T8InstOp8<0x71, "ldinf">;
+def FMUL :        T8InstOp8<0x72, "fmul">;
+def CFLERR :      T8InstOp8<0x73, "cflerr">;
+def CRCWORD :     T8InstOp8<0x74, "crcword">;
+def CRCBYTE :     T8InstOp8<0x75, "crcbyte">;
+def BITCNT :      T8InstOp8<0x76, "bitcnt">;
+def BITREVWORD :  T8InstOp8<0x77, "bitrevword">;
+def BITREVNBITS : T8InstOp8<0x78, "bitrevnbits">;
+
+def WSUBDB :     T8InstOp8<0x81, "wsubdb">;
+def FPLDNLDBI :  T8InstOp8<0x82, "fpldnldbi">;
+def FPCHKERR :   T8InstOp8<0x83, "fpchkerr">;
+def FPSTNLDB :   T8InstOp8<0x84, "fpstnldb">;
+def FPLDNLSNI :  T8InstOp8<0x86, "fpldnlsni">;
+def FPADD :      T8InstOp8<0x87, "fpadd">;
+def FPSTNLSN :   T8InstOp8<0x88, "fpstnlsn">;
+def FPSUB :      T8InstOp8<0x89, "fpsub">;
+def FPLDNLDB :   T8InstOp8<0x8A, "fpldnldb">;
+def FPMUL :      T8InstOp8<0x8B, "fpmul">;
+def FPDIV :      T8InstOp8<0x8C, "fpdiv">;
+def FPLDNLSN :   T8InstOp8<0x8E, "fpldnlsn">;
+def FPREMFIRST : T8InstOp8<0x8F, "fpremfirst">;
+
+def FPREMSTEP :   T8InstOp8<0x90, "fpremstep">;
+def FPNAN :       T8InstOp8<0x91, "fpnan">;
+def FPORDERED :   T8InstOp8<0x92, "fpordered">;
+def FPNOTFINITE : T8InstOp8<0x93, "fpnotfinite">;
+def FPGT :        T8InstOp8<0x94, "fpgt">;
+def FPEQ :        T8InstOp8<0x95, "fpeq">;
+def FPI32TOR32 :  T8InstOp8<0x96, "fpi32tor32">;
+def FPI32TOR64 :  T8InstOp8<0x98, "fpi32tor64">;
+def FPB32TOR64 :  T8InstOp8<0x9A, "fpb32tor64">;
+def FPTESTERR :   T8InstOp8<0x9C, "fptesterr">;
+def FPRTOI32 :    T8InstOp8<0x9D, "fprtoi32">;
+def FPSTNLI32 :   T8InstOp8<0x9E, "fpstnli32">;
+def FPLDZEROSN :  T8InstOp8<0x9F, "fpldzerosn">;
+
+def FPLDZERODB :  T8InstOp8<0xA0, "fpldnldbi">;
+def FPINT :       T8InstOp8<0xA1, "fpldnldbi">;
+def FPDUP :       T8InstOp8<0xA3, "fpldnldbi">;
+def FPREV :       T8InstOp8<0xA4, "fpldnldbi">;
+def FPLDNLADDDB : T8InstOp8<0xA6, "fpldnldbi">;
+def FPLDNLMULDB : T8InstOp8<0xA8, "fpldnldbi">;
+def FPLDNLADDSN : T8InstOp8<0xAA, "fpldnldbi">;
+def FPENTRY :     T8InstOp8<0xAB, "fpldnldbi">;
+def FPLDNLMULSN : T8InstOp8<0xAC, "fpldnldbi">;
+*/
+
+/*
+def FPUSQRTFIRST : T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPUSQRTSTEP :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPUSQRTLAST :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPURP :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPURM :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPURZ :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPUR32TOR64 :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPUR64TOR32 :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPUR64TOR32 :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
+def FPUR64TOR32 :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
 */
 
 
 // Some special instructions to move or add immediate values
 
-def ADC  : T8InstImm<0x12,
+def ADC  : T8InstImm<0x8,
 		(outs OReg:$dst),
        	 	(ins OReg:$src1, i32imm:$src2),
 		"adc $src2",
 		[(set OReg:$dst, (add OReg:$src1, imm:$src2))]> {
-		let isCodeGenOnly = 1;
-		let op2 = 0x00;
+		let imm = 0x0;
 		}
 
-def LDC  : T8xxPseudoInst<(outs OReg:$dst),
+def LDC  : T8InstImm<0x4,
+		(outs OReg:$dst),
        	 	(ins i32imm:$src),
 		"ldc $src",
 		[(set OReg:$dst, imm:$src)]> {
-		let isCodeGenOnly = 1;
-		let op2 = 0x00;
+		let imm = 0x0;
 		}
 
 // Taken from SparcInstrInfo.td
 // "LEA" forms of add (patterns to make tblgen happy)
 
 // Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
-def LDLP   : T8Inst<(outs OReg:$rd),
-      		    (ins WPtrSrc:$addr),
-                     "ldlp $addr \n",
-                     [(set iPTR:$rd, ADDRri:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let op1 = 0x99;
+def LDLP   : T8InstImm<0x1,
+		(outs OReg:$rd),
+      		(ins WPtrSrc:$addr),
+                "ldlp $addr",
+                [(set iPTR:$rd, ADDRri:$addr)]> {
+		let imm = 0x0;
+		let isPseudo = 1;
 }
 
 
-// TODO: Put these binary ops together in a multiclass
-// Just test code for analysing the inline assembler. Needs to be removed
-def ADD  : T8InstImm<0x12,
-		(outs OReg:$dst),
+
+class T8BinaryOp4<bits<4> opval, string opstr, SDNode opnode> :
+      T8InstOp4<opval,
+                (outs OReg:$dst),
        	 	(ins OReg:$src1, OReg:$src2),
-		"add",
-		[(set i32:$dst, (add i32:$src1, i32:$src2))]>
-		 {
-		let op2 = 0xEF;
-		}
+		opstr,
+		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]>
+{
+}
 
-
-def AND  : T8InstImm<0x12,
-		(outs OReg:$dst),
+class T8BinaryOp8<bits<8> opval, string opstr, SDNode opnode> :
+      T8InstOp8<opval,
+                (outs OReg:$dst),
        	 	(ins OReg:$src1, OReg:$src2),
-		"and",
-		[(set i32:$dst, (and i32:$src1, i32:$src2))]>
-		 {
-		let op2 = 0xF6;
-		}
+		opstr,
+		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]>
+{
+}
 
 
-def XWORD  : T8InstImm<0x12,
+def ADD : T8BinaryOp4<0x5, "add", add>;
+def SUB : T8BinaryOp4<0xC, "sub", sub>;
+def MUL : T8BinaryOp8<0x53, "mul", mul>;
+def SHL : T8BinaryOp8<0x41, "shl", shl>;
+def SHR : T8BinaryOp8<0x40, "shr", srl>;
+
+def DIV : T8BinaryOp8<0x2C, "div", sdiv>;
+def REM : T8BinaryOp8<0x1F, "rem", srem>;
+
+def XOR : T8BinaryOp8<0x33, "xor", xor>;  // #53
+def OR  : T8BinaryOp8<0x4B, "or", or>;  // #53
+def AND : T8BinaryOp8<0x46, "and", and>;  // #53
+
+//def : InstAlias<"add $src1, $src2", (ADDregregop OReg:$src1, OReg:$src2), 0>;
+
+
+/* Define via patterns */
+/*
+defm UDIV : T8BinaryOp<0x21, 0xFA, "ldiv", udiv>;   // Pseudo code, ldiv (Section 5.7.2 Compiler writer guide)
+defm UREM : T8BinaryOp<0x21, 0xFB, "ldiv", urem>;   // Pseudo code, ldiv -> TODO
+
+defm SRA : T8BinaryOp<0x01, 0x21, "lshr", sra>;  // #53   (Pseudo Code, needs transformation)
+defm ROTR : T8BinaryOp<0x01, 0x22, "lshr", rotr>;
+defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
+*/
+
+
+def XWORD  : T8InstOp8<0x3A,
 		(outs OReg:$dst),
        	 	(ins OReg:$src1, OReg:$src2),
 		"xword",
-		[]>
-		 {
-		let op2 = 0xFA;
-		}
+		[]>;
 
 
 // Load i32 from frame index
-def LDL : T8xxPseudoInst<
+def LDL : T8InstImm<0x7,
 		(outs OReg:$val),
        	 	(ins WPtrSrc:$addr),
 		"ldl $addr",
-		[(set i32:$val, (load ADDRri:$addr))]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
+		[(set i32:$val, (load ADDRri:$addr))]>
+{
+let imm = 0x0;
+let isPseudo = 1;
+}
 
 
 // Load i32 from global address
 // TODO: See if the offset via the immediate can be utilized
-def LDNL : T8xxPseudoInst<
+def LDNL : T8InstImm<0x3,
 		(outs OReg:$val),
        	 	(ins MemSrc:$addr),
 		"ldnl 0",
-		[(set i32:$val, (load ADDRr:$addr))]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
-		}
+		[(set i32:$val, (load ADDRr:$addr))]>
+{
+let imm = 0x0;
+}
+
 
 /*
 defm LDRzi8mem :  T8LoadMem<"ldl $addr \n\tlb \n", zextloadi8>;
@@ -385,8 +453,6 @@ def LB : T8xxPseudoInst<
        	 	(ins MemSrc:$addr),
 		"lb",
 		[(set i32:$val, (extloadi8 ADDRr:$addr))]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
 		}
 
 def : Pat<(extloadi8 ADDRri:$addr),
@@ -421,8 +487,6 @@ def STL : T8xxPseudoInst<
        	 	(ins OReg:$val, WPtrSrc:$addr),
 		"stl $addr",
 		[(store i32:$val, ADDRri:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
 		}
 
 // Store i32 to global address
@@ -432,8 +496,6 @@ def STNL : T8xxPseudoInst<
        	 	(ins OReg:$val, MemSrc:$addr),
 		"stnl 0",
 		[(store i32:$val, ADDRr:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
 		}
 
 // Store i8 to global address
@@ -443,47 +505,7 @@ def SB : T8xxPseudoInst<
        	 	(ins OReg:$val, MemSrc:$addr),
 		"sb",
 		[(truncstorei8 i32:$val, ADDRr:$addr)]> {
-		let isCodeGenOnly = 1;
-		let isPseudo = 1;
 		}
-
-
-// Note: The pseudo assembler code
-// will be focused on three types of operand
-// - Register
-// - Immediate
-// - Memory (relativ to register)
-
-multiclass T8BinaryOp<bits<8> pfix1, bits<8> opval, string opstr, SDNode opnode>{
-
-def regregop : T8InstWithOperands<
-    	        pfix1, opval,
-                (outs OReg:$dst),
-       	 	(ins OReg:$src1, OReg:$src2),
-		opstr,
-		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]>;
-}
-
-defm ADD : T8BinaryOp<0x00, 0xF5, "add", add>;  // #05
-defm SUB : T8BinaryOp<0x00, 0xFC, "sub", sub>;  // #05
-defm MUL : T8BinaryOp<0x25, 0xF4, "mul", mul>;  // #53
-defm SHL : T8BinaryOp<0x24, 0xF1, "shl", shl>;  // #53
-defm SHR : T8BinaryOp<0x24, 0xF0, "shr", srl>;  // #53
-
-defm SDIV : T8BinaryOp<0x22, 0xFC, "div", sdiv>; 
-defm SREM : T8BinaryOp<0x21, 0xFF, "rem", srem>;
-
-defm UDIV : T8BinaryOp<0x21, 0xFA, "ldiv", udiv>;   // Pseudo code, ldiv (Section 5.7.2 Compiler writer guide)
-defm UREM : T8BinaryOp<0x21, 0xFB, "ldiv", urem>;   // Pseudo code, ldiv -> TODO
-
-defm SRA : T8BinaryOp<0x01, 0x21, "lshr", sra>;  // #53   (Pseudo Code, needs transformation)
-defm ROTR : T8BinaryOp<0x01, 0x22, "lshr", rotr>;
-defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
-
-defm XOR : T8BinaryOp<0x01, 0x24, "xor", xor>;  // #53
-defm OR  : T8BinaryOp<0x01, 0x25, "or", or>;  // #53
-defm AND : T8BinaryOp<0x01, 0x26, "and", and>;  // #53
-
 
 
 def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, OReg:$lhs, OReg:$rhs),
@@ -505,9 +527,8 @@ def : Pat<(truncstorei8 i32:$val, ADDRri:$addr),
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : T8Inst<(outs), (ins variable_ops),
                     "ldl %r0 \n\tgcall \n",  [(T8xxRetFlag)]> {
-    let op1 = 0x20;
-    let op2 = 0x22;
     let isCodeGenOnly = 1;
+    let isPseudo = 1;
   }
 }
 
@@ -517,8 +538,6 @@ def AddWptrImm : T8Inst<(outs OReg:$dst),
     		    (ins WptrRegs:$src, i32imm:$val),
                     "ldlp $val \n\tstl $dst \n",
 		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, imm:$val))]> {
-    let op1 = 0x20;
-    let op2 = 0x23;
     let isCodeGenOnly = 1;
     let isPseudo = 1;
   }
@@ -553,8 +572,7 @@ let isCall = 1 in {
                       "ldcipr $addr \n\tadc -4 \n\tldpi \n\tgcall \n\trev \n",
                       [(call tglobaladdr:$addr)]> {
     let isCodeGenOnly = 1;
-    let op1 = 0x22;
-    let op2 = 0x25;
+    let isPseudo = 1;
   }
 }
 
@@ -574,8 +592,6 @@ def BRimm  : T8Inst<(outs), (ins i32imm:$addr),
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
 		   let isBranch = 1;
-		   let op1 = 0x15;
-		   let op2 = 0x35;
 }
 
 
@@ -586,16 +602,16 @@ def BRimm2  : T8Inst<(outs), (ins brtarget:$addr),
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
 		   let isBranch = 1;
-		   let op1 = 0x15;
-		   let op2 = 0x15;
 }
 
 
 let isTerminator = 1, isBranch = 1, Uses = [CPSR] in {
-  def Bcc : T8Inst<(outs), (ins brtarget:$dst),
-                    "cj $dst",  []> {
-		let op1 = 0x33;
-		let op2 = 0x55;
+  def Bcc : T8InstImm<0xA,
+		(outs), 
+		(ins brtarget:$dst),
+                "cj $dst",
+		[]> {
+		let imm = 0x0;
   }
 }
 
@@ -603,15 +619,6 @@ let isTerminator = 1, isBranch = 1, Uses = [CPSR] in {
 //===----------------------------------------------------------------------===//
 // Instructions
 //===----------------------------------------------------------------------===//
-
-// Pseudo instructions.
-class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
-   : T8Inst<outs, ins, asmstr, pattern> {
-  let isCodeGenOnly = 1;
-//  let isPseudo = 1;
-    let op1 = 0x66;
-    let op2 = 0x67;
-}
 
 
 /* When these instruction use "Defs" with the WPTR,
@@ -621,10 +628,10 @@ properly.
 */
 
 let Uses = [WPTR] in {
-def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+def ADJCALLSTACKDOWN : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                "ADJCALLSTACKDOWN $amt1, $amt2",
                                [(callseq_start timm:$amt1, timm:$amt2)]>;
-def ADJCALLSTACKUP : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+def ADJCALLSTACKUP : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                             "ADJCALLSTACKUP $amt1",
                             [(callseq_end timm:$amt1, timm:$amt2)]>;
 }
