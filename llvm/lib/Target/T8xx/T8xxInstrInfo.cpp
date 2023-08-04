@@ -290,7 +290,7 @@ void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum, co
 	if ((SrcReg >= T8xx::R0) and (SrcReg <= T8xx::R15))
 	  BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(MI.getOperand(OpNum).getReg().asMCReg()));
       }
-      break;	
+      break;
     case MachineOperand::MO_Immediate:
       BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(MI.getOperand(OpNum).getImm());
       break;
@@ -367,15 +367,15 @@ void T8xxInstrInfo::createComparison(MachineInstr &MI, const unsigned int OpX, c
   const MachineRegisterInfo &MRI = MF->getRegInfo();
   const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
 
-  loadRegStack (MI, OpX);
-  loadRegStack (MI, OpY);
+  /*  loadRegStack (MI, OpX);
+      loadRegStack (MI, OpY);*/
   if (diff)
-    BuildMI(MBB, MI, DL, get(T8xx::DIFF)); // Difference
+    BuildMI(MBB, MI, DL, get(T8xx::DIFF), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG); // Difference
   if (diff && negate)
-    BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(0); // logical NOT
-  BuildMI(MBB, MI, DL, get(T8xx::GT));
+    BuildMI(MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0); // logical NOT
+  BuildMI(MBB, MI, DL, get(T8xx::GT), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
   if (negate && (~diff))
-    BuildMI(MBB, MI, DL, get(T8xx::EQC)).addImm(0); // logical NOT
+    BuildMI(MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0); // logical NOT
 }
 
 
@@ -474,50 +474,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return true;
     }
     break;
-    /*
-  case T8xx::STRi8regop:  // TODO: Does fix the ldlp issue, but does work overall as the "storebyte" assembler code is removed
-    //  case T8xx::STRi8immop:
-    {
-      // Either load register or immediate
-      loadRegStack (MI, 0);
-
-      // These pseudo codes have three operands REG(IntReg), REG(WptrReg), IMM
-      // If the immediate can be divided by four, a "ldlp" is optimal and no further action
-      // is needed.
-      // For unaligned operations, the command needs to be divided into
-      // a ldlp imm / 4 and an adc imm.
-      if (MI.getOperand(2).isImm ())
-	{
-	  BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(MI.getOperand(2).getImm () / 4);
-	  if (MI.getOperand(2).getImm() % 4 != 0)
-	    BuildMI(MBB, MI, DL, get(T8xx::ADC)).addImm(MI.getOperand(2).getImm() % 4); // Difference
-	  BuildMI(MBB, MI, DL, get(T8xx::SB));
-	}
-      MBB.erase(MI);
-      return true;
-    }
-
-  case T8xx::LDRi8regop:
-  case T8xx::LDRzi8regop:
-  case T8xx::LDRsi8regop:
-  case T8xx::LEA_ADDri:
-    {
-      // These pseudo codes have three operands REG(IntReg), REG(WptrReg), IMM
-      // If the immediate can be divided by four, a "ldlp" is optimal and no further action
-      // is needed.
-      // For unaligned operations, the command needs to be divided into
-      // a ldlp imm / 4 and an adc imm.
-      if (MI.getOperand(2).isImm ())
-	{
-	  BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(MI.getOperand(2).getImm () / 4);
-	  if (MI.getOperand(2).getImm() % 4 != 0)
-	    BuildMI(MBB, MI, DL, get(T8xx::ADC)).addImm(MI.getOperand(2).getImm() % 4); // Difference
-	  return (true);
-	}
-      return (false);
-    }
-    break;
-    */
 
   }
 }

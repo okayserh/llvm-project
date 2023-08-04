@@ -13,6 +13,7 @@
 
 #include "T8xxTargetMachine.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Debug.h"
@@ -74,6 +75,12 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
     EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
     Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
     Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
+
+    // Test to see whether the alignment can be used to select
+    // only proper frame objects
+    MachineFrameInfo &MFI = MF->getFrameInfo ();
+    printf ("Object %i  Alignment %i\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
+
     return true;
   }
   if (Addr.getOpcode() == ISD::TargetExternalSymbol ||
