@@ -3,6 +3,7 @@ add_llvm_component_library(LLVMT8xxDisassembler
 
   LINK_COMPONENTS
   MCDisassembler
+  MC
   T8xxInfo
   Support
 

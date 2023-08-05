@@ -66,25 +66,34 @@ def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 // The parameter MIOperandInfo defines the contribution for the
 // MIOperandInfo. It is a register and an immediate.
 
-def MemSrc : Operand<i32> {
-  let MIOperandInfo = (ops OReg);
-  let PrintMethod = "printOperand";
-  let EncoderMethod = "getMemSrcValue";
+// This affects "T8xxAsmParser.cpp". Methods with the "Name" suffix
+// must be present in that class.
+// is<Name>
+// add<Name>Operands
+//
+
+def T8xxWPtrSrcAsmOperand : AsmOperandClass {
+  let Name = "WPtrSrc";
+  let ParserMethod = "parseWPtrOperand";
 }
 
-def WPtrSrc : Operand<i32> {
-  let MIOperandInfo = (ops WptrRegs, i32imm);
+def MemSrc : Operand<i32> {
+  let PrintMethod = "printOperand";
+  let MIOperandInfo = (ops OReg);
+//  let EncoderMethod = "getMemSrcValue";
+}
+
+def WPtrSrc : Operand<iPTR> {
   let PrintMethod = "printAddrModeMemSrc";
-  let EncoderMethod = "getMemSrcValue";
+  let MIOperandInfo = (ops WptrRegs, i32imm);
+//  let EncoderMethod = "getMemSrcValue";
+  let DecoderMethod = "DecodeWPtrSrcOperand";
+  let ParserMatchClass = T8xxWPtrSrcAsmOperand;
 }
 
 // Branch targets have OtherVT type.
 def brtarget : Operand<OtherVT> {
   let EncoderMethod = "getMemSrcValue";
-}
-
-def cc_val : Operand<i32> {
-  let PrintMethod = "printCondCode";
 }
 
 
@@ -165,6 +174,13 @@ def GT :      T8InstOp4<0x9,
 		"gt",
 		[]>;
 
+def GCALL :   T8InstOp4<0x6,
+    	        (outs),
+		(ins MemSrc:$addr),
+		"gcall",
+		[]>;
+
+
 /*
 
 //def STL   : T8InstImm<0xD, "stl">;
@@ -177,7 +193,6 @@ def REV :     T8InstOp4<0x0, "rev">;
 def BSUB :    T8InstOp4<0x2, "bsub">;
 def ENDP :    T8InstOp4<0x3, "endp">;
 //def ADD :     T8InstOp4<0x5, "add">;
-def GCALL :   T8InstOp4<0x6, "gcall">;
 def IN :      T8InstOp4<0x7, "in">;
 def PROD :    T8InstOp4<0x8, "prod">;
 def WSUB :    T8InstOp4<0xA, "wsub">;
@@ -358,7 +373,6 @@ def LDLP   : T8InstImm<0x1,
                 "ldlp $addr",
                 [(set iPTR:$rd, ADDRri:$addr)]> {
 		let imm = 0x0;
-		let isPseudo = 1;
 }
 
 def LDLPb   : T8Inst<(outs OReg:$rd),
@@ -432,7 +446,6 @@ def LDL : T8InstImm<0x7,
 		[(set i32:$val, (load ADDRri:$addr))]>
 {
 let imm = 0x0;
-let isPseudo = 1;
 }
 
 
@@ -457,7 +470,7 @@ defm LDRsi16mem :  T8LoadMem<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi1
 */
 
 // Load i8 from global address
-def LB : T8xxPseudoInst<
+def LB : T8InstOp4<0x1,
 		(outs OReg:$val),
        	 	(ins MemSrc:$addr),
 		"lb",
@@ -499,25 +512,27 @@ def : Pat<(sextloadi8 ADDRri8:$addr),
 
 // Store i32 onto frame
 // Note: previously STRi32regop
-def STL : T8xxPseudoInst<
+def STL : T8InstImm<0xD,
 		(outs),
        	 	(ins OReg:$val, WPtrSrc:$addr),
 		"stl $addr",
 		[(store i32:$val, ADDRri:$addr)]> {
+		let imm = 0x0;
 		}
 
 // Store i32 to global address
 // TODO: See if immediate offset can be utilized
-def STNL : T8xxPseudoInst<
+def STNL : T8InstImm<0xE,
 		(outs),
        	 	(ins OReg:$val, MemSrc:$addr),
 		"stnl 0",
 		[(store i32:$val, ADDRr:$addr)]> {
+		let imm = 0x0;
 		}
 
 // Store i8 to global address
 // Note: previously STRi8regop
-def SB : T8xxPseudoInst<
+def SB : T8InstOp8<0x3B,
 		(outs),
        	 	(ins OReg:$val, MemSrc:$addr),
 		"sb",
@@ -525,7 +540,7 @@ def SB : T8xxPseudoInst<
 		}
 
 
-def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, OReg:$lhs, OReg:$rhs),
+def CMP : T8xxPseudoInst<(outs), (ins i32imm:$cc, OReg:$lhs, OReg:$rhs),
                     "cmp$cc $lhs, $rhs", []> {
   let Defs = [CPSR];
 }
@@ -545,8 +560,8 @@ def : Pat<(truncstorei8 i32:$val, ADDRri8:$addr),
 //===----------------------------------------------------------------------===//
 
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
-  def RET : T8Inst<(outs), (ins variable_ops),
-                    "ldl %r0 \n\tgcall \n",  [(T8xxRetFlag)]> {
+  def RET : T8xxPseudoInst<(outs), (ins variable_ops),
+                    "RET",  [(T8xxRetFlag)]> {
     let isCodeGenOnly = 1;
     let isPseudo = 1;
   }
@@ -615,13 +630,14 @@ def BRimm  : T8Inst<(outs), (ins i32imm:$addr),
 }
 
 
-def BRimm2  : T8Inst<(outs), (ins brtarget:$addr),
+def BRimm2  : T8InstImm<0x0,
+		   (outs),
+		   (ins brtarget:$addr),
                    "j $addr",
                    [(br bb:$addr)]> {
 		   let isTerminator = 1;
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
 		   let isBranch = 1;
+		   let imm = 0x0;
 }
 
 

@@ -71,7 +71,7 @@ class T8xxAsmParser : public MCTargetAsmParser {
                                       unsigned Kind) override;
 
   // Custom parse functions for T8xx specific operands.
-  OperandMatchResultTy parseMEMOperand(OperandVector &Operands);
+  OperandMatchResultTy parseWPtrOperand(OperandVector &Operands);
 
   OperandMatchResultTy parseMembarTag(OperandVector &Operands);
 
@@ -198,9 +198,9 @@ public:
   bool isToken() const override { return Kind == k_Token; }
   bool isReg() const override { return Kind == k_Register; }
   bool isImm() const override { return Kind == k_Immediate; }
-  bool isMem() const override { return isMEMrr() || isMEMri(); }
+  bool isMem() const override { return isMEMrr() || isWPtrSrc(); }
   bool isMEMrr() const { return Kind == k_MemoryReg; }
-  bool isMEMri() const { return Kind == k_MemoryImm; }
+  bool isWPtrSrc() const { return Kind == k_MemoryImm; }
   bool isMembarTag() const { return Kind == k_Immediate; }
   bool isTailRelocSym() const { return Kind == k_Immediate; }
 
@@ -343,7 +343,7 @@ public:
     Inst.addOperand(MCOperand::createReg(getMemOffsetReg()));
   }
 
-  void addMEMriOperands(MCInst &Inst, unsigned N) const {
+  void addWPtrSrcOperands(MCInst &Inst, unsigned N) const {
     assert(N == 2 && "Invalid number of operands!");
 
     Inst.addOperand(MCOperand::createReg(getMemBase()));
@@ -649,7 +649,7 @@ ParseDirective(AsmToken DirectiveID)
 }
 
 OperandMatchResultTy
-T8xxAsmParser::parseMEMOperand(OperandVector &Operands) {
+T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
   SMLoc S, E;
 
   std::unique_ptr<T8xxOperand> LHS;
@@ -918,8 +918,6 @@ T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
       SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer()-1);
       Operands.push_back(T8xxOperand::CreateReg(Reg, RegKind, S, E));
       ResTy = MatchOperand_Success;
-    } else {
-      ResTy = parseMEMOperand(Operands);
     }
 
     if (ResTy != MatchOperand_Success)
