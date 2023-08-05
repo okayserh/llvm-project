@@ -49,6 +49,7 @@ public:
 
   // Complex Pattern Selectors.
   bool SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset);
+  bool SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offset);
   bool SelectADDRrr(SDValue Addr, SDValue &Base, SDValue &Offset);
   bool SelectADDRr(SDValue Addr, SDValue &Base);
 
@@ -81,6 +82,73 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
     MachineFrameInfo &MFI = MF->getFrameInfo ();
     printf ("Object %i  Alignment %i\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
 
+    // ADDRri ensures that only 32 bit aligned relatives to the WPTR are
+    // selected
+    // TODO: Currently hardcoded to 32 bit.
+    if (MFI.getObjectAlign(FIN->getIndex()) < Align(4))
+      return false;
+    else
+      return true;
+  }
+  if (Addr.getOpcode() == ISD::TargetExternalSymbol ||
+      Addr.getOpcode() == ISD::TargetGlobalAddress ||
+      Addr.getOpcode() == ISD::TargetGlobalTLSAddress) {
+    return false; // direct calls.
+  }
+
+  /*
+   * Note: When the base operand is the frameindex, special
+   * instructions enable the use of additions without
+   * having an "add" instruction.
+   * I.e. add would only be needed, when the base register
+   * is a regular register.
+   */
+
+#if 0
+  if (Addr.getOpcode() == ISD::ADD) {
+    printf ("ISD:ADD\n");
+    if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
+      // TODO: Check, whether there is a limitation to 13 bit offsets
+      if (isInt<32>(CN->getSExtValue())) {
+        if (FrameIndexSDNode *FIN =
+                dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
+          // Constant offset from frame ref.
+          Base = CurDAG->getTargetFrameIndex(
+              FIN->getIndex(), TLI->getPointerTy(CurDAG->getDataLayout()));
+        } else {
+
+	  Base = Addr.getOperand(0);
+	  return true;
+        }
+        Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
+                                           MVT::i32);
+        return true;
+      }
+    }
+  }
+#endif
+  
+  /* This seems to be the case that admits regular "Registers" ad
+     base !?
+  Base = Addr;
+  Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
+  return true;
+  */
+  return false;
+}
+
+
+bool T8xxDAGToDAGISel::SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offset) {
+  if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
+    printf ("FrameIndexSDNode\n");
+    EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
+    Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
+
+    // Test to see whether the alignment can be used to select
+    // only proper frame objects
+    MachineFrameInfo &MFI = MF->getFrameInfo ();
+    printf ("Object %i  Alignment %i\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
     return true;
   }
   if (Addr.getOpcode() == ISD::TargetExternalSymbol ||
@@ -129,6 +197,7 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
   */
   return false;
 }
+
 
 // Register + immediate
 
