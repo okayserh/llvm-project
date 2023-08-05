@@ -490,6 +490,15 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 	}
       MBB.erase(MI);
     }
+    break;
+
+  case T8xx::RET:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
+      BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
+      MBB.erase(MI);
+    }
+    break;
 
   }
 }

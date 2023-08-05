@@ -73,93 +73,6 @@ void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
 }
 
 
-
-const char * condCodeToString(ISD::CondCode CC) {
-  switch (CC) {
-  default:
-  case ISD::SETCC_INVALID:
-  case ISD::SETFALSE:      //    0 0 0 0       Always false (always folded)
-  case ISD::SETFALSE2:     //  1 X 0 0 0       Always false (always folded)
-  case ISD::SETOEQ:        //    0 0 0 1       True if ordered and equal
-  case ISD::SETOGT:        //    0 0 1 0       True if ordered and greater than
-  case ISD::SETOGE:        //    0 0 1 1       True if ordered and greater than or equal
-  case ISD::SETOLT:        //    0 1 0 0       True if ordered and less than
-  case ISD::SETOLE:        //    0 1 0 1       True if ordered and less than or equal
-  case ISD::SETONE:        //    0 1 1 0       True if ordered and operands are unequal
-  case ISD::SETO:          //    0 1 1 1       True if ordered (no nans)
-  case ISD::SETUO:         //    1 0 0 0       True if unordered: isnan(X) | isnan(Y)
-  case ISD::SETUEQ:        //    1 0 0 1       True if unordered or equal
-  case ISD::SETUGT:        //    1 0 1 0       True if unordered or greater than
-  case ISD::SETUGE:        //    1 0 1 1       True if unordered, greater than, or equal
-  case ISD::SETULT:        //    1 1 0 0       True if unordered or less than
-  case ISD::SETULE:        //    1 1 0 1       True if unordered, less than, or equal
-  case ISD::SETUNE:        //    1 1 1 0       True if unordered or not equal
-    llvm_unreachable("Invalid or unsupported condition code");
-    return nullptr;
-    
-  case ISD::SETTRUE:       //    1 1 1 1       Always true (always folded)
-  case ISD::SETTRUE2:      //  1 X 1 1 1       Always true (always folded)
-    return "";
-  
-  // Don't care operations: undefined if the input is a nan.
-  case ISD::SETEQ:         //  1 X 0 0 1       True if equal
-    return "eq";
-  case ISD::SETGT:         //  1 X 0 1 0       True if greater than
-    return "gt";
-  case ISD::SETGE:         //  1 X 0 1 1       True if greater than or equal
-    return "ge";
-  case ISD::SETLT:         //  1 X 1 0 0       True if less than
-    return "lt";
-  case ISD::SETLE:         //  1 X 1 0 1       True if less than or equal
-    return "le";
-  case ISD::SETNE:         //  1 X 1 1 0       True if not equal
-    return "ne";
-  }
-}
-
-void T8xxInstPrinter::printCondCode(const MCInst *MI, int opNum, const MCSubtargetInfo &STI,
-                       raw_ostream &OS)
-{
-  const MCOperand &Op = MI->getOperand(opNum);
-  ISD::CondCode CC = (ISD::CondCode)Op.getImm();
-  const char *Str = condCodeToString(CC);
-  OS << Str;
-}
-
-void T8xxInstPrinter::printMemOperand(const MCInst *MI, int opNum,
-                                       const MCSubtargetInfo &STI,
-                                       raw_ostream &O, const char *Modifier) {
-  // If this is an ADD operand, emit it like normal operands.
-  if (Modifier && !strcmp(Modifier, "arith")) {
-    printOperand(MI, opNum, STI, O);
-    O << ", ";
-    printOperand(MI, opNum + 1, STI, O);
-    return;
-  }
-
-  const MCOperand &Op1 = MI->getOperand(opNum);
-  const MCOperand &Op2 = MI->getOperand(opNum + 1);
-
-  bool PrintedFirstOperand = false;
-  if (Op1.isReg() && Op1.getReg() != T8xx::R0) {
-    printOperand(MI, opNum, STI, O);
-    PrintedFirstOperand = true;
-  }
-
-  // Skip the second operand iff it adds nothing (literal 0 or %g0) and we've
-  // already printed the first one
-  const bool SkipSecondOperand =
-      PrintedFirstOperand && ((Op2.isReg() && Op2.getReg() == T8xx::R0) ||
-                              (Op2.isImm() && Op2.getImm() == 0));
-
-  if (!SkipSecondOperand) {
-    if (PrintedFirstOperand)
-      O << '+';
-    printOperand(MI, opNum + 1, STI, O);
-  }
-}
-
-
 // Print a 'memsrc' operand which is a (Register, Offset) pair.
 void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
 					  const MCSubtargetInfo &STI,
@@ -169,6 +82,14 @@ void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
   
   const MCOperand &Op1 = MI->getOperand(OpNum);
   const MCOperand &Op2 = MI->getOperand(OpNum + 1);
+
+  assert((Op1.isReg() && Op1.getReg() == T8xx::WPTR) && "Unsupported register for MemSrc");
+  assert((Op2.isImm() && (Op2.getImm() % 4 == 0)) && "Offset is not properly aligned for MemSrc");
+
+  unsigned Offset = Op2.getImm() / 4;
+  O << Offset;
+  
+  /*
   O << "[";
   printRegName(O, Op1.getReg());
 
@@ -177,28 +98,7 @@ void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
     O << ", #" << Offset;
   }
   O << "]";
+  */
 }
 
-
-// Print a "memsrc" operand, which is a (Register)
-void T8xxInstPrinter::printAddrModeMem(const MCInst *MI, int OpNum,
-				       const MCSubtargetInfo &STI,
-				       raw_ostream &O) {
-  const MCOperand &Op1 = MI->getOperand(OpNum);
-  O << "[";
-  printRegName(O, Op1.getReg());
-  O << "]";
-}
-
-
-
-
-// Print a 'memsrc' operand which is a (Register, Offset) pair.
-/*
-void T8xxInstPrinter::printAddrModeStack(const MCInst *MI, int OpNum,
-					  const MCSubtargetInfo &STI,
-					  raw_ostream &O) {
-  O << "Stack";
-}
-*/
 

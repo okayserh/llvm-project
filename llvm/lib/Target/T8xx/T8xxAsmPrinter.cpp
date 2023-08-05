@@ -56,7 +56,6 @@ namespace {
     void printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
 			     raw_ostream &O);
 
-    void emitFunctionBodyStart() override;
     void emitInstruction(const MachineInstr *MI) override;
 
     static const char *getRegisterName(unsigned RegNo) {
@@ -68,211 +67,14 @@ namespace {
     bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
                                const char *ExtraCode, raw_ostream &O) override;
 
-    void LowerGETPCXAndEmitMCInsts(const MachineInstr *MI,
-                                   const MCSubtargetInfo &STI);
-
   };
 } // end of anonymous namespace
 
-/* TODO: Check reimplementation
 
-static MCOperand createT8xxMCOperand(T8xxMCExpr::VariantKind Kind,
-                                      MCSymbol *Sym, MCContext &OutContext) {
-  const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Sym,
-                                                         OutContext);
-  const T8xxMCExpr *expr = T8xxMCExpr::create(Kind, MCSym, OutContext);
-  return MCOperand::createExpr(expr);
-
-}
-static MCOperand createPCXCallOP(MCSymbol *Label,
-                                 MCContext &OutContext) {
-  return createT8xxMCOperand(T8xxMCExpr::VK_T8xx_WDISP30, Label, OutContext);
-}
-
-static MCOperand createPCXRelExprOp(T8xxMCExpr::VariantKind Kind,
-                                    MCSymbol *GOTLabel, MCSymbol *StartLabel,
-                                    MCSymbol *CurLabel,
-                                    MCContext &OutContext)
-{
-  const MCSymbolRefExpr *GOT = MCSymbolRefExpr::create(GOTLabel, OutContext);
-  const MCSymbolRefExpr *Start = MCSymbolRefExpr::create(StartLabel,
-                                                         OutContext);
-  const MCSymbolRefExpr *Cur = MCSymbolRefExpr::create(CurLabel,
-                                                       OutContext);
-
-  const MCBinaryExpr *Sub = MCBinaryExpr::createSub(Cur, Start, OutContext);
-  const MCBinaryExpr *Add = MCBinaryExpr::createAdd(GOT, Sub, OutContext);
-  const T8xxMCExpr *expr = T8xxMCExpr::create(Kind,
-                                                Add, OutContext);
-  return MCOperand::createExpr(expr);
-}
-
-static void EmitCall(MCStreamer &OutStreamer,
-                     MCOperand &Callee,
-                     const MCSubtargetInfo &STI)
-{
-  MCInst CallInst;
-  CallInst.setOpcode(T8xx::CALL);
-  CallInst.addOperand(Callee);
-  OutStreamer.emitInstruction(CallInst, STI);
-}
-
-static void EmitSETHI(MCStreamer &OutStreamer,
-                      MCOperand &Imm, MCOperand &RD,
-                      const MCSubtargetInfo &STI)
-{
-  MCInst SETHIInst;
-  SETHIInst.setOpcode(T8xx::SETHIi);
-  SETHIInst.addOperand(RD);
-  SETHIInst.addOperand(Imm);
-  OutStreamer.emitInstruction(SETHIInst, STI);
-}
-
-static void EmitBinary(MCStreamer &OutStreamer, unsigned Opcode,
-                       MCOperand &RS1, MCOperand &Src2, MCOperand &RD,
-                       const MCSubtargetInfo &STI)
-{
-  MCInst Inst;
-  Inst.setOpcode(Opcode);
-  Inst.addOperand(RD);
-  Inst.addOperand(RS1);
-  Inst.addOperand(Src2);
-  OutStreamer.emitInstruction(Inst, STI);
-}
-
-static void EmitOR(MCStreamer &OutStreamer,
-                   MCOperand &RS1, MCOperand &Imm, MCOperand &RD,
-                   const MCSubtargetInfo &STI) {
-  EmitBinary(OutStreamer, T8xx::ORri, RS1, Imm, RD, STI);
-}
-
-static void EmitADD(MCStreamer &OutStreamer,
-                    MCOperand &RS1, MCOperand &RS2, MCOperand &RD,
-                    const MCSubtargetInfo &STI) {
-  EmitBinary(OutStreamer, T8xx::ADDrr, RS1, RS2, RD, STI);
-}
-
-static void EmitSHL(MCStreamer &OutStreamer,
-                    MCOperand &RS1, MCOperand &Imm, MCOperand &RD,
-                    const MCSubtargetInfo &STI) {
-  EmitBinary(OutStreamer, T8xx::SLLri, RS1, Imm, RD, STI);
-}
-
-
-static void EmitHiLo(MCStreamer &OutStreamer,  MCSymbol *GOTSym,
-                     T8xxMCExpr::VariantKind HiKind,
-                     T8xxMCExpr::VariantKind LoKind,
-                     MCOperand &RD,
-                     MCContext &OutContext,
-                     const MCSubtargetInfo &STI) {
-
-  MCOperand hi = createT8xxMCOperand(HiKind, GOTSym, OutContext);
-  MCOperand lo = createT8xxMCOperand(LoKind, GOTSym, OutContext);
-  EmitSETHI(OutStreamer, hi, RD, STI);
-  EmitOR(OutStreamer, RD, lo, RD, STI);
-}
-*/
-
-void T8xxAsmPrinter::LowerGETPCXAndEmitMCInsts(const MachineInstr *MI,
-                                                const MCSubtargetInfo &STI)
-{
-  MCSymbol *GOTLabel   =
-    OutContext.getOrCreateSymbol(Twine("_GLOBAL_OFFSET_TABLE_"));
-
-  /*
-  const MachineOperand &MO = MI->getOperand(0);
-  assert(MO.getReg() != T8xx::O7 &&
-         "%o7 is assigned as destination for getpcx!");
-  */
-
-  //  MCOperand MCRegOP = MCOperand::createReg(MO.getReg());
-
-  /*
-  if (!isPositionIndependent()) {
-    // Just load the address of GOT to MCRegOP.
-    switch(TM.getCodeModel()) {
-    default:
-      llvm_unreachable("Unsupported absolute code model");
-    case CodeModel::Small:
-      EmitHiLo(*OutStreamer, GOTLabel,
-               T8xxMCExpr::VK_T8xx_HI, T8xxMCExpr::VK_T8xx_LO,
-               MCRegOP, OutContext, STI);
-      break;
-    case CodeModel::Medium: {
-      EmitHiLo(*OutStreamer, GOTLabel,
-               T8xxMCExpr::VK_T8xx_H44, T8xxMCExpr::VK_T8xx_M44,
-               MCRegOP, OutContext, STI);
-      MCOperand imm = MCOperand::createExpr(MCConstantExpr::create(12,
-                                                                   OutContext));
-      EmitSHL(*OutStreamer, MCRegOP, imm, MCRegOP, STI);
-      MCOperand lo = createT8xxMCOperand(T8xxMCExpr::VK_T8xx_L44,
-                                          GOTLabel, OutContext);
-      EmitOR(*OutStreamer, MCRegOP, lo, MCRegOP, STI);
-      break;
-    }
-    case CodeModel::Large: {
-      EmitHiLo(*OutStreamer, GOTLabel,
-               T8xxMCExpr::VK_T8xx_HH, T8xxMCExpr::VK_T8xx_HM,
-               MCRegOP, OutContext, STI);
-      MCOperand imm = MCOperand::createExpr(MCConstantExpr::create(32,
-                                                                   OutContext));
-      EmitSHL(*OutStreamer, MCRegOP, imm, MCRegOP, STI);
-      // Use register %o7 to load the lower 32 bits.
-      MCOperand RegO7 = MCOperand::createReg(T8xx::O7);
-      EmitHiLo(*OutStreamer, GOTLabel,
-               T8xxMCExpr::VK_T8xx_HI, T8xxMCExpr::VK_T8xx_LO,
-               RegO7, OutContext, STI);
-      EmitADD(*OutStreamer, MCRegOP, RegO7, MCRegOP, STI);
-    }
-    }
-    return;
-  }
-
-  MCSymbol *StartLabel = OutContext.createTempSymbol();
-  MCSymbol *EndLabel   = OutContext.createTempSymbol();
-  MCSymbol *SethiLabel = OutContext.createTempSymbol();
-
-  MCOperand RegO7   = MCOperand::createReg(T8xx::O7);
-
-  // <StartLabel>:
-  //   call <EndLabel>
-  // <SethiLabel>:
-  //     sethi %hi(_GLOBAL_OFFSET_TABLE_+(<SethiLabel>-<StartLabel>)), <MO>
-  // <EndLabel>:
-  //   or  <MO>, %lo(_GLOBAL_OFFSET_TABLE_+(<EndLabel>-<StartLabel>))), <MO>
-  //   add <MO>, %o7, <MO>
-
-  OutStreamer->emitLabel(StartLabel);
-  MCOperand Callee =  createPCXCallOP(EndLabel, OutContext);
-  EmitCall(*OutStreamer, Callee, STI);
-  OutStreamer->emitLabel(SethiLabel);
-  MCOperand hiImm = createPCXRelExprOp(T8xxMCExpr::VK_T8xx_PC22,
-                                       GOTLabel, StartLabel, SethiLabel,
-                                       OutContext);
-  EmitSETHI(*OutStreamer, hiImm, MCRegOP, STI);
-  OutStreamer->emitLabel(EndLabel);
-  MCOperand loImm = createPCXRelExprOp(T8xxMCExpr::VK_T8xx_PC10,
-                                       GOTLabel, StartLabel, EndLabel,
-                                       OutContext);
-  EmitOR(*OutStreamer, MCRegOP, loImm, MCRegOP, STI);
-  EmitADD(*OutStreamer, MCRegOP, RegO7, MCRegOP, STI);
-  */
-}
 
 void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
   T8xx_MC::verifyInstructionPredicates(MI->getOpcode(),
                                         getSubtargetInfo().getFeatureBits());
-  /*
-  switch (MI->getOpcode()) {
-  default: break;
-  case TargetOpcode::DBG_VALUE:
-    // FIXME: Debug Value.
-    return;
-  case T8xx::GETPCX:
-    LowerGETPCXAndEmitMCInsts(MI, getSubtargetInfo());
-    return;
-  }
-  */
   MachineBasicBlock::const_instr_iterator I = MI->getIterator();
   MachineBasicBlock::const_instr_iterator E = MI->getParent()->instr_end();
   do {
@@ -281,11 +83,6 @@ void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
     EmitToStreamer(*OutStreamer, TmpInst);
   } while ((++I != E) && I->isInsideBundle()); // Delay slot check.
 }
-
-void T8xxAsmPrinter::emitFunctionBodyStart() {
-    return;
-}
-
 
 
 void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,

@@ -143,3 +143,10 @@ static DecodeStatus DecodeCall(MCInst &MI, unsigned insn, uint64_t Address,
     MI.addOperand(MCOperand::createImm(tgt));
   return MCDisassembler::Success;
 }
+
+
+static DecodeStatus DecodeWPtrSrcOperand(MCInst &MI, unsigned insn, uint64_t Address,
+                               const MCDisassembler *Decoder) {
+  // TODO: Needs implementation
+  return MCDisassembler::Success;
+}
