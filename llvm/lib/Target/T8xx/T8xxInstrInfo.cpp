@@ -475,5 +475,21 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
+    // This is a special instruction to introduce a way to get effective addresses
+    // that are not aligned
+  case T8xx::LDLPb:
+    {
+      int64_t rem = MI.getOperand(2).getImm () % 4;
+      MCRegister DstReg = MI.getOperand(0).getReg ();
+      MCRegister SrcReg = MI.getOperand(1).getReg ();
+      BuildMI (MBB, MI, DL, get(T8xx::LDLP), DstReg).addReg(SrcReg).addImm(MI.getOperand(2).getImm () - rem);
+      if (rem != 0)
+	{
+	  MI.getOperand(2).setImm (MI.getOperand(2).getImm() - rem);
+	  BuildMI (MBB, MI, DL, get(T8xx::ADC), T8xx::AREG).addReg(T8xx::AREG).addImm(rem);
+	}
+      MBB.erase(MI);
+    }
+
   }
 }

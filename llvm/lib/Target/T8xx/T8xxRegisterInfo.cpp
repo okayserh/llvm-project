@@ -118,6 +118,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::STL:
   case T8xx::LDL:
   case T8xx::LDLP:
+  case T8xx::LDLPb:
     ImmOpIdx = FIOperandNum + 1;
     break;
   }
