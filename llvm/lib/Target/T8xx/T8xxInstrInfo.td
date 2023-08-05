@@ -101,6 +101,7 @@ def ADDRr  : ComplexPattern<iPTR, 1, "SelectADDRr", [], []>;
 //def ADDRrr : ComplexPattern<iPTR, 2, "SelectADDRrr", [], []>;
 def ADDRri : ComplexPattern<iPTR, 2, "SelectADDRri", [frameindex], []>;
 
+def ADDRri8 : ComplexPattern<iPTR, 2, "SelectADDRrib", [frameindex], []>;
 
 // The real hardware assembler codes. Cannot directly be used in the
 // DAG translations, since they affect the register stack, which
@@ -360,6 +361,14 @@ def LDLP   : T8InstImm<0x1,
 		let isPseudo = 1;
 }
 
+def LDLPb   : T8Inst<(outs OReg:$rd),
+      		(ins WPtrSrc:$addr),
+                "ldlp $addr",
+                [(set iPTR:$rd, ADDRri8:$addr)]> {
+		let isCodeGenOnly = 1;
+		let isPseudo = 1;
+}
+
 
 
 class T8BinaryOp4<bits<4> opval, string opstr, SDNode opnode> :
@@ -458,6 +467,9 @@ def LB : T8xxPseudoInst<
 def : Pat<(extloadi8 ADDRri:$addr),
           (LB (LDLP ADDRri:$addr) )>;
 
+def : Pat<(extloadi8 ADDRri8:$addr),
+          (LB (LDLPb ADDRri8:$addr) )>;
+
 //defm LDRi8 :  T8Load<"lb \n", extloadi8>;
 //defm LDRzi8 :  T8Load<"lb \n", zextloadi8>;
 //defm LDRsi8 :  T8Load<"lb \n\tldc #128 \n\txword \n", sextloadi8>;
@@ -472,12 +484,17 @@ def : Pat<(zextloadi8 ADDRr:$addr),
 def : Pat<(zextloadi8 ADDRri:$addr),
           (LB (LDLP ADDRri:$addr) )>;
 
+def : Pat<(zextloadi8 ADDRri8:$addr),
+          (LB (LDLPb ADDRri8:$addr) )>;
+
 def : Pat<(sextloadi8 ADDRr:$addr),
           (XWORD (LDC 128), (LB ADDRr:$addr) )>;
 
 def : Pat<(sextloadi8 ADDRri:$addr),
           (XWORD (LDC 128), (LB (LDLP ADDRri:$addr) ) )>;
 
+def : Pat<(sextloadi8 ADDRri8:$addr),
+          (XWORD (LDC 128), (LB (LDLPb ADDRri8:$addr) ) )>;
 
 
 // Store i32 onto frame
@@ -518,6 +535,9 @@ def CMP : T8xxPseudoInst<(outs), (ins cc_val:$cc, OReg:$lhs, OReg:$rhs),
  into a operand register */
 def : Pat<(truncstorei8 i32:$val, ADDRri:$addr),
           (SB i32:$val, (LDLP ADDRri:$addr) )>;
+
+def : Pat<(truncstorei8 i32:$val, ADDRri8:$addr),
+          (SB i32:$val, (LDLPb ADDRri8:$addr) )>;
 
 
 //===----------------------------------------------------------------------===//
