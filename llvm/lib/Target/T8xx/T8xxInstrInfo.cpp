@@ -477,6 +477,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 
     // This is a special instruction to introduce a way to get effective addresses
     // that are not aligned
+  case T8xx::AddWptrImm:
   case T8xx::LDLPb:
     {
       int64_t rem = MI.getOperand(2).getImm () % 4;
@@ -499,6 +500,35 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       MBB.erase(MI);
     }
     break;
+
+  case T8xx::CALL:
+    {
+      for (unsigned int i = 0; i < MI.getNumOperands (); ++i)
+	{
+	  printf ("CALL Op%i %i\n", i, MI.getOperand (i).getType ());
+	  MI.getOperand (i).dump ();
+	}
+
+      // First OP is MO_GlobalAddress
+      // Second OP is MO_RegisterMask
+      // Third and Fourth are MO_Register
+
+      // Load offset to global address into AREG and correct by bytecount of LDPI and GCALL
+      BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addGlobalAddress(MI.getOperand(0).getGlobal ());
+      BuildMI (MBB, MI, DL, get(T8xx::ADC), T8xx::AREG).addReg(T8xx::AREG).addImm(-4);
+      BuildMI (MBB, MI, DL, get(T8xx::LDPI), T8xx::AREG).addReg(T8xx::AREG);
+      BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
+      BuildMI (MBB, MI, DL, get(T8xx::REV));
+      MBB.erase(MI);
+      
+      /*
+      BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
+      BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
+      MBB.erase(MI);
+      */
+    }
+    break;
+
 
   }
 }
