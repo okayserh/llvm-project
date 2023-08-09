@@ -161,6 +161,11 @@ def EQC   : T8InstImm<0xC,
 		let imm = 0x0;
 		}
 
+def REV :     T8InstOp4<0x0,
+		(outs),
+		(ins),
+		"rev",
+		[]>;
 
 def DIFF :    T8InstOp4<0x4,
                 (outs OReg:$dst),
@@ -180,6 +185,11 @@ def GCALL :   T8InstOp4<0x6,
 		"gcall",
 		[]>;
 
+def LDPI :    T8InstOp8<0x1B,
+		(outs OReg:$dst),
+		(ins OReg:$src),
+		"ldpi",
+		[]>;
 
 /*
 
@@ -188,7 +198,6 @@ def GCALL :   T8InstOp4<0x6,
 // OPR 0xF
 
 // Instructions with 1 byte length
-def REV :     T8InstOp4<0x0, "rev">;
 //def LB :      T8InstOp4<0x1, "lb">;
 def BSUB :    T8InstOp4<0x2, "bsub">;
 def ENDP :    T8InstOp4<0x3, "endp">;
@@ -212,7 +221,7 @@ def STLB :    T8InstOp8<0x17, "stlb">;
 def STHF :    T8InstOp8<0x18, "sthf">;
 def NORM :    T8InstOp8<0x19, "norm">;
 def LDIV :    T8InstOp8<0x1A, "ldiv">;
-def LDPI :    T8InstOp8<0x1B, "ldpi">;
+//def LDPI :    T8InstOp8<0x1B, "ldpi">;
 def STLF :    T8InstOp8<0x1C, "stlf">;
 def XDBLE :   T8InstOp8<0x1D, "xdble">;
 def LDPRI :   T8InstOp8<0x1E, "ldpri">;
@@ -382,6 +391,15 @@ def LDLPb   : T8Inst<(outs OReg:$rd),
 		let isCodeGenOnly = 1;
 		let isPseudo = 1;
 }
+
+// Special instruction, which is solely used in CallLowering
+def AddWptrImm : T8Inst<(outs OReg:$dst),
+    		    (ins WptrRegs:$src, i32imm:$val),
+                    "ldlp $val",
+		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, imm:$val))]> {
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+  }
 
 
 
@@ -566,16 +584,6 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
     let isPseudo = 1;
   }
 }
-
-
-// Special instruction, which is solely used in CallLowering
-def AddWptrImm : T8Inst<(outs OReg:$dst),
-    		    (ins WptrRegs:$src, i32imm:$val),
-                    "ldlp $val \n\tstl $dst \n",
-		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, imm:$val))]> {
-    let isCodeGenOnly = 1;
-    let isPseudo = 1;
-  }
 
 
 //===----------------------------------------------------------------------===//

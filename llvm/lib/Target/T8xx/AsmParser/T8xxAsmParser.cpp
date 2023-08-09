@@ -728,12 +728,14 @@ T8xxAsmParser::parseTailRelocSym(OperandVector &Operands) {
   SMLoc S = getLoc();
   SMLoc E = SMLoc::getFromPointer(S.getPointer() - 1);
 
+#if 0
   auto MatchesKind = [](T8xxMCExpr::VariantKind VK) -> bool {
     switch (Kind) {
     case TailRelocKind::Load_GOT:
       // Non-TLS relocations on ld (or ldx).
       // ld [%rr + %rr], %rr, %rel(sym)
       return VK == T8xxMCExpr::VK_T8xx_GOTDATA_OP;
+      /*
     case TailRelocKind::Add_TLS:
       // TLS relocations on add.
       // add %rr, %rr, %rr, %rel(sym)
@@ -763,12 +765,15 @@ T8xxAsmParser::parseTailRelocSym(OperandVector &Operands) {
       case T8xxMCExpr::VK_T8xx_TLS_GD_CALL:
       case T8xxMCExpr::VK_T8xx_TLS_LDM_CALL:
         return true;
+      */
+
       default:
         return false;
       }
     }
     llvm_unreachable("Unhandled T8xxAsmParser::TailRelocKind enum");
   };
+#endif
 
   if (getLexer().getKind() != AsmToken::Percent) {
     Error(getLoc(), "expected '%' for operand modifier");
@@ -790,11 +795,13 @@ T8xxAsmParser::parseTailRelocSym(OperandVector &Operands) {
     return MatchOperand_ParseFail;
   }
 
+#if 0
   if (!MatchesKind(VK)) {
     // Did not match the specified set of relocation types, put '%' back.
     getLexer().UnLex(Tok);
     return MatchOperand_NoMatch;
   }
+#endif
 
   Parser.Lex(); // Eat the identifier.
   if (getLexer().getKind() != AsmToken::LParen) {
@@ -877,9 +884,14 @@ OperandMatchResultTy T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
   if (getParser().parseExpression(DestValue))
     return MatchOperand_NoMatch;
 
+  // TODO: Check for position independence.
   bool IsPic = getContext().getObjectFileInfo()->isPositionIndependent();
+  /*
   T8xxMCExpr::VariantKind Kind =
       IsPic ? T8xxMCExpr::VK_T8xx_WPLT30 : T8xxMCExpr::VK_T8xx_WDISP30;
+  */
+  T8xxMCExpr::VariantKind Kind =T8xxMCExpr::VK_T8xx_IPTRREL;
+  
 
   const MCExpr *DestExpr = T8xxMCExpr::create(Kind, DestValue, getContext());
   Operands.push_back(T8xxOperand::CreateImm(DestExpr, S, E));
@@ -993,13 +1005,13 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
 
     int64_t Res;
     if (!EVal->evaluateAsAbsolute(Res)) {
-      T8xxMCExpr::VariantKind Kind = T8xxMCExpr::VK_T8xx_13;
+      T8xxMCExpr::VariantKind Kind = T8xxMCExpr::VK_T8xx_IPTRREL;
 
       if (getContext().getObjectFileInfo()->isPositionIndependent()) {
         if (isCall)
-          Kind = T8xxMCExpr::VK_T8xx_WPLT30;
+          Kind = T8xxMCExpr::VK_T8xx_IPTRREL;
         else
-          Kind = T8xxMCExpr::VK_T8xx_GOT13;
+          Kind = T8xxMCExpr::VK_T8xx_IPTRREL;
       }
       EVal = T8xxMCExpr::create(Kind, EVal, getContext());
     }
@@ -1316,11 +1328,12 @@ T8xxAsmParser::adjustPICRelocation(T8xxMCExpr::VariantKind VK,
   // If the expression refers contains _GLOBAL_OFFSET_TABLE, it is
   // actually a %pc10 or %pc22 relocation. Otherwise, they are interpreted
   // as %got10 or %got22 relocation.
-
+  /*
+  
   if (getContext().getObjectFileInfo()->isPositionIndependent()) {
     switch(VK) {
     default: break;
-    case T8xxMCExpr::VK_T8xx_LO:
+    case T8xxMCExpr::VK_T8xx_IPTRREL:
       VK = (hasGOTReference(subExpr) ? T8xxMCExpr::VK_T8xx_PC10
                                      : T8xxMCExpr::VK_T8xx_GOT10);
       break;
@@ -1332,6 +1345,9 @@ T8xxAsmParser::adjustPICRelocation(T8xxMCExpr::VariantKind VK,
   }
 
   return T8xxMCExpr::create(VK, subExpr, getContext());
+  */
+  return NULL;
+
 }
 
 bool T8xxAsmParser::matchT8xxAsmModifiers(const MCExpr *&EVal,
@@ -1347,7 +1363,7 @@ bool T8xxAsmParser::matchT8xxAsmModifiers(const MCExpr *&EVal,
   case T8xxMCExpr::VK_T8xx_None:
     Error(getLoc(), "invalid operand modifier");
     return false;
-
+    /*
   case T8xxMCExpr::VK_T8xx_GOTDATA_OP:
   case T8xxMCExpr::VK_T8xx_TLS_GD_ADD:
   case T8xxMCExpr::VK_T8xx_TLS_GD_CALL:
@@ -1359,7 +1375,7 @@ bool T8xxAsmParser::matchT8xxAsmModifiers(const MCExpr *&EVal,
   case T8xxMCExpr::VK_T8xx_TLS_LDO_ADD:
     // These are special-cased at tablegen level.
     return false;
-
+    */
   default:
     break;
   }
