@@ -38,8 +38,10 @@ const MCExpr *T8xxELFTargetObjectFile::getTTypeGlobalReference(
       StubSym = MachineModuleInfoImpl::StubValueTy(Sym, !GV->hasLocalLinkage());
     }
 
+    // TODO: Check what this does? Just replace VK_T8xx_ with something known to make
+    // it compile
     MCContext &Ctx = getContext();
-    return T8xxMCExpr::create(T8xxMCExpr::VK_T8xx_R_DISP32,
+    return T8xxMCExpr::create(T8xxMCExpr::VK_T8xx_IPTRREL,
                                MCSymbolRefExpr::create(SSym, Ctx), Ctx);
   }
 

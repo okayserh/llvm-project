@@ -156,7 +156,17 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 	    }
 
 	  if (MO->isExpr ())
-	    printf ("Opcode %u, Expression found\n", Bits);
+	    {
+	      const MCExpr *Expr = MO->getExpr();
+	      if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr)) {
+		MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
+		Fixups.push_back(MCFixup::create(0, Expr, Kind));
+		//		return 0;
+	      }
+
+	      printf ("Opcode %u, Expression found\n", Bits);
+	      MO->getExpr ()->dump ();
+	    }
 	}
     }
 
@@ -227,5 +237,5 @@ MCCodeEmitter *llvm::createT8xxMCCodeEmitter(const MCInstrInfo &MCII,
                                               MCContext &Ctx) {
   // Endianess to be determined. In "T8xxTargetMachine", little endian "e" is specified
   // big endian would be "E".
-  return new T8xxMCCodeEmitter(MCII, Ctx, true);
+  return new T8xxMCCodeEmitter(MCII, Ctx, false);
 }

@@ -303,7 +303,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // Might be faster to use:
     // ldl %r1
     // stl -2
-    
+
     SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
     assert (VA.getLocMemOffset() % 4 == 0 &&
 	    "Only 4 byte aligned offset allowed");
@@ -312,6 +312,22 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
                                        MachinePointerInfo()));
+
+    /*
+    SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
+    assert (VA.getLocMemOffset() % 4 == 0 &&
+	    "Only 4 byte aligned offset allowed");
+
+    int32_t Offset = VA.getLocMemOffset();
+    SDValue PtrOff = DAG.getIntPtrConstant(-(Offset / 4 + 1), Loc);
+
+    PtrOff = DAG.getNode(ISD::ADD, Loc, MVT::i32, StackPtr, PtrOff);
+    MachinePointerInfo DstInfo =
+            MachinePointerInfo::getStack(DAG.getMachineFunction(), Offset);
+
+    MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
+                                       DstInfo));
+    */
   }
 
   // Emit all stores, make sure they occur before the call.
@@ -345,8 +361,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // This works with a call instruction that directly takes
   // the address as parameter
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
-    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0);
-
+    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0, T8xxMCExpr::VK_T8xx_IPTRREL);
 
   std::vector<SDValue> Ops;
   Ops.push_back(Chain);

@@ -44,47 +44,8 @@ bool T8xxMCExpr::printVariantKind(raw_ostream &OS, VariantKind Kind)
 {
   switch (Kind) {
   case VK_T8xx_None:     return false;
-  case VK_T8xx_LO:       OS << "%lo(";  return true;
-  case VK_T8xx_HI:       OS << "%hi(";  return true;
-  case VK_T8xx_H44:      OS << "%h44("; return true;
-  case VK_T8xx_M44:      OS << "%m44("; return true;
-  case VK_T8xx_L44:      OS << "%l44("; return true;
-  case VK_T8xx_HH:       OS << "%hh(";  return true;
-  case VK_T8xx_HM:       OS << "%hm(";  return true;
-  case VK_T8xx_LM:       OS << "%lm(";  return true;
-    // FIXME: use %pc22/%pc10, if system assembler supports them.
-  case VK_T8xx_PC22:     OS << "%hi("; return true;
-  case VK_T8xx_PC10:     OS << "%lo("; return true;
-    // FIXME: use %got22/%got10, if system assembler supports them.
-  case VK_T8xx_GOT22:    OS << "%hi("; return true;
-  case VK_T8xx_GOT10:    OS << "%lo("; return true;
-  case VK_T8xx_GOT13:    return false;
-  case VK_T8xx_13:       return false;
+  case VK_T8xx_IPTRREL:  return false;
   case VK_T8xx_WDISP30:  return false;
-  case VK_T8xx_WPLT30:   return false;
-  case VK_T8xx_R_DISP32: OS << "%r_disp32("; return true;
-  case VK_T8xx_TLS_GD_HI22:   OS << "%tgd_hi22(";   return true;
-  case VK_T8xx_TLS_GD_LO10:   OS << "%tgd_lo10(";   return true;
-  case VK_T8xx_TLS_GD_ADD:    OS << "%tgd_add(";    return true;
-  case VK_T8xx_TLS_GD_CALL:   OS << "%tgd_call(";   return true;
-  case VK_T8xx_TLS_LDM_HI22:  OS << "%tldm_hi22(";  return true;
-  case VK_T8xx_TLS_LDM_LO10:  OS << "%tldm_lo10(";  return true;
-  case VK_T8xx_TLS_LDM_ADD:   OS << "%tldm_add(";   return true;
-  case VK_T8xx_TLS_LDM_CALL:  OS << "%tldm_call(";  return true;
-  case VK_T8xx_TLS_LDO_HIX22: OS << "%tldo_hix22("; return true;
-  case VK_T8xx_TLS_LDO_LOX10: OS << "%tldo_lox10("; return true;
-  case VK_T8xx_TLS_LDO_ADD:   OS << "%tldo_add(";   return true;
-  case VK_T8xx_TLS_IE_HI22:   OS << "%tie_hi22(";   return true;
-  case VK_T8xx_TLS_IE_LO10:   OS << "%tie_lo10(";   return true;
-  case VK_T8xx_TLS_IE_LD:     OS << "%tie_ld(";     return true;
-  case VK_T8xx_TLS_IE_LDX:    OS << "%tie_ldx(";    return true;
-  case VK_T8xx_TLS_IE_ADD:    OS << "%tie_add(";    return true;
-  case VK_T8xx_TLS_LE_HIX22:  OS << "%tle_hix22(";  return true;
-  case VK_T8xx_TLS_LE_LOX10:  OS << "%tle_lox10(";  return true;
-  case VK_T8xx_HIX22:         OS << "%hix(";        return true;
-  case VK_T8xx_LOX10:         OS << "%lox(";        return true;
-  case VK_T8xx_GOTDATA_HIX22: OS << "%gdop_hix22("; return true;
-  case VK_T8xx_GOTDATA_LOX10: OS << "%gdop_lox10("; return true;
   case VK_T8xx_GOTDATA_OP:    OS << "%gdop(";       return true;
   }
   llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");
@@ -93,42 +54,7 @@ bool T8xxMCExpr::printVariantKind(raw_ostream &OS, VariantKind Kind)
 T8xxMCExpr::VariantKind T8xxMCExpr::parseVariantKind(StringRef name)
 {
   return StringSwitch<T8xxMCExpr::VariantKind>(name)
-    .Case("lo",  VK_T8xx_LO)
-    .Case("hi",  VK_T8xx_HI)
-    .Case("h44", VK_T8xx_H44)
-    .Case("m44", VK_T8xx_M44)
-    .Case("l44", VK_T8xx_L44)
-    .Case("hh",  VK_T8xx_HH)
-    .Case("hm",  VK_T8xx_HM)
-    .Case("lm",  VK_T8xx_LM)
-    .Case("pc22",  VK_T8xx_PC22)
-    .Case("pc10",  VK_T8xx_PC10)
-    .Case("got22", VK_T8xx_GOT22)
-    .Case("got10", VK_T8xx_GOT10)
-    .Case("got13", VK_T8xx_GOT13)
-    .Case("r_disp32",   VK_T8xx_R_DISP32)
-    .Case("tgd_hi22",   VK_T8xx_TLS_GD_HI22)
-    .Case("tgd_lo10",   VK_T8xx_TLS_GD_LO10)
-    .Case("tgd_add",    VK_T8xx_TLS_GD_ADD)
-    .Case("tgd_call",   VK_T8xx_TLS_GD_CALL)
-    .Case("tldm_hi22",  VK_T8xx_TLS_LDM_HI22)
-    .Case("tldm_lo10",  VK_T8xx_TLS_LDM_LO10)
-    .Case("tldm_add",   VK_T8xx_TLS_LDM_ADD)
-    .Case("tldm_call",  VK_T8xx_TLS_LDM_CALL)
-    .Case("tldo_hix22", VK_T8xx_TLS_LDO_HIX22)
-    .Case("tldo_lox10", VK_T8xx_TLS_LDO_LOX10)
-    .Case("tldo_add",   VK_T8xx_TLS_LDO_ADD)
-    .Case("tie_hi22",   VK_T8xx_TLS_IE_HI22)
-    .Case("tie_lo10",   VK_T8xx_TLS_IE_LO10)
-    .Case("tie_ld",     VK_T8xx_TLS_IE_LD)
-    .Case("tie_ldx",    VK_T8xx_TLS_IE_LDX)
-    .Case("tie_add",    VK_T8xx_TLS_IE_ADD)
-    .Case("tle_hix22",  VK_T8xx_TLS_LE_HIX22)
-    .Case("tle_lox10",  VK_T8xx_TLS_LE_LOX10)
-    .Case("hix",        VK_T8xx_HIX22)
-    .Case("lox",        VK_T8xx_LOX10)
-    .Case("gdop_hix22", VK_T8xx_GOTDATA_HIX22)
-    .Case("gdop_lox10", VK_T8xx_GOTDATA_LOX10)
+    .Case("iptrrel",   VK_T8xx_IPTRREL)
     .Case("gdop",       VK_T8xx_GOTDATA_OP)
     .Default(VK_T8xx_None);
 }
@@ -136,45 +62,11 @@ T8xxMCExpr::VariantKind T8xxMCExpr::parseVariantKind(StringRef name)
 T8xx::Fixups T8xxMCExpr::getFixupKind(T8xxMCExpr::VariantKind Kind) {
   switch (Kind) {
   default: llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");
-  case VK_T8xx_LO:       return T8xx::fixup_sparc_lo10;
-  case VK_T8xx_HI:       return T8xx::fixup_sparc_hi22;
-  case VK_T8xx_H44:      return T8xx::fixup_sparc_h44;
-  case VK_T8xx_M44:      return T8xx::fixup_sparc_m44;
-  case VK_T8xx_L44:      return T8xx::fixup_sparc_l44;
-  case VK_T8xx_HH:       return T8xx::fixup_sparc_hh;
-  case VK_T8xx_HM:       return T8xx::fixup_sparc_hm;
-  case VK_T8xx_LM:       return T8xx::fixup_sparc_lm;
-  case VK_T8xx_PC22:     return T8xx::fixup_sparc_pc22;
-  case VK_T8xx_PC10:     return T8xx::fixup_sparc_pc10;
-  case VK_T8xx_GOT22:    return T8xx::fixup_sparc_got22;
-  case VK_T8xx_GOT10:    return T8xx::fixup_sparc_got10;
-  case VK_T8xx_GOT13:    return T8xx::fixup_sparc_got13;
-  case VK_T8xx_13:       return T8xx::fixup_sparc_13;
-  case VK_T8xx_WPLT30:   return T8xx::fixup_sparc_wplt30;
+    /*
+  case VK_T8xx_IPTRREL:  return T8xx::fixup_t8xx_iptrrel;
   case VK_T8xx_WDISP30:  return T8xx::fixup_sparc_call30;
-  case VK_T8xx_TLS_GD_HI22:   return T8xx::fixup_sparc_tls_gd_hi22;
-  case VK_T8xx_TLS_GD_LO10:   return T8xx::fixup_sparc_tls_gd_lo10;
-  case VK_T8xx_TLS_GD_ADD:    return T8xx::fixup_sparc_tls_gd_add;
-  case VK_T8xx_TLS_GD_CALL:   return T8xx::fixup_sparc_tls_gd_call;
-  case VK_T8xx_TLS_LDM_HI22:  return T8xx::fixup_sparc_tls_ldm_hi22;
-  case VK_T8xx_TLS_LDM_LO10:  return T8xx::fixup_sparc_tls_ldm_lo10;
-  case VK_T8xx_TLS_LDM_ADD:   return T8xx::fixup_sparc_tls_ldm_add;
-  case VK_T8xx_TLS_LDM_CALL:  return T8xx::fixup_sparc_tls_ldm_call;
-  case VK_T8xx_TLS_LDO_HIX22: return T8xx::fixup_sparc_tls_ldo_hix22;
-  case VK_T8xx_TLS_LDO_LOX10: return T8xx::fixup_sparc_tls_ldo_lox10;
-  case VK_T8xx_TLS_LDO_ADD:   return T8xx::fixup_sparc_tls_ldo_add;
-  case VK_T8xx_TLS_IE_HI22:   return T8xx::fixup_sparc_tls_ie_hi22;
-  case VK_T8xx_TLS_IE_LO10:   return T8xx::fixup_sparc_tls_ie_lo10;
-  case VK_T8xx_TLS_IE_LD:     return T8xx::fixup_sparc_tls_ie_ld;
-  case VK_T8xx_TLS_IE_LDX:    return T8xx::fixup_sparc_tls_ie_ldx;
-  case VK_T8xx_TLS_IE_ADD:    return T8xx::fixup_sparc_tls_ie_add;
-  case VK_T8xx_TLS_LE_HIX22:  return T8xx::fixup_sparc_tls_le_hix22;
-  case VK_T8xx_TLS_LE_LOX10:  return T8xx::fixup_sparc_tls_le_lox10;
-  case VK_T8xx_HIX22:         return T8xx::fixup_sparc_hix22;
-  case VK_T8xx_LOX10:         return T8xx::fixup_sparc_lox10;
-  case VK_T8xx_GOTDATA_HIX22: return T8xx::fixup_sparc_gotdata_hix22;
-  case VK_T8xx_GOTDATA_LOX10: return T8xx::fixup_sparc_gotdata_lox10;
   case VK_T8xx_GOTDATA_OP:    return T8xx::fixup_sparc_gotdata_op;
+    */
   }
 }
 
@@ -217,6 +109,7 @@ static void fixELFSymbolsInTLSFixupsImpl(const MCExpr *Expr, MCAssembler &Asm) {
 void T8xxMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   switch(getKind()) {
   default: return;
+    /*
   case VK_T8xx_TLS_GD_CALL:
   case VK_T8xx_TLS_LDM_CALL: {
     // The corresponding relocations reference __tls_get_addr, as they call it,
@@ -245,6 +138,7 @@ void T8xxMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case VK_T8xx_TLS_IE_ADD:
   case VK_T8xx_TLS_LE_HIX22:
   case VK_T8xx_TLS_LE_LOX10: break;
+    */
   }
   fixELFSymbolsInTLSFixupsImpl(getSubExpr(), Asm);
 }
