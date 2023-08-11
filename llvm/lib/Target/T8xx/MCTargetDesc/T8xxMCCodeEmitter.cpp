@@ -157,12 +157,14 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 
 	  if (MO->isExpr ())
 	    {
+	      /*
 	      const MCExpr *Expr = MO->getExpr();
 	      if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr)) {
 		MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
 		Fixups.push_back(MCFixup::create(0, Expr, Kind));
 		//		return 0;
 	      }
+	      */
 
 	      printf ("Opcode %u, Expression found\n", Bits);
 	      MO->getExpr ()->dump ();
