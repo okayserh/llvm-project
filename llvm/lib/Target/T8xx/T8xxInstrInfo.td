@@ -191,6 +191,10 @@ def LDPI :    T8InstOp8<0x1B,
 		"ldpi",
 		[]>;
 
+
+def IN :      T8InstOp4<0x7, (outs), (ins OReg:$cnt, MemSrc:$chan, MemSrc:$addr), "in", []>;
+def OUT :     T8InstOp4<0xB, (outs), (ins OReg:$cnt, MemSrc:$chan, MemSrc:$addr), "out", []>;
+
 /*
 
 //def STL   : T8InstImm<0xD, "stl">;
@@ -202,10 +206,8 @@ def LDPI :    T8InstOp8<0x1B,
 def BSUB :    T8InstOp4<0x2, "bsub">;
 def ENDP :    T8InstOp4<0x3, "endp">;
 //def ADD :     T8InstOp4<0x5, "add">;
-def IN :      T8InstOp4<0x7, "in">;
 def PROD :    T8InstOp4<0x8, "prod">;
 def WSUB :    T8InstOp4<0xA, "wsub">;
-def OUT :     T8InstOp4<0xB, "out">;
 //def SUB :     T8InstOp4<0xC, "sub">;
 def STARTP :  T8InstOp4<0xD, "startp">;
 def OUTBYTE : T8InstOp4<0xE, "outbyte">;
