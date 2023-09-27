@@ -319,6 +319,9 @@ enum {
   EM_BPF = 247,           // Linux kernel bpf virtual machine
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
+
+  EM_T8XX = 253,          // Inmos Transputer family
+
   EM_LOONGARCH = 258,     // LoongArch
 };
 
@@ -948,6 +951,11 @@ enum : unsigned {
 // ELF Relocation types for Xtensa
 enum {
 #include "ELFRelocs/Xtensa.def"
+};
+
+// ELF Relocation types for Inmos Transputer
+enum {
+#include "ELFRelocs/T8xx.def"
 };
 
 #undef ELF_RELOC

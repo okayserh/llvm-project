@@ -136,30 +136,18 @@ def LDNLP : T8InstImm<0x5,
 //def ADC   : T8InstImm<0x8, "adc">;
 /* Call 0x9 */
 /* CJ 0xA */
-/* Check if this makes sense?
-def AJW   : T8InstImm<0xB,
-		(outs WptrRegs:$dst),
-		(ins WptrRegs:$src1, i32imm:$src2),
-		"ajw $src2",
-		[]> {
-		let imm = 0x0;
-		}
-*/
+
 def AJW   : T8InstImm<0xB,
 		(outs),
-		(ins i32imm:$src2),
-		"ajw $src2",
-		[]> {
-		let imm = 0x0;
-		}
+		(ins i32imm:$imm),
+		"ajw $imm",
+		[]>;
 
 def EQC   : T8InstImm<0xC,
 		(outs OReg:$dst),
-		(ins OReg:$src1, i32imm:$src2),
-		"eqc $src2",
-		[]> {
-		let imm = 0x0;
-		}
+		(ins OReg:$src1, i32imm:$imm),
+		"eqc $imm",
+		[]>;
 
 def REV :     T8InstOp4<0x0,
 		(outs),
@@ -360,19 +348,15 @@ def FPUR64TOR32 :  T8InstOp8<0x2A, 0xF2, "fpldnldbi">;
 
 def ADC  : T8InstImm<0x8,
 		(outs OReg:$dst),
-       	 	(ins OReg:$src1, i32imm:$src2),
-		"adc $src2",
-		[(set OReg:$dst, (add OReg:$src1, imm:$src2))]> {
-		let imm = 0x0;
-		}
+       	 	(ins OReg:$src1, i32imm:$imm),
+		"adc $imm",
+		[(set OReg:$dst, (add OReg:$src1, imm:$imm))]>;
 
 def LDC  : T8InstImm<0x4,
 		(outs OReg:$dst),
-       	 	(ins i32imm:$src),
-		"ldc $src",
-		[(set OReg:$dst, imm:$src)]> {
-		let imm = 0x0;
-		}
+       	 	(ins i32imm:$imm),
+		"ldc $imm",
+		[(set OReg:$dst, imm:$imm)]>;
 
 // Taken from SparcInstrInfo.td
 // "LEA" forms of add (patterns to make tblgen happy)
@@ -380,14 +364,14 @@ def LDC  : T8InstImm<0x4,
 // Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
 def LDLP   : T8InstImm<0x1,
 		(outs OReg:$rd),
-      		(ins WPtrSrc:$addr),
+      		(ins (WPtrSrc $rs, $imm):$addr),
                 "ldlp $addr",
                 [(set iPTR:$rd, ADDRri:$addr)]> {
 		let imm = 0x0;
 }
 
 def LDLPb   : T8Inst<(outs OReg:$rd),
-      		(ins WPtrSrc:$addr),
+      		(ins (WPtrSrc $rs, $imm):$addr),
                 "ldlp $addr",
                 [(set iPTR:$rd, ADDRri8:$addr)]> {
 		let isCodeGenOnly = 1;
@@ -461,12 +445,9 @@ def XWORD  : T8InstOp8<0x3A,
 // Load i32 from frame index
 def LDL : T8InstImm<0x7,
 		(outs OReg:$val),
-       	 	(ins WPtrSrc:$addr),
+       	 	(ins (WPtrSrc $rs, $imm):$addr),
 		"ldl $addr",
-		[(set i32:$val, (load ADDRri:$addr))]>
-{
-let imm = 0x0;
-}
+		[(set i32:$val, (load ADDRri:$addr))]>;
 
 
 // Load i32 from global address
@@ -534,10 +515,9 @@ def : Pat<(sextloadi8 ADDRri8:$addr),
 // Note: previously STRi32regop
 def STL : T8InstImm<0xD,
 		(outs),
-       	 	(ins OReg:$val, WPtrSrc:$addr),
+       	 	(ins OReg:$val, (WPtrSrc $rs, $imm):$addr),
 		"stl $addr",
 		[(store i32:$val, ADDRri:$addr)]> {
-		let imm = 0x0;
 		}
 
 // Store i32 to global address

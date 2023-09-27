@@ -54,9 +54,12 @@ bool T8xxInstPrinter::printT8xxAliasInstr(const MCInst *MI,
 void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
                                     const MCSubtargetInfo &STI,
                                     raw_ostream &O) {
+  //  MI->dump ();
+  // printf ("Op Num %i No Ops %i\n", opNum, MI->getNumOperands ());
+
   const MCOperand &MO = MI->getOperand (opNum);
 
-  printf ("printOperand\n");
+  //  printf ("printOperand\n");
   
   if (MO.isReg()) {
     printRegName(O, MO.getReg());
@@ -77,18 +80,26 @@ void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
 void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
 					  const MCSubtargetInfo &STI,
 					  raw_ostream &O) {
-  MI->dump ();
-  printf ("Op Num %i\n", OpNum);
-  
-  const MCOperand &Op1 = MI->getOperand(OpNum);
-  const MCOperand &Op2 = MI->getOperand(OpNum + 1);
+  //MI->dump ();
+  //  printf ("Op Num %i No Ops %i\n", OpNum, MI->getNumOperands ());
 
-  assert((Op1.isReg() && Op1.getReg() == T8xx::WPTR) && "Unsupported register for MemSrc");
-  assert((Op2.isImm() && (Op2.getImm() % 4 == 0)) && "Offset is not properly aligned for MemSrc");
-
-  unsigned Offset = Op2.getImm() / 4;
-  O << Offset;
+  if ((OpNum + 1) < MI->getNumOperands ())
+    {
+      const MCOperand &Op1 = MI->getOperand(OpNum);
+      const MCOperand &Op2 = MI->getOperand(OpNum + 1);
   
+      assert((Op1.isReg() && Op1.getReg() == T8xx::WPTR) && "Unsupported register for MemSrc");
+      assert((Op2.isImm() && (Op2.getImm() % 4 == 0)) && "Offset is not properly aligned for MemSrc");
+
+      unsigned Offset = Op2.getImm() / 4;
+      O << Offset;
+    }
+  else
+    {
+      // TODO: Quick fix for disassembler. Not consistent with code when compiling stuff
+      O << "x0x";
+    }
+      
   /*
   O << "[";
   printRegName(O, Op1.getReg());

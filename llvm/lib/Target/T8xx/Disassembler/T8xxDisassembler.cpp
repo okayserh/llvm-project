@@ -70,7 +70,69 @@ static DecodeStatus DecodeIntRegsRegisterClass(MCInst &Inst, unsigned RegNo,
 }
 
 
+static DecodeStatus decodeImm(MCInst &Inst, unsigned Insn, uint64_t Address,
+			      const MCDisassembler *Decoder);
+
+static DecodeStatus decodeRegStack(MCInst &Inst, unsigned Insn, uint64_t Address,
+				   const MCDisassembler *Decoder);
+
+
 #include "T8xxGenDisassemblerTables.inc"
+
+
+static DecodeStatus decodeImm(MCInst &Inst, unsigned Insn, uint64_t Address,
+			      const MCDisassembler *Decoder)
+{
+  unsigned opc = fieldFromInstruction(Insn, 4, 4);
+  unsigned imm = fieldFromInstruction(Insn, 0, 4);
+
+  //  printf ("OPC %i  IMM %i\n", opc, imm);
+  
+  switch (opc)
+    {
+    case 0x4:  // LDC
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createImm(imm));
+      break;
+    case 0x8:  // ADC
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createImm(imm));
+      break;
+
+    case 0xb: // AJW
+      Inst.addOperand(MCOperand::createImm(imm * 4));
+      break;
+
+    case 0x3:  // LDNL
+      Inst.addOperand(MCOperand::createImm(imm * 4));
+      break;
+      
+    case 0xe:  // STNL
+      Inst.addOperand(MCOperand::createImm(imm * 4));
+      break;
+      
+    case 0x1: // LDLP
+    case 0x7: // LDL
+    case 0xD: // STL
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createReg(T8xx::WPTR));
+      Inst.addOperand(MCOperand::createImm(imm * 4));
+      break;
+    }
+
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus decodeRegStack(MCInst &Inst, unsigned Insn, uint64_t Address,
+				   const MCDisassembler *Decoder)
+{
+  unsigned addr = 0;
+  Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+  Inst.addOperand(MCOperand::createReg(T8xx::BREG));
+  return MCDisassembler::Success;
+}
+
 
 /// Read four bytes from the ArrayRef and return 32 bit word.
 static DecodeStatus readInstruction32(ArrayRef<uint8_t> Bytes, uint64_t Address,
@@ -96,34 +158,48 @@ DecodeStatus T8xxDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
                                                uint64_t Address,
                                                raw_ostream &CStream) const {
   uint32_t Insn;
-  bool isLittleEndian = getContext().getAsmInfo()->isLittleEndian();
-  DecodeStatus Result =
-      readInstruction32(Bytes, Address, Size, Insn, isLittleEndian);
-  if (Result == MCDisassembler::Fail)
-    return MCDisassembler::Fail;
+  bool isLittleEndian = true; // getContext().getAsmInfo()->isLittleEndian();
+  DecodeStatus Result;
+
+  int32_t prefix = 0;
+  
+  //  printf ("Decode Size %lu  Address %lu\n", Size, Address);
+  /*
+  for (unsigned int i = 0; i < 20; ++i)
+    printf ("%20x ", Bytes[i]);
+  printf ("\n");
+  */
+
+  // Collect nfix / pfix instructions
+  unsigned int i = 0;
+  while (((Bytes[i] >> 4) == 0x6) ||
+	 ((Bytes[i] >> 4) == 0x2))
+    {
+      //      printf ("P/NFIX %i\n", i);
+      ++i;
+    }
 
   // Calling the auto-generated decoder function.
-  /* TODO: DecoderTable is not created?
-  if (STI.getFeatureBits()[T8xx::FeatureV9])
-  {
-    Result = decodeInstruction(DecoderTableT8xxV932, Instr, Insn, Address, this, STI);
-  }
+  Insn = Bytes[i];
+  Address += i;
+  Size = i;
+
+  //  printf ("Insn %i  Address %i   Size %i\n", Insn, Address, Size);
+
+  Result = decodeInstruction(DecoderTableT8xx8, Instr, Insn, Address, this, STI);
+  if (Result == MCDisassembler::Fail)
+    {
+      Insn = Insn << 8 + Bytes[i+1];
+      Result = decodeInstruction(DecoderTableT8xx16, Instr, Insn, Address, this, STI);
+      if (Result != MCDisassembler::Fail)
+	Size = i+2;
+    }
   else
-  {
-    Result = decodeInstruction(DecoderTableT8xxV832, Instr, Insn, Address, this, STI);
-  }
-  if (Result != MCDisassembler::Fail)
-    return Result;
+    {
+      Size = i+1;
+    }
 
-  Result =
-      decodeInstruction(DecoderTableT8xx32, Instr, Insn, Address, this, STI);
-
-  if (Result != MCDisassembler::Fail) {
-    Size = 4;
-    return Result;
-  }
-  */
-  return MCDisassembler::Fail;
+  return Result;
 }
 
 static bool tryAddingSymbolicOperand(int64_t Value, bool isBranch,

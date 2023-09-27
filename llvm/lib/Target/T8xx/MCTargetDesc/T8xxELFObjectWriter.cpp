@@ -22,8 +22,8 @@ namespace {
   class T8xxELFObjectWriter : public MCELFObjectTargetWriter {
   public:
     T8xxELFObjectWriter(bool Is64Bit, uint8_t OSABI)
-      : MCELFObjectTargetWriter(Is64Bit, OSABI,
-                                Is64Bit ?  ELF::EM_SPARCV9 : ELF::EM_SPARC,
+      : MCELFObjectTargetWriter(false, OSABI,
+                                ELF::EM_T8XX,
                                 /*HasRelocationAddend*/ true) {}
 
     ~T8xxELFObjectWriter() override = default;
@@ -48,17 +48,17 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
 
   if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Fixup.getValue())) {
     if (SExpr->getKind() == T8xxMCExpr::VK_T8xx_IPTRREL)
-      return ELF::R_SPARC_DISP32;
+      return ELF::R_T8XX_ADDR;
   }
 
   if (IsPCRel) {
     switch(Fixup.getTargetKind()) {
     default:
       llvm_unreachable("Unimplemented fixup -> relocation");
-    case FK_Data_1:                  return ELF::R_SPARC_DISP8;
-    case FK_Data_2:                  return ELF::R_SPARC_DISP16;
-    case FK_Data_4:                  return ELF::R_SPARC_DISP32;
-    case FK_Data_8:                  return ELF::R_SPARC_DISP64;
+    case FK_Data_1:                  return ELF::R_T8XX_ADDR;
+    case FK_Data_2:                  return ELF::R_T8XX_ADDR;
+    case FK_Data_4:                  return ELF::R_T8XX_ADDR;
+    case FK_Data_8:                  return ELF::R_T8XX_ADDR;
       /*
     case T8xx::fixup_sparc_call30:  return ELF::R_SPARC_WDISP30;
     case T8xx::fixup_sparc_br22:    return ELF::R_SPARC_WDISP22;
@@ -69,24 +69,24 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
   switch(Fixup.getTargetKind()) {
   default:
     llvm_unreachable("Unimplemented fixup -> relocation");
-  case FK_NONE:                  return ELF::R_SPARC_NONE;
-  case FK_Data_1:                return ELF::R_SPARC_8;
+  case FK_NONE:                  return ELF::R_T8XX_NONE;
+  case FK_Data_1:                return ELF::R_T8XX_ADDR;
   case FK_Data_2:                return ((Fixup.getOffset() % 2)
-                                         ? ELF::R_SPARC_UA16
-                                         : ELF::R_SPARC_16);
+                                         ? ELF::R_T8XX_ADDR
+                                         : ELF::R_T8XX_ADDR);
   case FK_Data_4:                return ((Fixup.getOffset() % 4)
-                                         ? ELF::R_SPARC_UA32
-                                         : ELF::R_SPARC_32);
+                                         ? ELF::R_T8XX_ADDR
+                                         : ELF::R_T8XX_ADDR);
   case FK_Data_8:                return ((Fixup.getOffset() % 8)
-                                         ? ELF::R_SPARC_UA64
-                                         : ELF::R_SPARC_64);
+                                         ? ELF::R_T8XX_ADDR
+                                         : ELF::R_T8XX_ADDR);
     /*
   case T8xx::fixup_sparc_13:    return ELF::R_SPARC_13;
   case T8xx::fixup_sparc_hi22:  return ELF::R_SPARC_HI22;
     */
   }
 
-  return ELF::R_SPARC_NONE;
+  return ELF::R_T8XX_NONE;
 }
 
 bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,

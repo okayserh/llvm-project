@@ -71,7 +71,7 @@ namespace {
       unsigned Type;
       Type = llvm::StringSwitch<unsigned>(Name)
 #define ELF_RELOC(X, Y) .Case(#X, Y)
-#include "llvm/BinaryFormat/ELFRelocs/Sparc.def"
+#include "llvm/BinaryFormat/ELFRelocs/T8xx.def"
 #undef ELF_RELOC
                  .Case("BFD_RELOC_NONE", ELF::R_SPARC_NONE)
                  .Case("BFD_RELOC_8", ELF::R_SPARC_8)
