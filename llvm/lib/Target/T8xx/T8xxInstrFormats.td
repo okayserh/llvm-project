@@ -24,6 +24,9 @@ class T8Inst8<dag outs, dag ins, string asmstr, list<dag> pattern>
       :T8Inst<outs, ins, asmstr, pattern> {
       field bits<8> Inst;
       let Size = 1;
+
+      bits<4> op;
+      let Inst{7 - 4} = op;
 }
 
 class T8Inst16<dag outs, dag ins, string asmstr, list<dag> pattern>
@@ -56,15 +59,20 @@ class T8InstImm<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> patte
    : T8Inst8<outs, ins, asmstr, pattern> {
    bits<4> imm;
 
-   let Inst{7 - 4} = opval;
+   let op = opval;
    let Inst{3 - 0} = imm;
+
+   let DecoderMethod = "decodeImm";
 }
 
 
-class T8InstOp4<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
+class T8InstOp4<bits<4> opval2, dag outs, dag ins, string asmstr, list<dag> pattern>
    : T8Inst8<outs, ins, asmstr, pattern> {
-   let Inst{7 - 4} = 0xF;
-   let Inst{3 - 0} = opval;
+
+   let op = 0xF;
+   let Inst{3 - 0} = opval2;
+
+   let DecoderMethod = "decodeRegStack";
 }
 
 class T8InstOp8<bits<8> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
@@ -73,6 +81,7 @@ class T8InstOp8<bits<8> opval, dag outs, dag ins, string asmstr, list<dag> patte
    let Inst{11-  8} = opval{7-4};
    let Inst{7 -  4} = 0xF;
    let Inst{3 -  0} = opval{3-0};
+   let DecoderMethod = "decodeRegStack";
 }
 
 
