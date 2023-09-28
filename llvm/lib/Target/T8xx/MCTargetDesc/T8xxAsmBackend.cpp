@@ -73,11 +73,9 @@ namespace {
 #define ELF_RELOC(X, Y) .Case(#X, Y)
 #include "llvm/BinaryFormat/ELFRelocs/T8xx.def"
 #undef ELF_RELOC
-                 .Case("BFD_RELOC_NONE", ELF::R_SPARC_NONE)
-                 .Case("BFD_RELOC_8", ELF::R_SPARC_8)
-                 .Case("BFD_RELOC_16", ELF::R_SPARC_16)
-                 .Case("BFD_RELOC_32", ELF::R_SPARC_32)
-                 .Case("BFD_RELOC_64", ELF::R_SPARC_64)
+                 .Case("BFD_RELOC_NONE", ELF::R_T8XX_NONE)
+                 .Case("BFD_RELOC_16", ELF::R_T8XX_16)
+                 .Case("BFD_RELOC_32", ELF::R_T8XX_32)
                  .Default(-1u);
       if (Type == -1u)
         return std::nullopt;
@@ -85,16 +83,13 @@ namespace {
     }
 
     const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override {
-      const static MCFixupKindInfo InfosBE[T8xx::NumTargetFixupKinds] = {
+      const static MCFixupKindInfo Infos[T8xx::NumTargetFixupKinds] = {
         // name                    offset bits  flags
-        { "fixup_sparc_call30",     2,     30,  MCFixupKindInfo::FKF_IsPCRel },
-        { "fixup_sparc_br22",      10,     22,  MCFixupKindInfo::FKF_IsPCRel },
-      };
-
-      const static MCFixupKindInfo InfosLE[T8xx::NumTargetFixupKinds] = {
-        // name                    offset bits  flags
-        { "fixup_sparc_call30",     0,     30,  MCFixupKindInfo::FKF_IsPCRel },
-        { "fixup_sparc_br22",       0,     22,  MCFixupKindInfo::FKF_IsPCRel },
+        { "fixup_t8xx_32",     0,     32,  0 },
+        { "fixup_t8xx_16",     0,     16,  0 },
+        { "fixup_t8xx_addr",      0,     16,  MCFixupKindInfo::FKF_IsPCRel },
+        { "fixup_t8xx_jump",      0,     16,  MCFixupKindInfo::FKF_IsTarget ||
+	  MCFixupKindInfo::FKF_IsPCRel },
       };
 
       // Fixup kinds from .reloc directive are like R_SPARC_NONE. They do
@@ -107,10 +102,8 @@ namespace {
 
       assert(unsigned(Kind - FirstTargetFixupKind) < getNumFixupKinds() &&
              "Invalid kind!");
-      if (Endian == support::little)
-        return InfosLE[Kind - FirstTargetFixupKind];
 
-      return InfosBE[Kind - FirstTargetFixupKind];
+      return Infos[Kind - FirstTargetFixupKind];
     }
 
     bool shouldForceRelocation(const MCAssembler &Asm, const MCFixup &Fixup,
@@ -120,15 +113,8 @@ namespace {
       switch ((T8xx::Fixups)Fixup.getKind()) {
       default:
         return false;
-	/*
-      case T8xx::fixup_sparc_wplt30:
-        if (Target.getSymA()->getSymbol().isTemporary())
-          return false;
-        [[fallthrough]];
-      case T8xx::fixup_sparc_tls_gd_hi22:
-      case T8xx::fixup_sparc_tls_gd_lo10:
-        return true;
-	*/
+      case T8xx::fixup_t8xx_jump:
+	return true;
       }
     }
 

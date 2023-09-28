@@ -212,21 +212,24 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
   const MCExpr *Expr = MO.getExpr();
   const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr);
 
-  /*
-  if (MI.getOpcode() == T8::TLS_CALL) {
-    // No fixups for __tls_get_addr. Will emit for fixups for tls_symbol in
-    // encodeInstruction.
-#ifndef NDEBUG
-    // Verify that the callee is actually __tls_get_addr.
-    assert(SExpr && SExpr->getSubExpr()->getKind() == MCExpr::SymbolRef &&
-           "Unexpected expression in TLS_CALL");
-    const MCSymbolRefExpr *SymExpr = cast<MCSymbolRefExpr>(SExpr->getSubExpr());
-    assert(SymExpr->getSymbol().getName() == "__tls_get_addr" &&
-           "Unexpected function for TLS_CALL");
-#endif
+  printf ("FIXUP: getCallTargetOpValue\n");
+
+  // Note: Code copied from AVRMCCodeEmitter.cpp.
+  // It seems that it differentiates two cases, one is an expression
+  // (presumably a symbol) which justifies the insertion of a fixup for
+  // later handling, the second being an immediate number, where
+  // just some bitshifting happens (in case of the AVR microcontroller).
+
+  if (MO.isExpr()) {
+    printf ("FIXUP: Expression\n");
+    Fixups.push_back(
+		     MCFixup::create(0, MO.getExpr(), MCFixupKind(T8xx::fixup_t8xx_jump), MI.getLoc()));
     return 0;
   }
-  */
+
+  assert(MO.isImm());
+  printf ("No FIXUP: Immediate\n");
+
   MCFixupKind Kind = MCFixupKind(SExpr->getFixupKind());
   Fixups.push_back(MCFixup::create(0, Expr, Kind));
   return 0;

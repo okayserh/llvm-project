@@ -90,6 +90,10 @@ static DecodeStatus decodeImm(MCInst &Inst, unsigned Insn, uint64_t Address,
   
   switch (opc)
     {
+    case 0x0:  // J
+    case 0xA:  // CJ
+      Inst.addOperand(MCOperand::createImm(imm));
+      break;
     case 0x4:  // LDC
       Inst.addOperand(MCOperand::createReg(T8xx::AREG));
       Inst.addOperand(MCOperand::createImm(imm));

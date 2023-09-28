@@ -45,8 +45,7 @@ bool T8xxMCExpr::printVariantKind(raw_ostream &OS, VariantKind Kind)
   switch (Kind) {
   case VK_T8xx_None:     return false;
   case VK_T8xx_IPTRREL:  return false;
-  case VK_T8xx_WDISP30:  return false;
-  case VK_T8xx_GOTDATA_OP:    OS << "%gdop(";       return true;
+  case VK_T8xx_GLOBAL:   return false;
   }
   llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");
 }
@@ -55,18 +54,17 @@ T8xxMCExpr::VariantKind T8xxMCExpr::parseVariantKind(StringRef name)
 {
   return StringSwitch<T8xxMCExpr::VariantKind>(name)
     .Case("iptrrel",   VK_T8xx_IPTRREL)
-    .Case("gdop",       VK_T8xx_GOTDATA_OP)
+    .Case("global",    VK_T8xx_GLOBAL)
     .Default(VK_T8xx_None);
 }
 
 T8xx::Fixups T8xxMCExpr::getFixupKind(T8xxMCExpr::VariantKind Kind) {
   switch (Kind) {
   default: llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");
-    /*
-  case VK_T8xx_IPTRREL:  return T8xx::fixup_t8xx_iptrrel;
-  case VK_T8xx_WDISP30:  return T8xx::fixup_sparc_call30;
-  case VK_T8xx_GOTDATA_OP:    return T8xx::fixup_sparc_gotdata_op;
-    */
+
+  case VK_T8xx_IPTRREL:  return T8xx::fixup_t8xx_jump;
+  case VK_T8xx_GLOBAL:   return T8xx::fixup_t8xx_addr;
+
   }
 }
 
@@ -122,20 +120,6 @@ void T8xxMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
       ELFSymbol->setBinding(ELF::STB_GLOBAL);
     [[fallthrough]];
   }
-  case VK_T8xx_TLS_GD_HI22:
-  case VK_T8xx_TLS_GD_LO10:
-  case VK_T8xx_TLS_GD_ADD:
-  case VK_T8xx_TLS_LDM_HI22:
-  case VK_T8xx_TLS_LDM_LO10:
-  case VK_T8xx_TLS_LDM_ADD:
-  case VK_T8xx_TLS_LDO_HIX22:
-  case VK_T8xx_TLS_LDO_LOX10:
-  case VK_T8xx_TLS_LDO_ADD:
-  case VK_T8xx_TLS_IE_HI22:
-  case VK_T8xx_TLS_IE_LO10:
-  case VK_T8xx_TLS_IE_LD:
-  case VK_T8xx_TLS_IE_LDX:
-  case VK_T8xx_TLS_IE_ADD:
   case VK_T8xx_TLS_LE_HIX22:
   case VK_T8xx_TLS_LE_LOX10: break;
     */
