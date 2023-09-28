@@ -59,6 +59,8 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
     case FK_Data_2:                  return ELF::R_T8XX_ADDR;
     case FK_Data_4:                  return ELF::R_T8XX_ADDR;
     case FK_Data_8:                  return ELF::R_T8XX_ADDR;
+
+    case T8xx::fixup_t8xx_jump: return ELF::R_T8XX_JUMP;
       /*
     case T8xx::fixup_sparc_call30:  return ELF::R_SPARC_WDISP30;
     case T8xx::fixup_sparc_br22:    return ELF::R_SPARC_WDISP22;
@@ -108,6 +110,7 @@ bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
     case ELF::R_SPARC_GOTDATA_OP_HIX22:
     case ELF::R_SPARC_GOTDATA_OP_LOX10:
       */
+  case ELF::R_T8XX_JUMP:
       return true;
   }
 }

@@ -4,5 +4,7 @@
 #endif
 
 ELF_RELOC(R_T8XX_NONE,         0)
-ELF_RELOC(R_T8XX_ADDR,         1)
-ELF_RELOC(R_T8XX_JUMP,         2)
+ELF_RELOC(R_T8XX_32,           1)
+ELF_RELOC(R_T8XX_16,           2)
+ELF_RELOC(R_T8XX_ADDR,         3)
+ELF_RELOC(R_T8XX_JUMP,         4)
