@@ -25,8 +25,7 @@ public:
   enum VariantKind {
     VK_T8xx_None,
     VK_T8xx_IPTRREL,
-    VK_T8xx_WDISP30,
-    VK_T8xx_GOTDATA_OP,
+    VK_T8xx_GLOBAL,
   };
 
 private:

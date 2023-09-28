@@ -93,7 +93,7 @@ def WPtrSrc : Operand<iPTR> {
 
 // Branch targets have OtherVT type.
 def brtarget : Operand<OtherVT> {
-  let EncoderMethod = "getMemSrcValue";
+  let EncoderMethod = "getCallTargetOpValue";
 }
 
 
@@ -620,25 +620,24 @@ def BRimm  : T8Inst<(outs), (ins i32imm:$addr),
 }
 
 
+// Note j is a relative call
+
 def BRimm2  : T8InstImm<0x0,
 		   (outs),
-		   (ins brtarget:$addr),
-                   "j $addr",
-                   [(br bb:$addr)]> {
+		   (ins brtarget:$imm),
+                   "j $imm",
+                   [(br bb:$imm)]> {
 		   let isTerminator = 1;
 		   let isBranch = 1;
-		   let imm = 0x0;
 }
 
 
 let isTerminator = 1, isBranch = 1, Uses = [CPSR] in {
   def Bcc : T8InstImm<0xA,
 		(outs), 
-		(ins brtarget:$dst),
-                "cj $dst",
-		[]> {
-		let imm = 0x0;
-  }
+		(ins brtarget:$imm),
+                "cj $imm",
+		[]>;
 }
 
 
