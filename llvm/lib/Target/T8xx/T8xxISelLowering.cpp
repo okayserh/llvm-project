@@ -192,7 +192,10 @@ SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) co
   GlobalAddressSDNode *GlobalAddr = cast<GlobalAddressSDNode>(Op.getNode());
   int64_t Offset = cast<GlobalAddressSDNode>(Op)->getOffset();
 
-  Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32);
+  // TODO: Just a first try to see how things work.
+  // Ideally a later version should be able to build position independent code as well
+  // as code for a fixed address.
+  Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32, 0, T8xxMCExpr::VK_T8xx_GLOBAL);
 
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
 
