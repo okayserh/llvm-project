@@ -89,6 +89,8 @@ bool T8xx::needsThunk(RelExpr expr, RelType type, const InputFile *file,
 }
 
 void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+  printf ("Relocation Type %i  Value %i\n", rel.type, val);
+
   switch (rel.type) {
   case R_T8XX_NONE:
     break;
@@ -97,7 +99,9 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     *loc = val & 0xff;
     break;
   case R_T8XX_JUMP:
-    checkUInt(loc, val, 32, rel);
+    // TODO: Negative relocations are feasible for the transputer
+    // See if another check should be implemented
+    //    checkUInt(loc, val, 32, rel);
     *loc = (val >> 8) & 0xff;
     break;
 

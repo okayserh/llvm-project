@@ -381,6 +381,11 @@ StringRef MCSymbolRefExpr::getVariantKindName(VariantKind Kind) {
   case VK_VE_TLS_GD_LO32: return "tls_gd_lo";
   case VK_VE_TPOFF_HI32: return "tpoff_hi";
   case VK_VE_TPOFF_LO32: return "tpoff_lo";
+
+  case VK_T8xx_None: return "none";
+  case VK_T8xx_IPTRREL: return "t8xx_iptrrel";
+  case VK_T8xx_GLOBAL: return "t8xx_global";
+
   }
   llvm_unreachable("Invalid variant kind");
 }
@@ -524,6 +529,10 @@ MCSymbolRefExpr::getVariantKindForName(StringRef Name) {
     .Case("tls_gd_lo", VK_VE_TLS_GD_LO32)
     .Case("tpoff_hi", VK_VE_TPOFF_HI32)
     .Case("tpoff_lo", VK_VE_TPOFF_LO32)
+
+    .Case("t8xx_iptrrel", VK_T8xx_IPTRREL)
+    .Case("t8xx_global", VK_T8xx_GLOBAL)
+        
     .Default(VK_Invalid);
 }
 

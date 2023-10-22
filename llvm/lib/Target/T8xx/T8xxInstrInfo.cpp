@@ -12,6 +12,7 @@
 
 #include "T8xxInstrInfo.h"
 #include "T8xx.h"
+#include "MCTargetDesc/T8xxMCExpr.h"
 #include "T8xxMachineFunctionInfo.h"
 #include "T8xxSubtarget.h"
 #include "llvm/ADT/STLExtras.h"
@@ -514,7 +515,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       // Third and Fourth are MO_Register
 
       // Load offset to global address into AREG and correct by bytecount of LDPI and GCALL
-      BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addGlobalAddress(MI.getOperand(0).getGlobal ());
+      BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addGlobalAddress(MI.getOperand(0).getGlobal (), 0, T8xxMCExpr::VK_T8xx_GLOBAL);
       BuildMI (MBB, MI, DL, get(T8xx::ADC), T8xx::AREG).addReg(T8xx::AREG).addImm(-4);
       BuildMI (MBB, MI, DL, get(T8xx::LDPI), T8xx::AREG).addReg(T8xx::AREG);
       BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);

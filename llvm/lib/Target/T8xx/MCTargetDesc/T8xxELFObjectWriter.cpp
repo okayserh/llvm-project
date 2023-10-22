@@ -61,6 +61,7 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
     case FK_Data_8:                  return ELF::R_T8XX_ADDR;
 
     case T8xx::fixup_t8xx_jump: return ELF::R_T8XX_JUMP;
+    case T8xx::fixup_t8xx_addr: return ELF::R_T8XX_ADDR;
       /*
     case T8xx::fixup_sparc_call30:  return ELF::R_SPARC_WDISP30;
     case T8xx::fixup_sparc_br22:    return ELF::R_SPARC_WDISP22;

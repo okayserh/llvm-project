@@ -157,11 +157,13 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 
 	  if (MO->isExpr ())
 	    {
-	      /*
+	      /* TODO:Adding a fixup here is leads to duplicate relocations in ELF file
+		 Unclear, where the first one is added?
 	      const MCExpr *Expr = MO->getExpr();
 	      if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr)) {
-		MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
-		Fixups.push_back(MCFixup::create(0, Expr, Kind));
+		printf ("Fixup t8xx_addr created\n");
+		//		MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
+		Fixups.push_back(MCFixup::create(0, Expr, MCFixupKind(T8xx::fixup_t8xx_addr), MI.getLoc()));
 		//		return 0;
 	      }
 	      */
@@ -177,10 +179,16 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
   ++MCNumEmitted;  // Keep track of the # of mi's emitted.
 }
 
+
+// Note: These method names are defines by setting the "EncoderMethod"
+// (this particular one is currently unused)
+
 unsigned T8xxMCCodeEmitter::
 getMachineOpValue(const MCInst &MI, const MCOperand &MO,
                   SmallVectorImpl<MCFixup> &Fixups,
                   const MCSubtargetInfo &STI) const {
+  printf ("getMachineOpValue called\n");
+
   if (MO.isReg())
     return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg());
 
@@ -203,6 +211,8 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
   return 0;
 }
 
+// Note: These method names are defines by setting the "EncoderMethod"
+// (This one is linked to "brtarget", which is used by BRimm2 and Bcc)
 
 unsigned T8xxMCCodeEmitter::
 getCallTargetOpValue(const MCInst &MI, unsigned OpNo,

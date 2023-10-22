@@ -59,6 +59,8 @@ T8xxMCExpr::VariantKind T8xxMCExpr::parseVariantKind(StringRef name)
 }
 
 T8xx::Fixups T8xxMCExpr::getFixupKind(T8xxMCExpr::VariantKind Kind) {
+  printf ("FixupKind %i\n", (int) Kind);
+
   switch (Kind) {
   default: llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");
 
@@ -75,57 +77,6 @@ T8xxMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
   return getSubExpr()->evaluateAsRelocatable(Res, Layout, Fixup);
 }
 
-static void fixELFSymbolsInTLSFixupsImpl(const MCExpr *Expr, MCAssembler &Asm) {
-  switch (Expr->getKind()) {
-  case MCExpr::Target:
-    llvm_unreachable("Can't handle nested target expr!");
-    break;
-
-  case MCExpr::Constant:
-    break;
-
-  case MCExpr::Binary: {
-    const MCBinaryExpr *BE = cast<MCBinaryExpr>(Expr);
-    fixELFSymbolsInTLSFixupsImpl(BE->getLHS(), Asm);
-    fixELFSymbolsInTLSFixupsImpl(BE->getRHS(), Asm);
-    break;
-  }
-
-  case MCExpr::SymbolRef: {
-    const MCSymbolRefExpr &SymRef = *cast<MCSymbolRefExpr>(Expr);
-    cast<MCSymbolELF>(SymRef.getSymbol()).setType(ELF::STT_TLS);
-    break;
-  }
-
-  case MCExpr::Unary:
-    fixELFSymbolsInTLSFixupsImpl(cast<MCUnaryExpr>(Expr)->getSubExpr(), Asm);
-    break;
-  }
-
-}
-
-void T8xxMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
-  switch(getKind()) {
-  default: return;
-    /*
-  case VK_T8xx_TLS_GD_CALL:
-  case VK_T8xx_TLS_LDM_CALL: {
-    // The corresponding relocations reference __tls_get_addr, as they call it,
-    // but this is only implicit; we must explicitly add it to our symbol table
-    // to bind it for these uses.
-    MCSymbol *Symbol = Asm.getContext().getOrCreateSymbol("__tls_get_addr");
-    Asm.registerSymbol(*Symbol);
-    auto ELFSymbol = cast<MCSymbolELF>(Symbol);
-    if (!ELFSymbol->isBindingSet())
-      ELFSymbol->setBinding(ELF::STB_GLOBAL);
-    [[fallthrough]];
-  }
-  case VK_T8xx_TLS_LE_HIX22:
-  case VK_T8xx_TLS_LE_LOX10: break;
-    */
-  }
-  fixELFSymbolsInTLSFixupsImpl(getSubExpr(), Asm);
-}
 
 void T8xxMCExpr::visitUsedExpr(MCStreamer &Streamer) const {
   Streamer.visitUsedExpr(*getSubExpr());

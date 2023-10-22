@@ -354,6 +354,10 @@ public:
     VK_VE_TPOFF_HI32,  // symbol@tpoff_hi
     VK_VE_TPOFF_LO32,  // symbol@tpoff_lo
 
+    VK_T8xx_None,      // symbol@none
+    VK_T8xx_IPTRREL,   // symbol@t8xx_iptrrel
+    VK_T8xx_GLOBAL,    // symbol@t8xx_global
+    
     VK_TPREL,
     VK_DTPREL
   };
