@@ -593,8 +593,18 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 // Then the "copyToReg" after the call will shift it into the
 // right destination "Frame-Register"
 let isCall = 1 in {
-  def CALL : T8Inst<(outs), (ins i32imm:$addr),
+/* Version that tries to determine a instruction pointer relative adressing.
+def CALL : T8Inst<(outs), (ins i32imm:$addr),
                       "ldcipr $addr \n\tadc -4 \n\tldpi \n\tgcall \n\trev \n",
+                      [(call tglobaladdr:$addr)]> {
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+  }
+*/
+
+// Version with absolute adressing
+def CALL : T8Inst<(outs), (ins i32imm:$addr),
+                      "ldc $addr\n\tgcall \n\trev \n",
                       [(call tglobaladdr:$addr)]> {
     let isCodeGenOnly = 1;
     let isPseudo = 1;
@@ -660,3 +670,6 @@ def ADJCALLSTACKUP : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                             "ADJCALLSTACKUP $amt1",
                             [(callseq_end timm:$amt1, timm:$amt2)]>;
 }
+
+
+include "T8xxInstrAliases.td"
