@@ -516,8 +516,11 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 
       // Load offset to global address into AREG and correct by bytecount of LDPI and GCALL
       BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addGlobalAddress(MI.getOperand(0).getGlobal (), 0, T8xxMCExpr::VK_T8xx_GLOBAL);
+
+      /* Stuff for IPTR relative adressing
       BuildMI (MBB, MI, DL, get(T8xx::ADC), T8xx::AREG).addReg(T8xx::AREG).addImm(-4);
       BuildMI (MBB, MI, DL, get(T8xx::LDPI), T8xx::AREG).addReg(T8xx::AREG);
+      */
       BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
       BuildMI (MBB, MI, DL, get(T8xx::REV));
       MBB.erase(MI);

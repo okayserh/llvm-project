@@ -1,0 +1,13 @@
+MCAssembler defines the assembler, which seems to be the controlling class. It
+contains
+
+-MCAsmBackend  (provided by Target specific code)
+-MCCodeEmitter (provided by Target specific code)
+-MCObjectWriter (???)
+
+
+MCSection contains (is SectionVariant / BundeLockState)
+1..n MCFragment
+1..n MCSymbol
+
+MCSymbol

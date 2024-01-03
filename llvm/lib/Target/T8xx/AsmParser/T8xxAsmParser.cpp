@@ -134,6 +134,7 @@ private:
     k_Token,
     k_Register,
     k_Immediate,
+    k_MemoryReg,
     k_MemoryImm
   } Kind;
 
@@ -169,11 +170,16 @@ private:
 public:
   T8xxOperand(KindTy K) : Kind(K) {}
 
+  /*
+   * OKH: These are called from T8xxGenAsmMatcher.inc. They create the link
+   * between the LLVM operand classes and the parsed operand classes.
+   */
+
   bool isToken() const override { return Kind == k_Token; }
   bool isReg() const override { return Kind == k_Register; }
   bool isImm() const override { return Kind == k_Immediate; }
   bool isMem() const override { return isWPtrSrc(); }
-  bool isWPtrSrc() const { return Kind == k_MemoryImm; }
+  bool isWPtrSrc() const { return Kind == k_MemoryReg; }
 
   bool isCallTarget() const {
     if (!isImm())
@@ -202,17 +208,17 @@ public:
 
   // TODO: Check what this is needed for
   unsigned getMemBase() const {
-    assert((Kind == k_MemoryImm) && "Invalid access!");
+    assert((Kind == k_MemoryReg) && "Invalid access!");
     return Mem.Base;
   }
 
   const MCExpr *getMemOff() const {
-    assert((Kind == k_MemoryImm) && "Invalid access!");
+    assert((Kind == k_MemoryReg) && "Invalid access!");
     return Mem.Off;
   }
 
 
-  
+
   /// getStartLoc - Get the location of the first token of this operand.
   SMLoc getStartLoc() const override {
     return StartLoc;
@@ -225,7 +231,10 @@ public:
   void print(raw_ostream &OS) const override {
     switch (Kind) {
     case k_Token:     OS << "Token: " << getToken() << "\n"; break;
+    case k_Register:  OS << "Reg: " << getReg() << "\n"; break;
     case k_Immediate: OS << "Imm: " << getImm() << "\n"; break;
+    case k_MemoryReg: OS << "MemoryReg: " << getMemBase() << "\n"; break;
+    default: OS << "Unknown"; break;
     }
   }
 
@@ -243,7 +252,8 @@ public:
   void addWPtrSrcOperands(MCInst &Inst, unsigned N) const {
     assert(N == 2 && "Invalid number of operands!");
 
-    Inst.addOperand(MCOperand::createReg(getMemBase()));
+    //    Inst.addOperand(MCOperand::createReg(getMemBase()));
+    Inst.addOperand(MCOperand::createReg(T8xx::WPTR));
 
     const MCExpr *Expr = getMemOff();
     addExpr(Inst, Expr);
@@ -292,6 +302,16 @@ public:
     return Op;
   }
 
+  static std::unique_ptr<T8xxOperand>
+  MorphToMEMrr(unsigned Base, std::unique_ptr<T8xxOperand> Op) {
+    unsigned offsetReg = Op->getReg();
+    Op->Kind = k_MemoryReg;
+    Op->Mem.Base = Base;
+    Op->Mem.OffsetReg = offsetReg;
+    Op->Mem.Off = nullptr;
+    return Op;
+  }
+  
 };
 
 } // end anonymous namespace
@@ -308,7 +328,7 @@ bool T8xxAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                               MatchingInlineAsm);
 
   // Debug ouput
-  printf ("MatchAndEmit\n");
+  printf ("MatchAndEmit  OpSize %i\n", Operands.size());
   for (auto T = Operands.begin (); T != Operands.end (); ++T)
     (*T)->dump ();
 
@@ -388,11 +408,29 @@ bool T8xxAsmParser::ParseInstruction(ParseInstructionInfo &Info,
                                       StringRef Name, SMLoc NameLoc,
                                       OperandVector &Operands) {
 
+  printf ("ParseInstruction\n");
+  
   // First operand in MCInst is instruction mnemonic.
   Operands.push_back(T8xxOperand::CreateToken(Name, NameLoc));
 
   // apply mnemonic aliases, if any, so that we can parse operands correctly.
   //TODO OKH  applyMnemonicAliases(Name, getAvailableFeatures(), 0);
+
+  /* Since the Transputer instructions always act on specific registers,
+    those registers are not explicitly mentioned in assembler code. However,
+    for the LLVM representation of the assembler instructions those operands
+    are required.
+    At this place, those operands are added as required by the 15 instructions
+    for which this applies */
+  /*
+  if (Name.equals("stl")) {
+    printf ("Adding OPS for stl\n");
+    Operands.push_back (T8xxOperand::CreateReg(T8xx::AREG, T8xxOperand::rk_Int,
+					       getLexer().getLoc(),
+					       getLexer().getLoc()));
+  }
+  */
+
 
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
     // Read the first operand.
@@ -454,10 +492,31 @@ ParseDirective(AsmToken DirectiveID)
 
 
 OperandMatchResultTy T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
-  // TODO: Implement
-  return MatchOperand_NoMatch;
-}
+  SMLoc S = Parser.getTok().getLoc();
+  SMLoc E = SMLoc::getFromPointer(S.getPointer() - 1);
+
+  printf ("parseWPtrOperand  %i  %i\n", getLexer().getKind(), AsmToken::Integer);
   
+  switch (getLexer().getKind()) {
+  default:
+    return MatchOperand_NoMatch;
+  case AsmToken::Integer:
+    break;
+  }
+
+  const MCExpr *DestValue;
+  if (getParser().parseExpression(DestValue))
+    return MatchOperand_NoMatch;
+
+  T8xxMCExpr::VariantKind Kind =T8xxMCExpr::VK_T8xx_None;
+  
+  const MCExpr *DestExpr = T8xxMCExpr::create(Kind, DestValue, getContext());
+  //  Operands.pop_back ();
+  Operands.push_back(T8xxOperand::MorphToMEMrr (12, T8xxOperand::CreateReg(T8xx::WPTR, T8xxOperand::rk_Int, S, E)));
+		     //  Operands.push_back(T8xxOperand::CreateImm(DestExpr, S, E));
+  return MatchOperand_Success;
+}
+
 
 OperandMatchResultTy T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
   SMLoc S = Parser.getTok().getLoc();
@@ -484,7 +543,7 @@ OperandMatchResultTy T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
       IsPic ? T8xxMCExpr::VK_T8xx_WPLT30 : T8xxMCExpr::VK_T8xx_WDISP30;
   */
   T8xxMCExpr::VariantKind Kind =T8xxMCExpr::VK_T8xx_IPTRREL;
-  
+
 
   const MCExpr *DestExpr = T8xxMCExpr::create(Kind, DestValue, getContext());
   Operands.push_back(T8xxOperand::CreateImm(DestExpr, S, E));
@@ -503,7 +562,7 @@ T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
     return ResTy;
 
   // Note: AsmTokens are defined in include/llvm/MC/MCAsmMacro.h
-  
+
   std::unique_ptr<T8xxOperand> Op;
 
   ResTy = parseT8xxAsmOperand(Op, (Mnemonic == "call"));
@@ -608,7 +667,7 @@ bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, MCRegister &RegNo,
       return true;
     }
   }
-    
+
    return false;
 }
 

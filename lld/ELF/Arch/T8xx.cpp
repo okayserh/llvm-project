@@ -25,6 +25,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "InputFiles.h"
+#include "OutputSections.h"
 #include "Symbols.h"
 #include "Target.h"
 #include "Thunks.h"
@@ -51,6 +52,9 @@ public:
                   int64_t a) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
+
+  void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const override;
+
 };
 } // namespace
 
@@ -95,20 +99,72 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_T8XX_NONE:
     break;
   case R_T8XX_ADDR:
-    checkUInt(loc, val, 32, rel);
-    *loc = val & 0xff;
+    // Fill in the prefixes
+    for (int i = 0; i < 8; ++i)
+      loc[i] = (loc[i] & 0xF0) | ((val >> (7-i)*4) & 0xF);
+
+    //    checkUInt(loc, val, 32, rel);
+    //    *loc = val & 0xff;
     break;
   case R_T8XX_JUMP:
     // TODO: Negative relocations are feasible for the transputer
     // See if another check should be implemented
     //    checkUInt(loc, val, 32, rel);
-    *loc = (val >> 8) & 0xff;
+    //    *loc = (val >> 8) & 0xff;
+
+    // Fill in the prefixes
+    for (int i = 0; i < 8; ++i)
+      loc[i] = (loc[i] & 0xF0) | ((val >> (7-i)*4) & 0xF);
+
+    //    write32(loc, 0x12345678);
     break;
 
   default:
     llvm_unreachable("unknown relocation");
   }
 }
+
+
+void T8xx::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
+  uint64_t secAddr = sec.getOutputSection()->addr;
+  if (auto *s = dyn_cast<InputSection>(&sec))
+    secAddr += s->outSecOff;
+
+  printf ("relocateAlloc\n");
+  
+  for (const Relocation &rel : sec.relocs()) {
+    uint8_t *loc = buf + rel.offset;
+    const uint64_t val = SignExtend64(
+        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
+                             secAddr + rel.offset, *rel.sym, rel.expr),
+        32);
+
+    printf ("secAddr %li  Offset %li  relalloc %li\n", secAddr, rel.offset, val);
+    
+    relocate(loc, rel, val);
+    
+    /*
+    switch (rel.expr) {
+    case R_RELAX_TLS_GD_TO_IE_GOT_OFF:
+      relaxTlsGdToIe(loc, rel, val);
+      break;
+    case R_RELAX_TLS_GD_TO_LE:
+      relaxTlsGdToLe(loc, rel, val);
+      break;
+    case R_RELAX_TLS_LD_TO_LE_ABS:
+      relaxTlsLdToLe(loc, rel, val);
+      break;
+    case R_RELAX_TLS_IE_TO_LE:
+      relaxTlsIeToLe(loc, rel, val);
+      break;
+    default:
+      relocate(loc, rel, val);
+      break;
+    }
+    */
+  }
+}
+
 
 TargetInfo *elf::getT8xxTargetInfo() {
   static T8xx target;
