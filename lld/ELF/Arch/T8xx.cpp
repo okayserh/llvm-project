@@ -63,6 +63,8 @@ RelExpr T8xx::getRelExpr(RelType type, const Symbol &s,
   switch (type) {
   case R_T8XX_ADDR:
     return R_ABS;
+  case R_T8XX_ADDR_NPFIX:
+    return R_ABS;
   case R_T8XX_JUMP:
     return R_PC;
   default:
@@ -93,7 +95,7 @@ bool T8xx::needsThunk(RelExpr expr, RelType type, const InputFile *file,
 }
 
 void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
-  printf ("Relocation Type %i  Value %i\n", rel.type, val);
+  printf ("Relocation Type %i  Value %x\n", rel.type, val);
 
   switch (rel.type) {
   case R_T8XX_NONE:
@@ -112,11 +114,22 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     //    checkUInt(loc, val, 32, rel);
     //    *loc = (val >> 8) & 0xff;
 
+    // TODO: Offset for the pfix/nfix instructions before the
+    // actual jump instruction. Needs to be adapted when the
+    // relaxation is operational
+    val -= 8;
+    
     // Fill in the prefixes
     for (int i = 0; i < 8; ++i)
       loc[i] = (loc[i] & 0xF0) | ((val >> (7-i)*4) & 0xF);
 
     //    write32(loc, 0x12345678);
+    break;
+  case R_T8XX_ADDR_NPFIX:
+    // Fill in and address, which is not based on prefixe
+    // Example is a reference to a place in the data section
+    for (int i = 0; i < 4; ++i)
+      loc[i] = ((val >> i*8) & 0xFF);
     break;
 
   default:

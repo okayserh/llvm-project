@@ -21,7 +21,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "sparcmcexpr"
+#define DEBUG_TYPE "t8xxmcexpr"
 
 const T8xxMCExpr*
 T8xxMCExpr::create(VariantKind Kind, const MCExpr *Expr,
@@ -54,7 +54,8 @@ T8xxMCExpr::VariantKind T8xxMCExpr::parseVariantKind(StringRef name)
 {
   return StringSwitch<T8xxMCExpr::VariantKind>(name)
     .Case("iptrrel",   VK_T8xx_IPTRREL)
-    .Case("global",    VK_T8xx_GLOBAL)
+    .Case("global_pfix",    VK_T8xx_GLOBAL)
+    .Case("global",    VK_T8xx_GLOBAL_NPFIX)
     .Default(VK_T8xx_None);
 }
 
@@ -63,9 +64,9 @@ T8xx::Fixups T8xxMCExpr::getFixupKind(T8xxMCExpr::VariantKind Kind) {
 
   switch (Kind) {
   default: llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");
-
   case VK_T8xx_IPTRREL:  return T8xx::fixup_t8xx_jump;
   case VK_T8xx_GLOBAL:   return T8xx::fixup_t8xx_addr;
+  case VK_T8xx_GLOBAL_NPFIX:   return T8xx::fixup_t8xx_addr_npfix;
 
   }
 }

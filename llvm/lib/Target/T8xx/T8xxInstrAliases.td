@@ -29,6 +29,10 @@ def : InstAlias<"jmp $addr", (JMPLri G0, MEMri:$addr), 0>;
 def : InstAlias<"stl $addr", (STL AREG, WPtrSrc:$addr), 0>;
 def : InstAlias<"ldl $addr", (LDL AREG, WPtrSrc:$addr), 0>;
 
+def : InstAlias<"ldnl $addr", (LDNL AREG, RPtrSrc:$addr), 0>;
+def : InstAlias<"stnl $addr", (STNL AREG, RPtrSrc:$addr), 0>;
+
+
 /*
 def : MnemonicAlias<"iflush", "flush">;
 */

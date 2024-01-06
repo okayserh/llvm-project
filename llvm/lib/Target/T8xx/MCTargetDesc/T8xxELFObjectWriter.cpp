@@ -57,15 +57,14 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
       llvm_unreachable("Unimplemented fixup -> relocation");
     case FK_Data_1:                  return ELF::R_T8XX_ADDR;
     case FK_Data_2:                  return ELF::R_T8XX_ADDR;
-    case FK_Data_4:                  return ELF::R_T8XX_ADDR;
+    case FK_Data_4:                  return ELF::R_T8XX_ADDR_NPFIX;
     case FK_Data_8:                  return ELF::R_T8XX_ADDR;
 
+      // TODO: It seem these fixups are only selected when the "IsPCRel" flag is set. However,
+      // some of these relocations are not PC relative. Needs to be ordered properly.
     case T8xx::fixup_t8xx_jump: return ELF::R_T8XX_JUMP;
     case T8xx::fixup_t8xx_addr: return ELF::R_T8XX_ADDR;
-      /*
-    case T8xx::fixup_sparc_call30:  return ELF::R_SPARC_WDISP30;
-    case T8xx::fixup_sparc_br22:    return ELF::R_SPARC_WDISP22;
-      */
+    case T8xx::fixup_t8xx_addr_npfix: return ELF::R_T8XX_ADDR_NPFIX;
     }
   }
 
@@ -78,15 +77,11 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
                                          ? ELF::R_T8XX_ADDR
                                          : ELF::R_T8XX_ADDR);
   case FK_Data_4:                return ((Fixup.getOffset() % 4)
-                                         ? ELF::R_T8XX_ADDR
-                                         : ELF::R_T8XX_ADDR);
+                                         ? ELF::R_T8XX_ADDR_NPFIX
+                                         : ELF::R_T8XX_ADDR_NPFIX);
   case FK_Data_8:                return ((Fixup.getOffset() % 8)
                                          ? ELF::R_T8XX_ADDR
                                          : ELF::R_T8XX_ADDR);
-    /*
-  case T8xx::fixup_sparc_13:    return ELF::R_SPARC_13;
-  case T8xx::fixup_sparc_hi22:  return ELF::R_SPARC_HI22;
-    */
   }
 
   return ELF::R_T8XX_NONE;
