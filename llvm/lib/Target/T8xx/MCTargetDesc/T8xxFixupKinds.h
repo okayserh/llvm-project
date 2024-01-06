@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_MCTARGETDESC_SPARCFIXUPKINDS_H
-#define LLVM_LIB_TARGET_SPARC_MCTARGETDESC_SPARCFIXUPKINDS_H
+#ifndef LLVM_LIB_TARGET_T8XX_MCTARGETDESC_T8XXFIXUPKINDS_H
+#define LLVM_LIB_TARGET_T8XX_MCTARGETDESC_T8XXFIXUPKINDS_H
 
 #include "llvm/MC/MCFixup.h"
 
@@ -26,6 +26,10 @@ namespace llvm {
       /// fixup_t8xx_jump - global symbol to jump or conditional jump
       /// branches
       fixup_t8xx_jump,
+
+      /// fixup_t8xx_addr_npfix - global address to symbol, not needing
+      /// prefix / postfix transputer instruction
+      fixup_t8xx_addr_npfix,
 
       // Marker
       LastTargetFixupKind,

@@ -26,6 +26,7 @@ public:
     VK_T8xx_None,
     VK_T8xx_IPTRREL,
     VK_T8xx_GLOBAL,
+    VK_T8xx_GLOBAL_NPFIX,
   };
 
 private:

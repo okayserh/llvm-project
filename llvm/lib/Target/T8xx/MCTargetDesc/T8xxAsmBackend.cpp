@@ -32,6 +32,7 @@ static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
     return Value;
 
   case T8xx::fixup_t8xx_addr:
+  case T8xx::fixup_t8xx_addr_npfix:
   case T8xx::fixup_t8xx_jump:
     return 0;
   }
@@ -90,6 +91,7 @@ namespace {
         { "fixup_t8xx_addr",      0,     16,  MCFixupKindInfo::FKF_IsPCRel },
         { "fixup_t8xx_jump",      0,     16,  MCFixupKindInfo::FKF_IsTarget ||
 	  MCFixupKindInfo::FKF_IsPCRel },
+        { "fixup_t8xx_addr_npfix",      0,     16,  MCFixupKindInfo::FKF_IsPCRel},
       };
 
       // Fixup kinds from .reloc directive are like R_SPARC_NONE. They do

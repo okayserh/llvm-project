@@ -83,6 +83,8 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineOperand &FIOp = MI.getOperand(FIOperandNum);
   int FI = FIOp.getIndex();
 
+  bool bWordAlignedFO = false;
+  
   printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %i\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
   MI.dump ();
 
@@ -118,6 +120,9 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::STL:
   case T8xx::LDL:
   case T8xx::LDLP:
+    bWordAlignedFO = true;
+    // Fallthrough intended!
+    
   case T8xx::LDLPb:
     ImmOpIdx = FIOperandNum + 1;
     break;
@@ -176,8 +181,15 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // Note: This error is back :-/. Presumably since WPTR is now
   // included as real register, the function also takes this up.
   FIOp.ChangeToRegister(T8xx::WPTR, false);
-  ImmOp.setImm(Offset);
-  
+
+  if (bWordAlignedFO)
+    {
+      assert ((Offset % 4 == 0) && "Framepointer offset must be word aligned!");
+      ImmOp.setImm(Offset / 4);
+    }
+  else
+    ImmOp.setImm(Offset);
+      
   printf ("After eliminateFrameIndex\n");
   MI.dump ();
 

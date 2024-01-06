@@ -120,7 +120,7 @@ public:
 namespace {
 
 /// T8xxOperand - Instances of this class represent a parsed T8xx machine
-/// instruction.
+/// instruction operand.
 class T8xxOperand : public MCParsedAsmOperand {
 public:
   enum RegisterKind {
@@ -155,7 +155,6 @@ private:
   };
 
   struct MemOp {
-    unsigned Base;
     unsigned OffsetReg;
     const MCExpr *Off;
   };
@@ -206,12 +205,6 @@ public:
     return Imm.Val;
   }
 
-  // TODO: Check what this is needed for
-  unsigned getMemBase() const {
-    assert((Kind == k_MemoryReg) && "Invalid access!");
-    return Mem.Base;
-  }
-
   const MCExpr *getMemOff() const {
     assert((Kind == k_MemoryReg) && "Invalid access!");
     return Mem.Off;
@@ -233,7 +226,7 @@ public:
     case k_Token:     OS << "Token: " << getToken() << "\n"; break;
     case k_Register:  OS << "Reg: " << getReg() << "\n"; break;
     case k_Immediate: OS << "Imm: " << getImm() << "\n"; break;
-    case k_MemoryReg: OS << "MemoryReg: " << getMemBase() << "\n"; break;
+    case k_MemoryReg: OS << "MemoryReg: " << "\n"; break;
     default: OS << "Unknown"; break;
     }
   }
@@ -256,6 +249,14 @@ public:
     Inst.addOperand(MCOperand::createReg(T8xx::WPTR));
 
     const MCExpr *Expr = getMemOff();
+
+    if (!Expr)
+      printf ("Expr == NULL\n");
+    else if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr))
+      printf ("Expr == %i\n", CE->getValue());
+    else
+      printf ("Expr == createExpr\n");
+
     addExpr(Inst, Expr);
   }
 
@@ -303,12 +304,11 @@ public:
   }
 
   static std::unique_ptr<T8xxOperand>
-  MorphToMEMrr(unsigned Base, std::unique_ptr<T8xxOperand> Op) {
+  MorphToMEMrr(const MCExpr *Off, std::unique_ptr<T8xxOperand> Op) {
     unsigned offsetReg = Op->getReg();
     Op->Kind = k_MemoryReg;
-    Op->Mem.Base = Base;
     Op->Mem.OffsetReg = offsetReg;
-    Op->Mem.Off = nullptr;
+    Op->Mem.Off = Off;
     return Op;
   }
   
@@ -510,9 +510,9 @@ OperandMatchResultTy T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
 
   T8xxMCExpr::VariantKind Kind =T8xxMCExpr::VK_T8xx_None;
   
-  const MCExpr *DestExpr = T8xxMCExpr::create(Kind, DestValue, getContext());
+  //  const MCExpr *DestExpr = T8xxMCExpr::create(Kind, DestValue, getContext());
   //  Operands.pop_back ();
-  Operands.push_back(T8xxOperand::MorphToMEMrr (12, T8xxOperand::CreateReg(T8xx::WPTR, T8xxOperand::rk_Int, S, E)));
+  Operands.push_back(T8xxOperand::MorphToMEMrr (DestValue, T8xxOperand::CreateReg(T8xx::WPTR, T8xxOperand::rk_Int, S, E)));
 		     //  Operands.push_back(T8xxOperand::CreateImm(DestExpr, S, E));
   return MatchOperand_Success;
 }
