@@ -484,7 +484,8 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       int64_t rem = MI.getOperand(2).getImm () % 4;
       MCRegister DstReg = MI.getOperand(0).getReg ();
       MCRegister SrcReg = MI.getOperand(1).getReg ();
-      BuildMI (MBB, MI, DL, get(T8xx::LDLP), DstReg).addReg(SrcReg).addImm(MI.getOperand(2).getImm () - rem);
+      BuildMI (MBB, MI, DL, get(T8xx::LDLP), DstReg).addReg(SrcReg).
+	addImm((MI.getOperand(2).getImm () - rem) / 4);  // Divide by 4 to get offset in words
       if (rem != 0)
 	{
 	  MI.getOperand(2).setImm (MI.getOperand(2).getImm() - rem);

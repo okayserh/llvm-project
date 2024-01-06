@@ -384,7 +384,8 @@ StringRef MCSymbolRefExpr::getVariantKindName(VariantKind Kind) {
 
   case VK_T8xx_None: return "none";
   case VK_T8xx_IPTRREL: return "t8xx_iptrrel";
-  case VK_T8xx_GLOBAL: return "t8xx_global";
+  case VK_T8xx_GLOBAL: return "t8xx_global_pfix";
+  case VK_T8xx_GLOBAL_NPFIX: return "t8xx_global";
 
   }
   llvm_unreachable("Invalid variant kind");
@@ -531,8 +532,9 @@ MCSymbolRefExpr::getVariantKindForName(StringRef Name) {
     .Case("tpoff_lo", VK_VE_TPOFF_LO32)
 
     .Case("t8xx_iptrrel", VK_T8xx_IPTRREL)
-    .Case("t8xx_global", VK_T8xx_GLOBAL)
-        
+    .Case("t8xx_global_pfix", VK_T8xx_GLOBAL)
+    .Case("t8xx_global", VK_T8xx_GLOBAL_NPFIX)
+
     .Default(VK_Invalid);
 }
 

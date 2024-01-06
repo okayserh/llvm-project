@@ -357,6 +357,7 @@ public:
     VK_T8xx_None,      // symbol@none
     VK_T8xx_IPTRREL,   // symbol@t8xx_iptrrel
     VK_T8xx_GLOBAL,    // symbol@t8xx_global
+    VK_T8xx_GLOBAL_NPFIX,    // symbol@t8xx_global_npfix
     
     VK_TPREL,
     VK_DTPREL

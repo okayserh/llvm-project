@@ -88,10 +88,12 @@ void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
       const MCOperand &Op1 = MI->getOperand(OpNum);
       const MCOperand &Op2 = MI->getOperand(OpNum + 1);
   
-      assert((Op1.isReg() && Op1.getReg() == T8xx::WPTR) && "Unsupported register for MemSrc");
-      assert((Op2.isImm() && (Op2.getImm() % 4 == 0)) && "Offset is not properly aligned for MemSrc");
+      assert((Op1.isReg() && (Op1.getReg() == T8xx::WPTR ||
+			      Op1.getReg() == T8xx::AREG ||
+			      Op1.getReg() == T8xx::BREG)) && "Unsupported register for MemSrc");
+      assert(Op2.isImm() && "Offset is not immediate for MemSrc");
 
-      unsigned Offset = Op2.getImm() / 4;
+      unsigned Offset = Op2.getImm();
       O << Offset;
     }
   else

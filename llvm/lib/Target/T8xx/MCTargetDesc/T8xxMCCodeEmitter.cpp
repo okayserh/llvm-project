@@ -121,13 +121,6 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 	  if (MO->isImm ())
 	    {
 	      int64_t imm = MO->getImm ();
-	      // Correction for workspace operations
-	      // TODO: Check ldnl / stnl
-	      // TODO: Maybe move this correction to the eliminateFrameIndex!?
-	      if ((MI.getOpcode() == T8xx::STL) ||
-		  (MI.getOpcode() == T8xx::LDL) ||
-		  (MI.getOpcode() == T8xx::LDLP))
-		imm /= 4;
 
 	      // Add pfix and nfix as required
 	      int i = 7;
