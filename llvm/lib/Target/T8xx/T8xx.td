@@ -42,11 +42,15 @@ def T8xxAsmParser : AsmParser {
 }
 
 //===----------------------------------------------------------------------===//
-// SPARC processors supported.
+// T8xx processors supported.
 //===----------------------------------------------------------------------===//
 
-def : Processor<"generic", NoItineraries, []>;
+class Proc<string Name, list<SubtargetFeature> Features>
+ : Processor<Name, NoItineraries, Features>;
 
+def : Proc<"t8xx",              []>;
+
+def : Processor<"generic", NoItineraries, []>;
 
 //===----------------------------------------------------------------------===//
 // Declare the target which we are implementing

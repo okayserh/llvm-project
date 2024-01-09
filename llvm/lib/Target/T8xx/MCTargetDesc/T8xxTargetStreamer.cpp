@@ -22,7 +22,7 @@ T8xxTargetStreamer::T8xxTargetStreamer(MCStreamer &S) : MCTargetStreamer(S) {}
 void T8xxTargetStreamer::anchor() {}
 
 T8xxTargetAsmStreamer::T8xxTargetAsmStreamer(MCStreamer &S,
-                                               formatted_raw_ostream &OS)
+					     formatted_raw_ostream &OS)
     : T8xxTargetStreamer(S), OS(OS) {}
 
 void T8xxTargetAsmStreamer::emitT8xxRegisterIgnore(MCRegister reg) {

@@ -17,7 +17,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "sparc-subtarget"
+#define DEBUG_TYPE "t8xx-subtarget"
 
 #define GET_SUBTARGETINFO_TARGET_DESC
 #define GET_SUBTARGETINFO_CTOR
@@ -39,7 +39,7 @@ T8xxSubtarget &T8xxSubtarget::initializeSubtargetDependencies(StringRef CPU,
   // Determine default and user specified characteristics
   std::string CPUName = std::string(CPU);
   if (CPUName.empty())
-    CPUName = "v8";
+    CPUName = "t8xx";
 
   // Parse features string.
   ParseSubtargetFeatures(CPUName, /*TuneCPU*/ CPUName, FS);

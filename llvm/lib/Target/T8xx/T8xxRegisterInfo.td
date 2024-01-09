@@ -52,13 +52,24 @@ def CPSR  : T8xxReg<16, "cpsr">;
 
 // The processor stack register. For informational
 // purpose to flag instructions that modify the processor stack.
-def PSTACK  : T8xxReg<17, "PSTACK">;
+/*def PSTACK  : T8xxReg<17, "PSTACK">;*/
 
 // Floating point stack
-def FAreg : T8xxReg<0, "FAreg">, DwarfRegNum<[22]>;
-def FBreg : T8xxReg<1, "FBreg">, DwarfRegNum<[23]>;
-def FCreg : T8xxReg<2, "FCreg">, DwarfRegNum<[24]>;
+def FAREG : T8xxReg<0, "FAREG">, DwarfRegNum<[22]>;
+def FBREG : T8xxReg<1, "FBREG">, DwarfRegNum<[23]>;
+def FCREG : T8xxReg<2, "FCREG">, DwarfRegNum<[24]>;
 
+/*
+// Aliases of the F* registers to hold 64-bit fp values (doubles)
+class T8xxDFReg<bits<16> Enc, string n, list<Register> subregs> : T8xxReg<Enc, n> {
+      let SubRegs = subregs;
+      let CoveredBySubRegs = 1;
+}
+
+def DFAREG: T8xxDFReg<70, "DFAREG", [FAREG]>, DwarfRegNum<[70]>;
+def DFBREG: T8xxDFReg<71, "DFBREG", [FBREG]>, DwarfRegNum<[71]>;
+def DFCREG: T8xxDFReg<72, "DFCREG", [FCREG]>, DwarfRegNum<[72]>;
+*/
 
 // Register classes.
 //
@@ -74,6 +85,9 @@ def IntRegs : RegisterClass<"T8xx", [i32], 32,
                             (add (sequence "R%u", 1, 15))>;
 */
 
+// Note: Parameters of RegisterClass
+// RegisterClass<"T8xx", regTypes, alignment, regList>;
+
 // The frame pointer or workspace pointer is special
 // in that it is used in special adressing modes
 def WptrRegs : RegisterClass<"T8xx", [i32], 32,
@@ -81,3 +95,11 @@ def WptrRegs : RegisterClass<"T8xx", [i32], 32,
 
 def OReg : RegisterClass<"T8xx", [i32], 32,
      	                  (add AREG, BREG)>;
+
+def FPReg:  RegisterClass<"T8xx", [f32], 32,
+     	                  (add FAREG, FBREG)>;
+
+def DFPReg:  RegisterClass<"T8xx", [f64], 32,
+     	                  (add FPReg)>;
+
+

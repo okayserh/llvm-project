@@ -26,12 +26,12 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
-#include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/SubtargetFeature.h"
 #include <cassert>
 #include <cstdint>
 
@@ -50,12 +50,12 @@ class T8xxMCCodeEmitter : public MCCodeEmitter {
 
 public:
   T8xxMCCodeEmitter(const MCInstrInfo &mcii, MCContext &ctx, bool IsLittle)
-    : MCII(mcii), Ctx(ctx), IsLittleEndian (IsLittle) {}
+      : MCII(mcii), Ctx(ctx), IsLittleEndian (IsLittle) {}
   T8xxMCCodeEmitter(const T8xxMCCodeEmitter &) = delete;
   T8xxMCCodeEmitter &operator=(const T8xxMCCodeEmitter &) = delete;
   ~T8xxMCCodeEmitter() override = default;
 
-  void encodeInstruction(const MCInst &MI, raw_ostream &OS,
+  void encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
 
@@ -75,15 +75,19 @@ public:
                              const MCSubtargetInfo &STI) const;
 
   // Taken from ARMMCCodeEmitter
-  void EmitByte(unsigned char C, raw_ostream &OS) const {
-    OS << (char)C;
+  void EmitByte(unsigned char C, SmallVectorImpl<char> &CB) const {
+    support::endian::write<uint8_t>(CB, static_cast<uint8_t>(C),
+				    llvm::endianness::big);
   }
 
-  void EmitConstant(uint64_t Val, unsigned Size, raw_ostream &OS) const {
-    // Output the constant in little endian byte order.
+  // Note: Instructions need to be emitted in little endian order
+  // However, the Transputer is generally big endian!!!
+  
+  void EmitConstant(uint64_t Val, unsigned Size, SmallVectorImpl<char> &CB) const {
+    // Output the constant in big endian byte order.
     for (unsigned i = 0; i != Size; ++i) {
       unsigned Shift = IsLittleEndian ? i * 8 : (Size - 1 - i) * 8;
-      EmitByte((Val >> Shift) & 0xff, OS);
+      EmitByte((Val >> Shift) & 0xff, CB);
     }
   }
 
@@ -92,7 +96,8 @@ public:
 
 } // end anonymous namespace
 
-void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
+void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
+                                           SmallVectorImpl<char> &CB,
                                            SmallVectorImpl<MCFixup> &Fixups,
                                            const MCSubtargetInfo &STI) const {
   const MCInstrDesc &Desc = MCII.get(MI.getOpcode());
@@ -136,7 +141,8 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 		  // If we had some nonzero bits before
 		  // continue padding with "pfix" instructions
 		  if (enc_beg)
-		    EmitConstant (0x20 & (imm_res >> (4 * i)), 1, OS);
+		    support::endian::write<uint8_t>(CB, static_cast<uint8_t> (0x20 | (imm_res >> (4 * i))),
+						    llvm::endianness::big);
 
 		  // First nonzero bits discovered
 		  if ((imm_res || ((imm < 0) && i == 1)) && !enc_beg)
@@ -144,11 +150,13 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 		      enc_beg = true;
 		      if (imm < 0)
 			{
-			  EmitConstant (0x60 | (imm_res >> (4 * i)), 1, OS);
+			  support::endian::write<uint8_t>(CB, static_cast<uint8_t> (0x60 | (imm_res >> (4 * i))),
+							  llvm::endianness::big);
 			  imm_dec = ~imm_dec;			  
 			}
 		      else
-			  EmitConstant (0x20 | (imm_res >> (4 * i)), 1, OS);			
+			support::endian::write<uint8_t>(CB, static_cast<uint8_t> (0x20 | (imm_res >> (4 * i))),
+							llvm::endianness::big);
 		    }
 		}
 
@@ -161,7 +169,7 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 	      // Add 7 "pfix 0" instructions. These will later be adjusted
 	      // during relocation with proper values.
 	      for (int i = 0; i < 7; ++i)
-		EmitByte (0x20, OS);
+		EmitByte (0x20, CB);
 
 	      /* TODO:Adding a fixup here is leads to duplicate relocations in ELF file
 		 Unclear, where the first one is added?
@@ -183,7 +191,7 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 	}
     }
 
-  EmitConstant(Bits, Size, OS);
+  EmitConstant(Bits, Size, CB);
 
   ++MCNumEmitted;  // Keep track of the # of mi's emitted.
 }
@@ -267,7 +275,7 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
 
 MCCodeEmitter *llvm::createT8xxMCCodeEmitter(const MCInstrInfo &MCII,
                                               MCContext &Ctx) {
-  // Endianess to be determined. In "T8xxTargetMachine", little endian "e" is specified
-  // big endian would be "E".
+  // Endianess to be determined. In "T8xxTargetMachine", big endian "E" is specified
+  // little endian would be "e".
   return new T8xxMCCodeEmitter(MCII, Ctx, false);
 }

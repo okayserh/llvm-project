@@ -60,8 +60,7 @@ namespace {
 
   public:
     T8xxAsmBackend(const Target &T)
-        : MCAsmBackend(StringRef(T.getName()) == "sparcel" ? support::little
-                                                           : support::big),
+      : MCAsmBackend(llvm::endianness::big),
           TheTarget(T), Is64Bit(StringRef(TheTarget.getName()) == "sparcv9") {}
 
     unsigned getNumFixupKinds() const override {
@@ -109,7 +108,8 @@ namespace {
     }
 
     bool shouldForceRelocation(const MCAssembler &Asm, const MCFixup &Fixup,
-                               const MCValue &Target) override {
+                               const MCValue &Target,
+			       const MCSubtargetInfo *STI) override {
       if (Fixup.getKind() >= FirstLiteralRelocationKind)
         return true;
       switch ((T8xx::Fixups)Fixup.getKind()) {
@@ -138,13 +138,12 @@ namespace {
 
     bool writeNopData(raw_ostream &OS, uint64_t Count,
                       const MCSubtargetInfo *STI) const override {
-      // Cannot emit NOP with size not multiple of 32 bits.
-      if (Count % 4 != 0)
-        return false;
-
-      uint64_t NumNops = Count / 4;
-      for (uint64_t i = 0; i != NumNops; ++i)
-        support::endian::write<uint32_t>(OS, 0x01000000, Endian);
+      // Note: Transputer instruction set does not explicity provide
+      // a "NOP" instruction. However, the 0x00 will be j 0, which
+      // makes a jump to the next instruction, thereby being
+      // equivalent to a NOP instruction.
+      for (uint64_t i = 0; i != Count; ++i)
+        support::endian::write<uint8_t>(OS, 0x00, Endian);
 
       return true;
     }
@@ -172,7 +171,7 @@ namespace {
       // from the fixup value. The Value has been "split up" into the
       // appropriate bitfields above.
       for (unsigned i = 0; i != NumBytes; ++i) {
-        unsigned Idx = Endian == support::little ? i : (NumBytes - 1) - i;
+        unsigned Idx = Endian == llvm::endianness::little ? i : (NumBytes - 1) - i;
         Data[Offset + Idx] |= uint8_t((Value >> (i * 8)) & 0xff);
       }
     }

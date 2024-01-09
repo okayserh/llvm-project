@@ -252,8 +252,11 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   // Get the size of the outgoing arguments stack space requirement.
   // Note: Named "ArgsSize" in SparcISelLowering
-  const unsigned NumBytes = CCInfo.getNextStackOffset();
-
+  // Old Code (LLVM 17)
+  //  const unsigned NumBytes = CCInfo.getNextStackOffset();
+  // New Code (LLVM 18) ???
+  unsigned NumBytes = CCInfo.getStackSize();
+  
   /* Old LEG Code
   Chain =
     DAG.getCALLSEQ_START(Chain, DAG.getIntPtrConstant(NumBytes, Loc, true), 0,
@@ -506,13 +509,7 @@ bool T8xxTargetLowering::CanLowerReturn(
     const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg, MF, RVLocs, Context);
-  if (!CCInfo.CheckReturn(Outs, RetCC_T8xx32)) {
-    return false;
-  }
-  if (CCInfo.getNextStackOffset() != 0 && isVarArg) {
-    return false;
-  }
-  return true;
+  return CCInfo.CheckReturn(Outs, RetCC_T8xx32);
 }
 
 

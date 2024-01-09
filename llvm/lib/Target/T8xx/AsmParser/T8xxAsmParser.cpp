@@ -59,27 +59,27 @@ class T8xxAsmParser : public MCTargetAsmParser {
                                uint64_t &ErrorInfo,
                                bool MatchingInlineAsm) override;
   bool parseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) override;
-  OperandMatchResultTy tryParseRegister(MCRegister &RegNo, SMLoc &StartLoc,
-                                        SMLoc &EndLoc) override;
+  ParseStatus tryParseRegister(MCRegister &RegNo, SMLoc &StartLoc,
+			       SMLoc &EndLoc) override;
   bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
-  bool ParseDirective(AsmToken DirectiveID) override;
+  ParseStatus parseDirective(AsmToken DirectiveID) override;
 
   unsigned validateTargetOperandClass(MCParsedAsmOperand &Op,
                                       unsigned Kind) override;
 
   // Custom parse functions for T8xx specific operands.
-  OperandMatchResultTy parseWPtrOperand(OperandVector &Operands);
+  ParseStatus parseWPtrOperand(OperandVector &Operands);
 
-  OperandMatchResultTy parseCallTarget(OperandVector &Operands);
+  ParseStatus parseCallTarget(OperandVector &Operands);
 
-  OperandMatchResultTy parseOperand(OperandVector &Operands, StringRef Name);
+  ParseStatus parseOperand(OperandVector &Operands, StringRef Name);
 
-  OperandMatchResultTy
+  ParseStatus
   parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Operand,
                        bool isCall = false);
 
-  OperandMatchResultTy parseBranchModifiers(OperandVector &Operands);
+  ParseStatus parseBranchModifiers(OperandVector &Operands);
 
   // Helper function for dealing with %lo / %hi in PIC mode.
   const T8xxMCExpr *adjustPICRelocation(T8xxMCExpr::VariantKind VK,
@@ -378,15 +378,15 @@ bool T8xxAsmParser::parseRegister(MCRegister &RegNo, SMLoc &StartLoc,
   return false;
 }
 
-OperandMatchResultTy T8xxAsmParser::tryParseRegister(MCRegister &RegNo,
-                                                      SMLoc &StartLoc,
-                                                      SMLoc &EndLoc) {
+ParseStatus T8xxAsmParser::tryParseRegister(MCRegister &RegNo,
+					    SMLoc &StartLoc,
+					    SMLoc &EndLoc) {
   const AsmToken &Tok = Parser.getTok();
   StartLoc = Tok.getLoc();
   EndLoc = Tok.getEndLoc();
   RegNo = 0;
   if (getLexer().getKind() != AsmToken::Percent)
-    return MatchOperand_NoMatch;
+    return ParseStatus::NoMatch;
   Parser.Lex();
   unsigned regKind = T8xxOperand::rk_None;
   /*
@@ -397,7 +397,7 @@ OperandMatchResultTy T8xxAsmParser::tryParseRegister(MCRegister &RegNo,
   */
 
   getLexer().UnLex(Tok);
-  return MatchOperand_NoMatch;
+  return ParseStatus::NoMatch;
 }
 
 static void applyMnemonicAliases(StringRef &Mnemonic,
@@ -469,29 +469,29 @@ bool T8xxAsmParser::ParseInstruction(ParseInstructionInfo &Info,
   return false;
 }
 
-bool T8xxAsmParser::
-ParseDirective(AsmToken DirectiveID)
+ParseStatus T8xxAsmParser::
+parseDirective(AsmToken DirectiveID)
 {
   StringRef IDVal = DirectiveID.getString();
 
   if (IDVal == ".register") {
     // For now, ignore .register directive.
     Parser.eatToEndOfStatement();
-    return false;
+    return ParseStatus::Success;
   }
   if (IDVal == ".proc") {
     // For compatibility, ignore this directive.
     // (It's supposed to be an "optimization" in the Sun assembler)
     Parser.eatToEndOfStatement();
-    return false;
+    return ParseStatus::Success;    
   }
 
   // Let the MC layer to handle other directives.
-  return true;
+  return ParseStatus::NoMatch;
 }
 
 
-OperandMatchResultTy T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
+ParseStatus T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
   SMLoc S = Parser.getTok().getLoc();
   SMLoc E = SMLoc::getFromPointer(S.getPointer() - 1);
 
@@ -499,14 +499,14 @@ OperandMatchResultTy T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
   
   switch (getLexer().getKind()) {
   default:
-    return MatchOperand_NoMatch;
+    return ParseStatus::NoMatch;
   case AsmToken::Integer:
     break;
   }
 
   const MCExpr *DestValue;
   if (getParser().parseExpression(DestValue))
-    return MatchOperand_NoMatch;
+    return ParseStatus::NoMatch;
 
   T8xxMCExpr::VariantKind Kind =T8xxMCExpr::VK_T8xx_None;
   
@@ -514,17 +514,17 @@ OperandMatchResultTy T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
   //  Operands.pop_back ();
   Operands.push_back(T8xxOperand::MorphToMEMrr (DestValue, T8xxOperand::CreateReg(T8xx::WPTR, T8xxOperand::rk_Int, S, E)));
 		     //  Operands.push_back(T8xxOperand::CreateImm(DestExpr, S, E));
-  return MatchOperand_Success;
+  return ParseStatus::Success;
 }
 
 
-OperandMatchResultTy T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
+ParseStatus T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
   SMLoc S = Parser.getTok().getLoc();
   SMLoc E = SMLoc::getFromPointer(S.getPointer() - 1);
 
   switch (getLexer().getKind()) {
   default:
-    return MatchOperand_NoMatch;
+    return ParseStatus::NoMatch;
   case AsmToken::LParen:
   case AsmToken::Integer:
   case AsmToken::Identifier:
@@ -534,7 +534,7 @@ OperandMatchResultTy T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
 
   const MCExpr *DestValue;
   if (getParser().parseExpression(DestValue))
-    return MatchOperand_NoMatch;
+    return ParseStatus::NoMatch;
 
   // TODO: Check for position independence.
   bool IsPic = getContext().getObjectFileInfo()->isPositionIndependent();
@@ -547,35 +547,35 @@ OperandMatchResultTy T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
 
   const MCExpr *DestExpr = T8xxMCExpr::create(Kind, DestValue, getContext());
   Operands.push_back(T8xxOperand::CreateImm(DestExpr, S, E));
-  return MatchOperand_Success;
+  return ParseStatus::Success;
 }
 
-OperandMatchResultTy
+ParseStatus
 T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
 
-  OperandMatchResultTy ResTy = MatchOperandParserImpl(Operands, Mnemonic);
+  ParseStatus Res = MatchOperandParserImpl(Operands, Mnemonic);
 
   // If there wasn't a custom match, try the generic matcher below. Otherwise,
   // there was a match, but an error occurred, in which case, just return that
   // the operand parsing failed.
-  if (ResTy == MatchOperand_Success || ResTy == MatchOperand_ParseFail)
-    return ResTy;
+  if (Res.isSuccess() || Res.isFailure())
+    return Res;
 
   // Note: AsmTokens are defined in include/llvm/MC/MCAsmMacro.h
 
   std::unique_ptr<T8xxOperand> Op;
 
-  ResTy = parseT8xxAsmOperand(Op, (Mnemonic == "call"));
-  if (ResTy != MatchOperand_Success || !Op)
-    return MatchOperand_ParseFail;
+  Res = parseT8xxAsmOperand(Op, (Mnemonic == "call"));
+  if (!Res.isSuccess() || !Op)
+    return ParseStatus::Failure;
 
   // Push the parsed operand into the list of operands
   Operands.push_back(std::move(Op));
 
-  return MatchOperand_Success;
+  return ParseStatus::Success;
 }
 
-OperandMatchResultTy
+ParseStatus
 T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
                                      bool isCall) {
   SMLoc S = Parser.getTok().getLoc();
@@ -630,7 +630,7 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
     Op = T8xxOperand::CreateImm(EVal, S, E);
     break;
   }
-  return (Op) ? MatchOperand_Success : MatchOperand_ParseFail;
+  return (Op) ? ParseStatus::Success : ParseStatus::Failure;
 }
 
 
