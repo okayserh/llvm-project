@@ -30,9 +30,9 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
 }
 
 static std::string computeDataLayout(const Triple &T) {
-  // T8xx is typically big endian, but some are little.
-  std::string Ret = "e";
-  Ret += "-m:e";
+  // T8xx is typically big endian
+  std::string Ret = "E";
+  Ret += "-m:E";
 
   // Some ABIs have 32bit pointers.
   Ret += "-p:32:32:32";
