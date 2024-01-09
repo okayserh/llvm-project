@@ -21,10 +21,6 @@
 //       T8xxInstPrinter.cpp
 
 // jmp addr -> jmpl addr, %g0
-/*
-def : InstAlias<"jmp $addr", (JMPLrr G0, MEMrr:$addr), 0>;
-def : InstAlias<"jmp $addr", (JMPLri G0, MEMri:$addr), 0>;
-*/
 
 def : InstAlias<"stl $addr", (STL AREG, WPtrSrc:$addr), 0>;
 def : InstAlias<"ldl $addr", (LDL AREG, WPtrSrc:$addr), 0>;

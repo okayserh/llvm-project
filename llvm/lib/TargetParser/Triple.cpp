@@ -1801,7 +1801,7 @@ bool Triple::isLittleEndian() const {
   case Triple::spirv:
   case Triple::spirv32:
   case Triple::spirv64:
-  case Triple::t8xx:
+    //  case Triple::t8xx:  -> T8xx turns out to be big endian
   case Triple::tcele:
   case Triple::thumb:
   case Triple::ve:

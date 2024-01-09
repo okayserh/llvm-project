@@ -25,7 +25,7 @@ void T8xxELFMCAsmInfo::anchor() {}
 
 T8xxELFMCAsmInfo::T8xxELFMCAsmInfo(const Triple &TheTriple) {
   bool isV9 = (TheTriple.getArch() == Triple::sparcv9);
-  IsLittleEndian = (TheTriple.getArch() == Triple::sparcel);
+  IsLittleEndian = false;
 
   if (isV9) {
     CodePointerSize = CalleeSaveStackSlotSize = 8;

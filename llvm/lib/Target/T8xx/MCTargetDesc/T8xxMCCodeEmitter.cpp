@@ -50,7 +50,7 @@ class T8xxMCCodeEmitter : public MCCodeEmitter {
 
 public:
   T8xxMCCodeEmitter(const MCInstrInfo &mcii, MCContext &ctx, bool IsLittle)
-    : MCII(mcii), Ctx(ctx), IsLittleEndian (IsLittle) {}
+      : MCII(mcii), Ctx(ctx), IsLittleEndian (IsLittle) {}
   T8xxMCCodeEmitter(const T8xxMCCodeEmitter &) = delete;
   T8xxMCCodeEmitter &operator=(const T8xxMCCodeEmitter &) = delete;
   ~T8xxMCCodeEmitter() override = default;
@@ -79,6 +79,9 @@ public:
     OS << (char)C;
   }
 
+  // Note: Instructions need to be emitted in little endian order
+  // However, the Transputer is generally big endian!!!
+  
   void EmitConstant(uint64_t Val, unsigned Size, raw_ostream &OS) const {
     // Output the constant in little endian byte order.
     for (unsigned i = 0; i != Size; ++i) {
@@ -267,7 +270,7 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
 
 MCCodeEmitter *llvm::createT8xxMCCodeEmitter(const MCInstrInfo &MCII,
                                               MCContext &Ctx) {
-  // Endianess to be determined. In "T8xxTargetMachine", little endian "e" is specified
-  // big endian would be "E".
+  // Endianess to be determined. In "T8xxTargetMachine", big endian "E" is specified
+  // little endian would be "e".
   return new T8xxMCCodeEmitter(MCII, Ctx, false);
 }
