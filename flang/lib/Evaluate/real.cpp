@@ -350,7 +350,7 @@ ValueWithRealFlags<Real<W, P>> Real<W, P>::NEAREST(bool upward) const {
         isNegative = !isNegative;
       } else {
         auto sub1{fraction.SubtractSigned(one)};
-        if (sub1.overflow) {
+        if (sub1.overflow && expo > 1) {
           nearest = Fraction{0}.NOT();
           --expo;
         } else {
@@ -745,12 +745,12 @@ template <typename W, int P> Real<W, P> Real<W, P>::SPACING() const {
     return *this;
   } else if (IsInfinite()) {
     return NotANumber();
-  } else if (IsZero()) {
-    return TINY();
+  } else if (IsZero() || IsSubnormal()) {
+    return TINY(); // mandated by standard
   } else {
     Real result;
     result.Normalize(false, Exponent(), Fraction::MASKR(1));
-    return result;
+    return result.IsZero() ? TINY() : result;
   }
 }
 

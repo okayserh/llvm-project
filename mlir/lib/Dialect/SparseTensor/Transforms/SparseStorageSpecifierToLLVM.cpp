@@ -6,10 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "CodegenUtils.h"
-#include "SparseTensorStorageLayout.h"
+#include "Utils/CodegenUtils.h"
 
+#include "mlir/Conversion/LLVMCommon/StructBuilder.h"
+#include "mlir/Dialect/SparseTensor/IR/SparseTensorStorageLayout.h"
 #include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
+
 #include <optional>
 
 using namespace mlir;
@@ -262,7 +264,8 @@ public:
       std::optional<unsigned> lvl;
       if (op.getLevel())
         lvl = (*op.getLevel());
-      unsigned idx = layout.getMemRefFieldIndex(op.getSpecifierKind(), lvl);
+      unsigned idx =
+          layout.getMemRefFieldIndex(toFieldKind(op.getSpecifierKind()), lvl);
       Value v = Base::onMemSize(rewriter, op, spec, idx);
       rewriter.replaceOp(op, v);
       return success();

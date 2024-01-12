@@ -42,6 +42,11 @@
 // CHECK-DAG: #[[UNSWITCH:.*]] = #llvm.loop_unswitch<partialDisable = true>
 #unswitch = #llvm.loop_unswitch<partialDisable = true>
 
+// CHECK-DAG: #[[GROUP1:.*]] = #llvm.access_group<id = {{.*}}>
+// CHECK-DAG: #[[GROUP2:.*]] = #llvm.access_group<id = {{.*}}>
+#group1 = #llvm.access_group<id = distinct[0]<>>
+#group2 = #llvm.access_group<id = distinct[1]<>>
+
 // CHECK: #[[LOOP_ANNOT:.*]] = #llvm.loop_annotation<
 // CHECK-DAG: disableNonforced = false
 // CHECK-DAG: mustProgress = true
@@ -53,7 +58,7 @@
 // CHECK-DAG: peeled = #[[PEELED]]
 // CHECK-DAG: unswitch = #[[UNSWITCH]]
 // CHECK-DAG: isVectorized = false
-// CHECK-DAG: parallelAccesses = @metadata::@group1, @metadata::@group2>
+// CHECK-DAG: parallelAccesses = #[[GROUP1]], #[[GROUP2]]>
 #loopMD = #llvm.loop_annotation<disableNonforced = false,
         mustProgress = true,
         vectorize = #vectorize,
@@ -66,7 +71,7 @@
         peeled = #peeled,
         unswitch = #unswitch,
         isVectorized = false,
-        parallelAccesses = @metadata::@group1, @metadata::@group2>
+        parallelAccesses = #group1, #group2>
 
 // CHECK: llvm.func @loop_annotation
 llvm.func @loop_annotation() {
@@ -74,11 +79,6 @@ llvm.func @loop_annotation() {
   llvm.br ^bb1 {llvm.loop = #loopMD}
 ^bb1:
   llvm.return
-}
-
-llvm.metadata @metadata {
-  llvm.access_group @group1
-  llvm.access_group @group2
 }
 
 // -----
@@ -90,7 +90,7 @@ llvm.metadata @metadata {
 // CHECK: #[[END_LOC:.*]] = loc("loop-metadata.mlir":52:4)
 #loc2 = loc("loop-metadata.mlir":52:4)
 
-#di_compile_unit = #llvm.di_compile_unit<sourceLanguage = DW_LANG_C, file = #di_file, isOptimized = false, emissionKind = None>
+#di_compile_unit = #llvm.di_compile_unit<id = distinct[0]<>, sourceLanguage = DW_LANG_C, file = #di_file, isOptimized = false, emissionKind = None>
 // CHECK: #[[SUBPROGRAM:.*]] = #llvm.di_subprogram<
 #di_subprogram = #llvm.di_subprogram<compileUnit = #di_compile_unit, scope = #di_file, name = "loop_locs", file = #di_file, subprogramFlags = Definition>
 

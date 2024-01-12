@@ -43,6 +43,7 @@ public:
                      const uint8_t *loc) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
+  void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const override;
   bool relaxOnce(int pass) const override;
 };
 
@@ -289,6 +290,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_PLT32:
     return R_PLT_PC;
   case R_RISCV_GOT_HI20:
+  case R_RISCV_GOT32_PCREL:
     return R_GOT_PC;
   case R_RISCV_PCREL_LO12_I:
   case R_RISCV_PCREL_LO12_S:
@@ -306,6 +308,9 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_TPREL_ADD:
   case R_RISCV_RELAX:
     return config->relax ? R_RELAX_HINT : R_NONE;
+  case R_RISCV_SET_ULEB128:
+  case R_RISCV_SUB_ULEB128:
+    return R_RISCV_LEB128;
   default:
     error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
           ") against symbol " + toString(s));
@@ -495,6 +500,8 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_RISCV_SET32:
   case R_RISCV_32_PCREL:
   case R_RISCV_PLT32:
+  case R_RISCV_GOT32_PCREL:
+    checkInt(loc, val, 32, rel);
     write32le(loc, val);
     return;
 
@@ -510,6 +517,46 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
 
   default:
     llvm_unreachable("unknown relocation");
+  }
+}
+
+void RISCV::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
+  uint64_t secAddr = sec.getOutputSection()->addr;
+  if (auto *s = dyn_cast<InputSection>(&sec))
+    secAddr += s->outSecOff;
+  else if (auto *ehIn = dyn_cast<EhInputSection>(&sec))
+    secAddr += ehIn->getParent()->outSecOff;
+  for (size_t i = 0, size = sec.relocs().size(); i != size; ++i) {
+    const Relocation &rel = sec.relocs()[i];
+    uint8_t *loc = buf + rel.offset;
+    const uint64_t val =
+        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
+                             secAddr + rel.offset, *rel.sym, rel.expr);
+
+    switch (rel.expr) {
+    case R_RELAX_HINT:
+      break;
+    case R_RISCV_LEB128:
+      if (i + 1 < size) {
+        const Relocation &rel1 = sec.relocs()[i + 1];
+        if (rel.type == R_RISCV_SET_ULEB128 &&
+            rel1.type == R_RISCV_SUB_ULEB128 && rel.offset == rel1.offset) {
+          auto val = rel.sym->getVA(rel.addend) - rel1.sym->getVA(rel1.addend);
+          if (overwriteULEB128(loc, val) >= 0x80)
+            errorOrWarn(sec.getLocation(rel.offset) + ": ULEB128 value " +
+                        Twine(val) + " exceeds available space; references '" +
+                        lld::toString(*rel.sym) + "'");
+          ++i;
+          continue;
+        }
+      }
+      errorOrWarn(sec.getLocation(rel.offset) +
+                  ": R_RISCV_SET_ULEB128 not paired with R_RISCV_SUB_SET128");
+      return;
+    default:
+      relocate(loc, rel, val);
+      break;
+    }
   }
 }
 
@@ -550,10 +597,18 @@ static void initSymbolAnchors() {
   }
   // Store anchors (st_value and st_value+st_size) for symbols relative to text
   // sections.
+  //
+  // For a defined symbol foo, we may have `d->file != file` with --wrap=foo.
+  // We should process foo, as the defining object file's symbol table may not
+  // contain foo after redirectSymbols changed the foo entry to __wrap_foo. To
+  // avoid adding a Defined that is undefined in one object file, use
+  // `!d->scriptDefined` to exclude symbols that are definitely not wrapped.
+  //
+  // `relaxAux->anchors` may contain duplicate symbols, but that is fine.
   for (InputFile *file : ctx.objectFiles)
     for (Symbol *sym : file->getSymbols()) {
       auto *d = dyn_cast<Defined>(sym);
-      if (!d || d->file != file)
+      if (!d || (d->file != file && !d->scriptDefined))
         continue;
       if (auto *sec = dyn_cast_or_null<InputSection>(d->section))
         if (sec->flags & SHF_EXECINSTR && sec->relaxAux) {
@@ -581,7 +636,7 @@ static void initSymbolAnchors() {
 // Relax R_RISCV_CALL/R_RISCV_CALL_PLT auipc+jalr to c.j, c.jal, or jal.
 static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
-  const bool rvc = config->eflags & EF_RISCV_RVC;
+  const bool rvc = getEFlags(sec.file) & EF_RISCV_RVC;
   const Symbol &sym = *r.sym;
   const uint64_t insnPair = read64le(sec.content().data() + r.offset);
   const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
@@ -663,7 +718,7 @@ static bool relax(InputSection &sec) {
   auto &aux = *sec.relaxAux;
   bool changed = false;
   ArrayRef<SymbolAnchor> sa = ArrayRef(aux.anchors);
-  uint32_t delta = 0;
+  uint64_t delta = 0;
 
   std::fill_n(aux.relocTypes.get(), sec.relocs().size(), R_RISCV_NONE);
   aux.writes.clear();
@@ -726,8 +781,8 @@ static bool relax(InputSection &sec) {
       a.d->value = a.offset - delta;
   }
   // Inform assignAddresses that the size has changed.
-  if (!isUInt<16>(delta))
-    fatal("section size decrease is too large");
+  if (!isUInt<32>(delta))
+    fatal("section size decrease is too large: " + Twine(delta));
   sec.bytesDropped = delta;
   return changed;
 }
@@ -902,8 +957,8 @@ static void mergeArch(RISCVISAInfo::OrderedExtensionMap &mergedExts,
   } else {
     for (const auto &ext : info.getExtensions()) {
       if (auto it = mergedExts.find(ext.first); it != mergedExts.end()) {
-        if (std::tie(it->second.MajorVersion, it->second.MinorVersion) >=
-            std::tie(ext.second.MajorVersion, ext.second.MinorVersion))
+        if (std::tie(it->second.Major, it->second.Minor) >=
+            std::tie(ext.second.Major, ext.second.Minor))
           continue;
       }
       mergedExts[ext.first] = ext.second;
@@ -925,7 +980,7 @@ mergeAttributesSection(const SmallVector<InputSectionBase *, 0> &sections) {
   const auto &attributesTags = RISCVAttrs::getRISCVAttributeTags();
   for (const InputSectionBase *sec : sections) {
     RISCVAttributeParser parser;
-    if (Error e = parser.parse(sec->content(), support::little))
+    if (Error e = parser.parse(sec->content(), llvm::endianness::little))
       warn(toString(sec) + ": " + llvm::toString(std::move(e)));
     for (const auto &tag : attributesTags) {
       switch (RISCVAttrs::AttrType(tag.attr)) {

@@ -29,8 +29,12 @@ class X86Subtarget;
 namespace X86 {
 
 enum AsmComments {
+  // For instr that was compressed from EVEX to LEGACY.
+  AC_EVEX_2_LEGACY = MachineInstr::TAsmComments,
   // For instr that was compressed from EVEX to VEX.
-  AC_EVEX_2_VEX = MachineInstr::TAsmComments
+  AC_EVEX_2_VEX = AC_EVEX_2_LEGACY << 1,
+  // For instr that was compressed from EVEX to EVEX.
+  AC_EVEX_2_EVEX = AC_EVEX_2_VEX << 1
 };
 
 /// Return a pair of condition code for the given predicate and whether
@@ -149,6 +153,17 @@ class X86InstrInfo final : public X86GenInstrInfo {
 
 public:
   explicit X86InstrInfo(X86Subtarget &STI);
+
+  /// Given a machine instruction descriptor, returns the register
+  /// class constraint for OpNum, or NULL. Returned register class
+  /// may be different from the definition in the TD file, e.g.
+  /// GR*RegClass (definition in TD file)
+  /// ->
+  /// GR*_NOREX2RegClass (Returned register class)
+  const TargetRegisterClass *
+  getRegClass(const MCInstrDesc &MCID, unsigned OpNum,
+              const TargetRegisterInfo *TRI,
+              const MachineFunction &MF) const override;
 
   /// getRegisterInfo - TargetInstrInfo is a superset of MRegister info.  As
   /// such, whenever a client has an instance of instruction info, it should
@@ -457,6 +472,9 @@ public:
                                int64_t Offset2,
                                unsigned NumLoads) const override;
 
+  void insertNoop(MachineBasicBlock &MBB,
+                  MachineBasicBlock::iterator MI) const override;
+
   MCInst getNop() const override;
 
   bool
@@ -547,6 +565,15 @@ public:
                                   Register &FoldAsLoadDefReg,
                                   MachineInstr *&DefMI) const override;
 
+  bool FoldImmediateImpl(MachineInstr &UseMI, MachineInstr *DefMI, Register Reg,
+                         int64_t ImmVal, MachineRegisterInfo *MRI,
+                         bool MakeChange) const;
+
+  /// Reg is known to be defined by a move immediate instruction, try to fold
+  /// the immediate into the use instruction.
+  bool FoldImmediate(MachineInstr &UseMI, MachineInstr &DefMI, Register Reg,
+                     MachineRegisterInfo *MRI) const override;
+
   std::pair<unsigned, unsigned>
   decomposeMachineOperandsTargetFlags(unsigned TF) const override;
 
@@ -569,6 +596,10 @@ public:
   insertOutlinedCall(Module &M, MachineBasicBlock &MBB,
                      MachineBasicBlock::iterator &It, MachineFunction &MF,
                      outliner::Candidate &C) const override;
+
+  void buildClearRegister(Register Reg, MachineBasicBlock &MBB,
+                          MachineBasicBlock::iterator Iter, DebugLoc &DL,
+                          bool AllowSideEffects = true) const override;
 
   bool verifyInstruction(const MachineInstr &MI,
                          StringRef &ErrInfo) const override;
@@ -631,6 +662,9 @@ protected:
   bool accumulateInstrSeqToRootLatency(MachineInstr &Root) const override {
     return false;
   }
+
+  void getFrameIndexOperands(SmallVectorImpl<MachineOperand> &Ops,
+                             int FI) const override;
 
 private:
   /// This is a helper for convertToThreeAddress for 8 and 16-bit instructions.

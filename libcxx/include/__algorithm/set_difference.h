@@ -55,7 +55,7 @@ inline _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 _OutputIterator set_d
     _OutputIterator __result,
     _Compare __comp) {
   return std::__set_difference<_ClassicAlgPolicy, __comp_ref_type<_Compare> >(
-      __first1, __last1, __first2, __last2, __result, __comp)
+             __first1, __last1, __first2, __last2, __result, __comp)
       .second;
 }
 
@@ -66,14 +66,7 @@ inline _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 _OutputIterator set_d
     _InputIterator2 __first2,
     _InputIterator2 __last2,
     _OutputIterator __result) {
-  return std::__set_difference<_ClassicAlgPolicy>(
-      __first1,
-      __last1,
-      __first2,
-      __last2,
-      __result,
-      __less<typename iterator_traits<_InputIterator1>::value_type,
-             typename iterator_traits<_InputIterator2>::value_type>()).second;
+  return std::__set_difference<_ClassicAlgPolicy>(__first1, __last1, __first2, __last2, __result, __less<>()).second;
 }
 
 _LIBCPP_END_NAMESPACE_STD

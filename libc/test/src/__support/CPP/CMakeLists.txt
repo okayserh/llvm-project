@@ -1,6 +1,17 @@
 add_custom_target(libc-cpp-utils-tests)
 
 add_libc_test(
+  bit_test
+  SUITE
+    libc-cpp-utils-tests
+  SRCS
+    bit_test.cpp
+  DEPENDS
+    libc.src.__support.CPP.bit
+    libc.src.__support.uint
+)
+
+add_libc_test(
   bitset_test
   SUITE
     libc-cpp-utils-tests
@@ -65,19 +76,16 @@ if(NOT LIBC_GPU_TARGET_ARCHITECTURE_IS_NVPTX)
   )
 endif()
 
-# This test fails with a segmentation fault on NVPTX.
-if(NOT LIBC_GPU_TARGET_ARCHITECTURE_IS_NVPTX)
-  add_libc_test(
-    stringstream_test
-    SUITE
-      libc-cpp-utils-tests
-    SRCS
-      stringstream_test.cpp
-    DEPENDS
-      libc.src.__support.CPP.span
-      libc.src.__support.CPP.stringstream
-  )
-endif()
+add_libc_test(
+  stringstream_test
+  SUITE
+    libc-cpp-utils-tests
+  SRCS
+    stringstream_test.cpp
+  DEPENDS
+    libc.src.__support.CPP.span
+    libc.src.__support.CPP.stringstream
+)
 
 add_libc_test(
   optional_test
@@ -101,8 +109,6 @@ add_libc_test(
 
 add_libc_test(
   string_test
-  # This test relies on 'realloc' which is not implemented for hermetic tests.
-  UNIT_TEST_ONLY
   SUITE
     libc-cpp-utils-tests
   SRCS
@@ -110,4 +116,14 @@ add_libc_test(
   DEPENDS
   libc.src.__support.CPP.string
   libc.src.__support.CPP.string_view
+)
+
+add_libc_test(
+  type_traits_test
+  SUITE
+    libc-cpp-utils-tests
+  SRCS
+  type_traits_test.cpp
+  DEPENDS
+  libc.src.__support.CPP.type_traits
 )

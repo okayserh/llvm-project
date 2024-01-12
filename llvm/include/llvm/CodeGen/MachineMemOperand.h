@@ -20,13 +20,14 @@
 #include "llvm/CodeGen/LowLevelType.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Value.h" // PointerLikeTypeTraits<Value*>
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/DataTypes.h"
 
 namespace llvm {
 
-class FoldingSetNodeID;
 class MDNode;
 class raw_ostream;
 class MachineFunction;
@@ -324,10 +325,6 @@ public:
   void setType(LLT NewTy) {
     MemoryType = NewTy;
   }
-
-  /// Profile - Gather unique data for the object.
-  ///
-  void Profile(FoldingSetNodeID &ID) const;
 
   /// Support for operator<<.
   /// @{

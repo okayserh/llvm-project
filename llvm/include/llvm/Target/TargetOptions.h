@@ -121,6 +121,16 @@ namespace llvm {
     Never,
   };
 
+  /// \brief Enumeration value for AMDGPU code object version, which is the
+  /// code object version times 100.
+  enum CodeObjectVersionKind {
+    COV_None,
+    COV_2 = 200, // Unsupported.
+    COV_3 = 300, // Unsupported.
+    COV_4 = 400,
+    COV_5 = 500,
+  };
+
   class TargetOptions {
   public:
     TargetOptions()
@@ -140,7 +150,7 @@ namespace llvm {
           SupportsDefaultOutlining(false), EmitAddrsig(false),
           EmitCallSiteInfo(false), SupportsDebugEntryValues(false),
           EnableDebugEntryValues(false), ValueTrackingVariableLocations(false),
-          ForceDwarfFrameSection(false), XRayOmitFunctionIndex(false),
+          ForceDwarfFrameSection(false), XRayFunctionIndex(true),
           DebugStrictDwarf(false), Hotpatch(false),
           PPCGenScalarMASSEntries(false), JMCInstrument(false),
           EnableCFIFixup(false), MisExpect(false), XCOFFReadOnlyPointers(false),
@@ -334,7 +344,7 @@ namespace llvm {
     unsigned ForceDwarfFrameSection : 1;
 
     /// Emit XRay Function Index section
-    unsigned XRayOmitFunctionIndex : 1;
+    unsigned XRayFunctionIndex : 1;
 
     /// When set to true, don't use DWARF extensions in later DWARF versions.
     /// By default, it is set to false.

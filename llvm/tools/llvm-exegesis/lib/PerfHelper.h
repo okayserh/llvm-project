@@ -23,6 +23,12 @@
 #include <functional>
 #include <memory>
 
+#ifdef _MSC_VER
+typedef int pid_t;
+#else
+#include <sys/types.h>
+#endif // _MSC_VER
+
 struct perf_event_attr;
 
 namespace llvm {
@@ -76,7 +82,7 @@ private:
 class Counter {
 public:
   // event: the PerfEvent to measure.
-  explicit Counter(PerfEvent &&event);
+  explicit Counter(PerfEvent &&event, pid_t ProcessID = 0);
 
   Counter(const Counter &) = delete;
   Counter(Counter &&other) = default;
@@ -89,9 +95,6 @@ public:
   /// Stops the measurement of the event.
   void stop();
 
-  /// Returns the current value of the counter or -1 if it cannot be read.
-  int64_t read() const;
-
   /// Returns the current value of the counter or error if it cannot be read.
   /// FunctionBytes: The benchmark function being executed.
   /// This is used to filter out the measurements to ensure they are only
@@ -103,15 +106,15 @@ public:
 
   virtual int numValues() const;
 
+  int getFileDescriptor() const { return FileDescriptor; }
+
 protected:
   PerfEvent Event;
-#ifdef HAVE_LIBPFM
   int FileDescriptor = -1;
-#endif
   bool IsDummyEvent;
 
 private:
-  void initRealEvent(const PerfEvent &E);
+  void initRealEvent(const PerfEvent &E, pid_t ProcessID);
 };
 
 } // namespace pfm

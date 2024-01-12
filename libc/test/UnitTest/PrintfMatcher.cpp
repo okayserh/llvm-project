@@ -16,11 +16,12 @@
 
 #include <stdint.h>
 
-using __llvm_libc::testing::tlog;
-
-namespace __llvm_libc {
-namespace printf_core {
+namespace LIBC_NAMESPACE {
 namespace testing {
+
+using printf_core::FormatFlags;
+using printf_core::FormatSection;
+using printf_core::LengthModifier;
 
 bool FormatSectionMatcher::match(FormatSection actualValue) {
   actual = actualValue;
@@ -76,7 +77,7 @@ static void display(FormatSection form) {
            << "\n";
     else if (form.conv_name != '%')
       tlog << "\tvalue: "
-           << int_to_hex<fputil::FPBits<long double>::UIntType>(
+           << int_to_hex<fputil::FPBits<long double>::StorageType>(
                   form.conv_val_raw)
            << "\n";
   }
@@ -93,5 +94,4 @@ void FormatSectionMatcher::explainError() {
 }
 
 } // namespace testing
-} // namespace printf_core
-} // namespace __llvm_libc
+} // namespace LIBC_NAMESPACE

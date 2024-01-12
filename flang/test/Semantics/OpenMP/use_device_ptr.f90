@@ -1,4 +1,4 @@
-! RUN: %flang -fc1 -fopenmp -fdebug-dump-symbols %s | FileCheck %s
+! RUN: %flang_fc1 -fopenmp -fdebug-dump-symbols %s | FileCheck %s
 ! OpenMP Version 5.0
 ! 2.10.1 use_device_ptr clause
 ! List items that appear in a use_device_ptr clause are converted into device
@@ -12,7 +12,7 @@ subroutine omp_target_data
    integer, pointer :: arrayB
    a = 1
    !$omp target data map(tofrom: a, arrayB) use_device_ptr(b)
-   !CHECK: b (OmpUseDevicePtr)
+   !CHECK: b (OmpUseDevicePtr): HostAssoc
       allocate(arrayB)
       call c_f_pointer(b, arrayB)
       a = arrayB

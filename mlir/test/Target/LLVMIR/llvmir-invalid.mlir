@@ -7,6 +7,14 @@ func.func @foo() {
 
 // -----
 
+llvm.func @vector_with_non_vector_type() -> f32 {
+  // expected-error @below{{expected vector or array type}}
+  %cst = llvm.mlir.constant(dense<100.0> : vector<1xf64>) : f32
+  llvm.return %cst : f32
+}
+
+// -----
+
 llvm.func @no_non_complex_struct() -> !llvm.array<2 x array<2 x array<2 x struct<(i32)>>>> {
   // expected-error @below{{expected struct type to be a complex number}}
   %0 = llvm.mlir.constant(dense<[[[1, 2], [3, 4]], [[42, 43], [44, 45]]]> : tensor<2x2x2xi32>) : !llvm.array<2 x array<2 x array<2 x struct<(i32)>>>>
@@ -27,6 +35,30 @@ llvm.func @struct_wrong_attribute_element_type() -> !llvm.struct<(f64, f64)> {
   // expected-error @below{{FloatAttr does not match expected type of the constant}}
   %0 = llvm.mlir.constant([1.0 : f32, 1.0 : f32]) : !llvm.struct<(f64, f64)>
   llvm.return %0 : !llvm.struct<(f64, f64)>
+}
+
+// -----
+
+llvm.func @integer_with_float_type() -> f32 {
+  // expected-error @+1 {{expected integer type}}
+  %0 = llvm.mlir.constant(1 : index) : f32
+  llvm.return %0 : f32
+}
+
+// -----
+
+llvm.func @incompatible_float_attribute_type() -> f32 {
+  // expected-error @below{{expected float type of width 64}}
+  %cst = llvm.mlir.constant(1.0 : f64) : f32
+  llvm.return %cst : f32
+}
+
+// -----
+
+llvm.func @incompatible_integer_type_for_float_attr() -> i32 {
+  // expected-error @below{{expected integer type of width 16}}
+  %cst = llvm.mlir.constant(1.0 : f16) : i32
+  llvm.return %cst : i32
 }
 
 // -----
@@ -106,41 +138,25 @@ llvm.func @powi_intr_wrong_type(%arg0 : f32, %arg1 : f32) -> f32 {
 
 // -----
 
-llvm.func @ctlz_intr_wrong_type(%arg0 : i32, %arg1 : i32) -> i32 {
-  // expected-error @below{{op operand #1 must be 1-bit signless integer, but got 'i32'}}
-  %0 = "llvm.intr.ctlz"(%arg0, %arg1) : (i32, i32) -> i32
-  llvm.return %0 : i32
-}
-
-// -----
-
-llvm.func @memcpy_intr_wrong_type(%src : i64, %dst : i64, %len : i64, %volatile : i1) {
+llvm.func @memcpy_intr_wrong_type(%src : i64, %dst : i64, %len : i64) {
   // expected-error @below{{op operand #0 must be LLVM pointer type, but got 'i64'}}
-  "llvm.intr.memcpy"(%src, %dst, %len, %volatile) : (i64, i64, i64, i1) -> ()
+  "llvm.intr.memcpy"(%src, %dst, %len) <{isVolatile = false}> : (i64, i64, i64) -> ()
   llvm.return
 }
 
 // -----
 
-llvm.func @memcpy_inline_intr_wrong_type(%src : !llvm.ptr, %dst : !llvm.ptr, %len : i64, %volatile : i32) {
-  // expected-error @below{{op operand #3 must be 1-bit signless integer, but got 'i32'}}
-  "llvm.intr.memcpy.inline"(%src, %dst, %len, %volatile) : (!llvm.ptr, !llvm.ptr, i64, i32) -> ()
-  llvm.return
-}
-
-// -----
-
-llvm.func @memmove_intr_wrong_type(%src : !llvm.ptr, %dst : i64, %len : i64, %volatile : i1) {
+llvm.func @memmove_intr_wrong_type(%src : !llvm.ptr, %dst : i64, %len : i64) {
   // expected-error @below{{op operand #1 must be LLVM pointer type, but got 'i64'}}
-  "llvm.intr.memmove"(%src, %dst, %len, %volatile) : (!llvm.ptr, i64, i64, i1) -> ()
+  "llvm.intr.memmove"(%src, %dst, %len) <{isVolatile = false}> : (!llvm.ptr, i64, i64) -> ()
   llvm.return
 }
 
 // -----
 
-llvm.func @memset_intr_wrong_type(%dst : !llvm.ptr, %val : i32, %len : i64, %volatile : i1) {
+llvm.func @memset_intr_wrong_type(%dst : !llvm.ptr, %val : i32, %len : i64) {
   // expected-error @below{{op operand #1 must be 8-bit signless integer, but got 'i32'}}
-  "llvm.intr.memset"(%dst, %val, %len, %volatile) : (!llvm.ptr, i32, i64, i1) -> ()
+  "llvm.intr.memset"(%dst, %val, %len) <{isVolatile = false}> : (!llvm.ptr, i32, i64) -> ()
   llvm.return
 }
 
@@ -245,9 +261,9 @@ llvm.func @masked_gather_intr_wrong_type(%ptrs : vector<7xf32>, %mask : vector<7
 
 // -----
 
-llvm.func @masked_scatter_intr_wrong_type(%vec : f32, %ptrs : !llvm.vec<7xptr<f32>>, %mask : vector<7xi1>) {
+llvm.func @masked_scatter_intr_wrong_type(%vec : f32, %ptrs : !llvm.vec<7xptr>, %mask : vector<7xi1>) {
   // expected-error @below{{op operand #0 must be LLVM dialect-compatible vector type, but got 'f32'}}
-  llvm.intr.masked.scatter %vec, %ptrs, %mask { alignment = 1: i32} : f32, vector<7xi1> into !llvm.vec<7xptr<f32>>
+  llvm.intr.masked.scatter %vec, %ptrs, %mask { alignment = 1: i32} : f32, vector<7xi1> into !llvm.vec<7xptr>
   llvm.return
 }
 
@@ -257,4 +273,43 @@ llvm.func @stepvector_intr_wrong_type() -> vector<7xf32> {
   // expected-error @below{{op result #0 must be LLVM dialect-compatible vector of signless integer, but got 'vector<7xf32>'}}
   %0 = llvm.intr.experimental.stepvector : vector<7xf32>
   llvm.return %0 : vector<7xf32>
+}
+
+// -----
+
+// expected-error @below{{target features can not contain ','}}
+llvm.func @invalid_target_feature() attributes { target_features = #llvm.target_features<["+bad,feature", "+test"]> }
+{
+}
+
+// -----
+
+// expected-error @below{{target features must start with '+' or '-'}}
+llvm.func @missing_target_feature_prefix() attributes { target_features = #llvm.target_features<["sme"]> }
+{
+}
+
+// -----
+
+// expected-error @below{{target features can not be null or empty}}
+llvm.func @empty_target_feature() attributes { target_features = #llvm.target_features<["", "+sve"]> }
+{
+}
+
+// -----
+
+llvm.comdat @__llvm_comdat {
+  llvm.comdat_selector @foo any
+}
+
+llvm.comdat @__llvm_comdat_1 {
+  // expected-error @below{{comdat selection symbols must be unique even in different comdat regions}}
+  llvm.comdat_selector @foo any
+}
+
+// -----
+
+llvm.func @foo() {
+  // expected-error @below{{must appear at the module level}}
+  llvm.linker_options ["test"]
 }

@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Affine/IR/ValueBoundsOpInterfaceImpl.h"
 #include "mlir/Dialect/Affine/Transforms/Transforms.h"
 #include "mlir/Dialect/Arith/Transforms/Transforms.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -161,7 +162,7 @@ static LogicalResult testReifyValueBounds(func::FuncOp funcOp,
       }
 
       // Replace the op with the reified bound.
-      if (auto val = reified->dyn_cast<Value>()) {
+      if (auto val = llvm::dyn_cast_if_present<Value>(*reified)) {
         rewriter.replaceOp(op, val);
         return WalkResult::skip();
       }
@@ -175,9 +176,49 @@ static LogicalResult testReifyValueBounds(func::FuncOp funcOp,
   return failure(result.wasInterrupted());
 }
 
+/// Look for "test.are_equal" ops and emit errors/remarks.
+static LogicalResult testEquality(func::FuncOp funcOp) {
+  IRRewriter rewriter(funcOp.getContext());
+  WalkResult result = funcOp.walk([&](Operation *op) {
+    // Look for test.are_equal ops.
+    if (op->getName().getStringRef() == "test.are_equal") {
+      if (op->getNumOperands() != 2 || !op->getOperand(0).getType().isIndex() ||
+          !op->getOperand(1).getType().isIndex()) {
+        op->emitOpError("invalid op");
+        return WalkResult::skip();
+      }
+      if (op->hasAttr("compose")) {
+        FailureOr<int64_t> delta = affine::fullyComposeAndComputeConstantDelta(
+            op->getOperand(0), op->getOperand(1));
+        if (failed(delta)) {
+          op->emitError("could not determine equality");
+        } else if (*delta == 0) {
+          op->emitRemark("equal");
+        } else {
+          op->emitRemark("different");
+        }
+      } else {
+        FailureOr<bool> equal = ValueBoundsConstraintSet::areEqual(
+            op->getOperand(0), op->getOperand(1));
+        if (failed(equal)) {
+          op->emitError("could not determine equality");
+        } else if (*equal) {
+          op->emitRemark("equal");
+        } else {
+          op->emitRemark("different");
+        }
+      }
+    }
+    return WalkResult::advance();
+  });
+  return failure(result.wasInterrupted());
+}
+
 void TestReifyValueBounds::runOnOperation() {
   if (failed(
           testReifyValueBounds(getOperation(), reifyToFuncArgs, useArithOps)))
+    signalPassFailure();
+  if (failed(testEquality(getOperation())))
     signalPassFailure();
 }
 

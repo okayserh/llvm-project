@@ -76,8 +76,7 @@ lldb::ValueObjectSP GetCapturedThisValueObject(StackFrame *frame) {
   assert(frame);
 
   if (auto thisValSP = frame->FindVariable(ConstString("this")))
-    if (auto thisThisValSP =
-            thisValSP->GetChildMemberWithName(ConstString("this"), true))
+    if (auto thisThisValSP = thisValSP->GetChildMemberWithName("this"))
       return thisThisValSP;
 
   return nullptr;
@@ -1107,7 +1106,7 @@ bool ClangExpressionDeclMap::LookupLocalVariable(
     auto find_capture = [](ConstString varname,
                            StackFrame *frame) -> ValueObjectSP {
       if (auto lambda = ClangExpressionUtil::GetLambdaValueObject(frame)) {
-        if (auto capture = lambda->GetChildMemberWithName(varname, true)) {
+        if (auto capture = lambda->GetChildMemberWithName(varname)) {
           return capture;
         }
       }
@@ -1370,7 +1369,7 @@ void ClangExpressionDeclMap::FindExternalVisibleDecls(
   if (!namespace_decl)
     SearchPersistenDecls(context, name);
 
-  if (name.GetStringRef().startswith("$") && !namespace_decl) {
+  if (name.GetStringRef().starts_with("$") && !namespace_decl) {
     if (name == "$__lldb_class") {
       LookUpLldbClass(context);
       return;
@@ -1386,7 +1385,7 @@ void ClangExpressionDeclMap::FindExternalVisibleDecls(
     }
 
     // any other $__lldb names should be weeded out now
-    if (name.GetStringRef().startswith("$__lldb"))
+    if (name.GetStringRef().starts_with("$__lldb"))
       return;
 
     // No ParserVars means we can't do register or variable lookup.
@@ -1401,7 +1400,7 @@ void ClangExpressionDeclMap::FindExternalVisibleDecls(
       return;
     }
 
-    assert(name.GetStringRef().startswith("$"));
+    assert(name.GetStringRef().starts_with("$"));
     llvm::StringRef reg_name = name.GetStringRef().substr(1);
 
     if (m_parser_vars->m_exe_ctx.GetRegisterContext()) {

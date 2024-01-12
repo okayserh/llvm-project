@@ -60,8 +60,28 @@ protected:
   SDValue LowerFROUNDEVEN(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerFROUND(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerFFLOOR(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerFLOG(SDValue Op, SelectionDAG &DAG,
-                    double Log2BaseInverted) const;
+
+  static bool allowApproxFunc(const SelectionDAG &DAG, SDNodeFlags Flags);
+  static bool needsDenormHandlingF32(const SelectionDAG &DAG, SDValue Src,
+                                     SDNodeFlags Flags);
+  SDValue getIsLtSmallestNormal(SelectionDAG &DAG, SDValue Op,
+                                SDNodeFlags Flags) const;
+  SDValue getIsFinite(SelectionDAG &DAG, SDValue Op, SDNodeFlags Flags) const;
+  std::pair<SDValue, SDValue> getScaledLogInput(SelectionDAG &DAG,
+                                                const SDLoc SL, SDValue Op,
+                                                SDNodeFlags Flags) const;
+
+  SDValue LowerFLOG2(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerFLOGCommon(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerFLOG10(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerFLOGUnsafe(SDValue Op, const SDLoc &SL, SelectionDAG &DAG,
+                          bool IsLog10, SDNodeFlags Flags) const;
+  SDValue lowerFEXP2(SDValue Op, SelectionDAG &DAG) const;
+
+  SDValue lowerFEXPUnsafe(SDValue Op, const SDLoc &SL, SelectionDAG &DAG,
+                          SDNodeFlags Flags) const;
+  SDValue lowerFEXP10Unsafe(SDValue Op, const SDLoc &SL, SelectionDAG &DAG,
+                            SDNodeFlags Flags) const;
   SDValue lowerFEXP(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue LowerCTLZ_CTTZ(SDValue Op, SelectionDAG &DAG) const;
@@ -200,7 +220,7 @@ public:
   bool isLoadBitCastBeneficial(EVT, EVT, const SelectionDAG &DAG,
                                const MachineMemOperand &MMO) const final;
 
-  bool storeOfVectorConstantIsCheap(EVT MemVT,
+  bool storeOfVectorConstantIsCheap(bool IsZero, EVT MemVT,
                                     unsigned NumElem,
                                     unsigned AS) const override;
   bool aggressivelyPreferBuildVectorSources(EVT VecVT) const override;
@@ -227,9 +247,7 @@ public:
   SDValue LowerCall(CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
 
-  SDValue LowerDYNAMIC_STACKALLOC(SDValue Op,
-                                  SelectionDAG &DAG) const;
-
+  SDValue LowerDYNAMIC_STACKALLOC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
   void ReplaceNodeResults(SDNode * N,
@@ -292,6 +310,9 @@ public:
                                     bool SNaN = false,
                                     unsigned Depth = 0) const override;
 
+  bool isReassocProfitable(MachineRegisterInfo &MRI, Register N0,
+                           Register N1) const override;
+
   /// Helper function that adds Reg to the LiveIn list of the DAG's
   /// MachineFunction.
   ///
@@ -344,6 +365,8 @@ public:
   /// type of implicit parameter.
   uint32_t getImplicitParameterOffset(const MachineFunction &MF,
                                       const ImplicitParameter Param) const;
+  uint32_t getImplicitParameterOffset(const uint64_t ExplicitKernArgSize,
+                                      const ImplicitParameter Param) const;
 
   MVT getFenceOperandTy(const DataLayout &DL) const override {
     return MVT::i32;
@@ -351,8 +374,8 @@ public:
 
   AtomicExpansionKind shouldExpandAtomicRMWInIR(AtomicRMWInst *) const override;
 
-  bool isConstantUnsignedBitfieldExtractLegal(unsigned Opc, LLT Ty1,
-                                              LLT Ty2) const override;
+  bool shouldSinkOperands(Instruction *I,
+                          SmallVectorImpl<Use *> &Ops) const override;
 };
 
 namespace AMDGPUISD {
@@ -368,6 +391,7 @@ enum NodeType : unsigned {
   CALL,
   TC_RETURN,
   TC_RETURN_GFX,
+  TC_RETURN_CHAIN,
   TRAP,
 
   // Masked control flow nodes.
@@ -378,11 +402,18 @@ enum NodeType : unsigned {
   // A uniform kernel return that terminates the wavefront.
   ENDPGM,
 
+  // s_endpgm, but we may want to insert it in the middle of the block.
+  ENDPGM_TRAP,
+
   // Return to a shader part's epilog code.
   RETURN_TO_EPILOG,
 
   // Return with values from a non-entry function.
   RET_GLUE,
+
+  // Convert a unswizzled wave uniform stack address to an address compatible
+  // with a vector offset for use in stack access.
+  WAVE_ADDRESS,
 
   DWORDADDR,
   FRACT,
@@ -418,6 +449,8 @@ enum NodeType : unsigned {
   FMED3,
   SMED3,
   UMED3,
+  FMAXIMUM3,
+  FMINIMUM3,
   FDOT2,
   URECIP,
   DIV_SCALE,
@@ -433,9 +466,15 @@ enum NodeType : unsigned {
   RSQ,
   RCP_LEGACY,
   RCP_IFLAG,
+
+  // log2, no denormal handling for f32.
+  LOG,
+
+  // exp2, no denormal handling for f32.
+  EXP,
+
   FMUL_LEGACY,
   RSQ_CLAMP,
-  LDEXP,
   FP_CLASS,
   DOT4,
   CARRY,

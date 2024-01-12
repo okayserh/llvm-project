@@ -504,3 +504,46 @@ TEST(FileSpecTest, TestIsSourceImplementationFile) {
   EXPECT_FALSE(win_noext.IsSourceImplementationFile());
   EXPECT_FALSE(exe.IsSourceImplementationFile());
 }
+
+TEST(FileSpecTest, TestGetComponents) {
+  std::pair<llvm::StringRef, std::vector<llvm::StringRef>> PosixTests[] = {
+      {"/", {}},
+      {"/foo", {"foo"}},
+      {"/foo/", {"foo"}},
+      {"/foo/bar", {"foo", "bar"}},
+      {"/llvm-project/lldb/unittests/Utility/FileSpecTest.cpp",
+       {"llvm-project", "lldb", "unittests", "Utility", "FileSpecTest.cpp"}},
+  };
+
+  for (const auto &pair : PosixTests) {
+    FileSpec file_spec = PosixSpec(pair.first);
+    EXPECT_EQ(file_spec.GetComponents(), pair.second);
+  }
+
+  std::pair<llvm::StringRef, std::vector<llvm::StringRef>> WindowsTests[] = {
+      {"C:\\", {"C:"}},
+      {"C:\\Windows\\", {"C:", "Windows"}},
+      {"C:\\Windows\\System32", {"C:", "Windows", "System32"}},
+      {"C:\\llvm-project\\lldb\\unittests\\Utility\\FileSpecTest.cpp",
+       {"C:", "llvm-project", "lldb", "unittests", "Utility",
+        "FileSpecTest.cpp"}},
+  };
+
+  for (const auto &pair : WindowsTests) {
+    FileSpec file_spec = WindowsSpec(pair.first);
+    EXPECT_EQ(file_spec.GetComponents(), pair.second);
+  }
+}
+
+TEST(FileSpecTest, TestChecksum) {
+  Checksum checksum(llvm::MD5::MD5Result{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}});
+  FileSpec file_spec("/foo/bar", FileSpec::Style::posix, checksum);
+  EXPECT_TRUE(static_cast<bool>(file_spec.GetChecksum()));
+  EXPECT_EQ(file_spec.GetChecksum(), checksum);
+
+  FileSpec copy = file_spec;
+
+  EXPECT_TRUE(static_cast<bool>(copy.GetChecksum()));
+  EXPECT_EQ(file_spec.GetChecksum(), copy.GetChecksum());
+}

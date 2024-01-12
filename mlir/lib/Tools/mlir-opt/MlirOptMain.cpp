@@ -90,6 +90,11 @@ struct MlirOptMainConfigCLOptions : public MlirOptMainConfig {
         "emit-bytecode", cl::desc("Emit bytecode when generating output"),
         cl::location(emitBytecodeFlag), cl::init(false));
 
+    static cl::opt<bool, /*ExternalStorage=*/true> elideResourcesFromBytecode(
+        "elide-resource-data-from-bytecode",
+        cl::desc("Elide resources when generating bytecode"),
+        cl::location(elideResourceDataFromBytecodeFlag), cl::init(false));
+
     static cl::opt<std::optional<int64_t>, /*ExternalStorage=*/true,
                    BytecodeVersionParser>
         bytecodeVersion(
@@ -139,8 +144,23 @@ struct MlirOptMainConfigCLOptions : public MlirOptMainConfig {
         cl::desc("Run the verifier after each transformation pass"),
         cl::location(verifyPassesFlag), cl::init(true));
 
+    static cl::opt<bool, /*ExternalStorage=*/true> verifyRoundtrip(
+        "verify-roundtrip",
+        cl::desc("Round-trip the IR after parsing and ensure it succeeds"),
+        cl::location(verifyRoundtripFlag), cl::init(false));
+
     static cl::list<std::string> passPlugins(
         "load-pass-plugin", cl::desc("Load passes from plugin library"));
+
+    static cl::opt<std::string, /*ExternalStorage=*/true>
+        generateReproducerFile(
+            "mlir-generate-reproducer",
+            llvm::cl::desc(
+                "Generate an mlir reproducer at the provided filename"
+                " (no crash required)"),
+            cl::location(generateReproducerFileFlag), cl::init(""),
+            cl::value_desc("filename"));
+
     /// Set the callback to load a pass plugin.
     passPlugins.setCallback([&](const std::string &pluginPath) {
       auto plugin = PassPlugin::load(pluginPath);
@@ -213,6 +233,107 @@ void MlirOptMainConfigCLOptions::setDialectPluginsCallback(
   });
 }
 
+LogicalResult loadIRDLDialects(StringRef irdlFile, MLIRContext &ctx) {
+  DialectRegistry registry;
+  registry.insert<irdl::IRDLDialect>();
+  ctx.appendDialectRegistry(registry);
+
+  // Set up the input file.
+  std::string errorMessage;
+  std::unique_ptr<MemoryBuffer> file = openInputFile(irdlFile, &errorMessage);
+  if (!file) {
+    emitError(UnknownLoc::get(&ctx)) << errorMessage;
+    return failure();
+  }
+
+  // Give the buffer to the source manager.
+  // This will be picked up by the parser.
+  SourceMgr sourceMgr;
+  sourceMgr.AddNewSourceBuffer(std::move(file), SMLoc());
+
+  SourceMgrDiagnosticHandler sourceMgrHandler(sourceMgr, &ctx);
+
+  // Parse the input file.
+  OwningOpRef<ModuleOp> module(parseSourceFile<ModuleOp>(sourceMgr, &ctx));
+
+  // Load IRDL dialects.
+  return irdl::loadDialects(module.get());
+}
+
+// Return success if the module can correctly round-trip. This intended to test
+// that the custom printers/parsers are complete.
+static LogicalResult doVerifyRoundTrip(Operation *op,
+                                       const MlirOptMainConfig &config,
+                                       bool useBytecode) {
+  // We use a new context to avoid resource handle renaming issue in the diff.
+  MLIRContext roundtripContext;
+  OwningOpRef<Operation *> roundtripModule;
+  roundtripContext.appendDialectRegistry(
+      op->getContext()->getDialectRegistry());
+  if (op->getContext()->allowsUnregisteredDialects())
+    roundtripContext.allowUnregisteredDialects();
+  StringRef irdlFile = config.getIrdlFile();
+  if (!irdlFile.empty() && failed(loadIRDLDialects(irdlFile, roundtripContext)))
+    return failure();
+
+  // Print a first time with custom format (or bytecode) and parse it back to
+  // the roundtripModule.
+  {
+    std::string buffer;
+    llvm::raw_string_ostream ostream(buffer);
+    if (useBytecode) {
+      if (failed(writeBytecodeToFile(op, ostream))) {
+        op->emitOpError()
+            << "failed to write bytecode, cannot verify round-trip.\n";
+        return failure();
+      }
+    } else {
+      op->print(ostream,
+                OpPrintingFlags().printGenericOpForm(false).enableDebugInfo());
+    }
+    FallbackAsmResourceMap fallbackResourceMap;
+    ParserConfig parseConfig(&roundtripContext, /*verifyAfterParse=*/true,
+                             &fallbackResourceMap);
+    roundtripModule =
+        parseSourceString<Operation *>(ostream.str(), parseConfig);
+    if (!roundtripModule) {
+      op->emitOpError()
+          << "failed to parse bytecode back, cannot verify round-trip.\n";
+      return failure();
+    }
+  }
+
+  // Print in the generic form for the reference module and the round-tripped
+  // one and compare the outputs.
+  std::string reference, roundtrip;
+  {
+    llvm::raw_string_ostream ostreamref(reference);
+    op->print(ostreamref,
+              OpPrintingFlags().printGenericOpForm().enableDebugInfo());
+    llvm::raw_string_ostream ostreamrndtrip(roundtrip);
+    roundtripModule.get()->print(
+        ostreamrndtrip,
+        OpPrintingFlags().printGenericOpForm().enableDebugInfo());
+  }
+  if (reference != roundtrip) {
+    // TODO implement a diff.
+    return op->emitOpError() << "roundTrip testing roundtripped module differs "
+                                "from reference:\n<<<<<<Reference\n"
+                             << reference << "\n=====\n"
+                             << roundtrip << "\n>>>>>roundtripped\n";
+  }
+
+  return success();
+}
+
+static LogicalResult doVerifyRoundTrip(Operation *op,
+                                       const MlirOptMainConfig &config) {
+  // Textual round-trip isn't fully robust at the moment (for example implicit
+  // terminator are losing location informations).
+
+  return doVerifyRoundTrip(op, config, /*useBytecode=*/true);
+}
+
 /// Perform the actions on the input file indicated by the command line flags
 /// within the specified context.
 ///
@@ -247,10 +368,16 @@ performActions(raw_ostream &os,
   TimingScope parserTiming = timing.nest("Parser");
   OwningOpRef<Operation *> op = parseSourceFileForTool(
       sourceMgr, parseConfig, !config.shouldUseExplicitModule());
-  context->enableMultithreading(wasThreadingEnabled);
+  parserTiming.stop();
   if (!op)
     return failure();
-  parserTiming.stop();
+
+  // Perform round-trip verification if requested
+  if (config.shouldVerifyRoundtrip() &&
+      failed(doVerifyRoundTrip(op.get(), config)))
+    return failure();
+
+  context->enableMultithreading(wasThreadingEnabled);
 
   // Prepare the pass manager, applying command-line and reproducer options.
   PassManager pm(op.get()->getName(), PassManager::Nesting::Implicit);
@@ -267,12 +394,22 @@ performActions(raw_ostream &os,
   if (failed(pm.run(*op)))
     return failure();
 
+  // Generate reproducers if requested
+  if (!config.getReproducerFilename().empty()) {
+    StringRef anchorName = pm.getAnyOpAnchorName();
+    const auto &passes = pm.getPasses();
+    makeReproducer(anchorName, passes, op.get(),
+                   config.getReproducerFilename());
+  }
+
   // Print the output.
   TimingScope outputTiming = timing.nest("Output");
   if (config.shouldEmitBytecode()) {
     BytecodeWriterConfig writerConfig(fallbackResourceMap);
     if (auto v = config.bytecodeVersionToEmit())
       writerConfig.setDesiredBytecodeVersion(*v);
+    if (config.shouldElideResourceDataFromBytecode())
+      writerConfig.setElideResourceDataFlag();
     return writeBytecodeToFile(op.get(), os, writerConfig);
   }
 
@@ -284,33 +421,6 @@ performActions(raw_ostream &os,
   op.get()->print(os, asmState);
   os << '\n';
   return success();
-}
-
-LogicalResult loadIRDLDialects(StringRef irdlFile, MLIRContext &ctx) {
-  DialectRegistry registry;
-  registry.insert<irdl::IRDLDialect>();
-  ctx.appendDialectRegistry(registry);
-
-  // Set up the input file.
-  std::string errorMessage;
-  std::unique_ptr<MemoryBuffer> file = openInputFile(irdlFile, &errorMessage);
-  if (!file) {
-    emitError(UnknownLoc::get(&ctx)) << errorMessage;
-    return failure();
-  }
-
-  // Give the buffer to the source manager.
-  // This will be picked up by the parser.
-  SourceMgr sourceMgr;
-  sourceMgr.AddNewSourceBuffer(std::move(file), SMLoc());
-
-  SourceMgrDiagnosticHandler sourceMgrHandler(sourceMgr, &ctx);
-
-  // Parse the input file.
-  OwningOpRef<ModuleOp> module(parseSourceFile<ModuleOp>(sourceMgr, &ctx));
-
-  // Load IRDL dialects.
-  return irdl::loadDialects(module.get());
 }
 
 /// Parses the memory buffer.  If successfully, run a series of passes against
@@ -361,6 +471,36 @@ static LogicalResult processBuffer(raw_ostream &os,
   return sourceMgrHandler.verify();
 }
 
+std::pair<std::string, std::string>
+mlir::registerAndParseCLIOptions(int argc, char **argv,
+                                 llvm::StringRef toolName,
+                                 DialectRegistry &registry) {
+  static cl::opt<std::string> inputFilename(
+      cl::Positional, cl::desc("<input file>"), cl::init("-"));
+
+  static cl::opt<std::string> outputFilename("o", cl::desc("Output filename"),
+                                             cl::value_desc("filename"),
+                                             cl::init("-"));
+  // Register any command line options.
+  MlirOptMainConfig::registerCLOptions(registry);
+  registerAsmPrinterCLOptions();
+  registerMLIRContextCLOptions();
+  registerPassManagerCLOptions();
+  registerDefaultTimingManagerCLOptions();
+  tracing::DebugCounter::registerCLOptions();
+
+  // Build the list of dialects as a header for the --help message.
+  std::string helpHeader = (toolName + "\nAvailable Dialects: ").str();
+  {
+    llvm::raw_string_ostream os(helpHeader);
+    interleaveComma(registry.getDialectNames(), os,
+                    [&](auto name) { os << name; });
+  }
+  // Parse pass names in main to ensure static initialization completed.
+  cl::ParseCommandLineOptions(argc, argv, helpHeader);
+  return std::make_pair(inputFilename.getValue(), outputFilename.getValue());
+}
+
 LogicalResult mlir::MlirOptMain(llvm::raw_ostream &outputStream,
                                 std::unique_ptr<llvm::MemoryBuffer> buffer,
                                 DialectRegistry &registry,
@@ -395,34 +535,13 @@ LogicalResult mlir::MlirOptMain(llvm::raw_ostream &outputStream,
                                /*insertMarkerInOutput=*/true);
 }
 
-LogicalResult mlir::MlirOptMain(int argc, char **argv, llvm::StringRef toolName,
+LogicalResult mlir::MlirOptMain(int argc, char **argv,
+                                llvm::StringRef inputFilename,
+                                llvm::StringRef outputFilename,
                                 DialectRegistry &registry) {
-  static cl::opt<std::string> inputFilename(
-      cl::Positional, cl::desc("<input file>"), cl::init("-"));
-
-  static cl::opt<std::string> outputFilename("o", cl::desc("Output filename"),
-                                             cl::value_desc("filename"),
-                                             cl::init("-"));
 
   InitLLVM y(argc, argv);
 
-  // Register any command line options.
-  MlirOptMainConfig::registerCLOptions(registry);
-  registerAsmPrinterCLOptions();
-  registerMLIRContextCLOptions();
-  registerPassManagerCLOptions();
-  registerDefaultTimingManagerCLOptions();
-  tracing::DebugCounter::registerCLOptions();
-
-  // Build the list of dialects as a header for the --help message.
-  std::string helpHeader = (toolName + "\nAvailable Dialects: ").str();
-  {
-    llvm::raw_string_ostream os(helpHeader);
-    interleaveComma(registry.getDialectNames(), os,
-                    [&](auto name) { os << name; });
-  }
-  // Parse pass names in main to ensure static initialization completed.
-  cl::ParseCommandLineOptions(argc, argv, helpHeader);
   MlirOptMainConfig config = MlirOptMainConfig::createFromCLOptions();
 
   // When reading from stdin and the input is a tty, it is often a user mistake
@@ -452,4 +571,15 @@ LogicalResult mlir::MlirOptMain(int argc, char **argv, llvm::StringRef toolName,
   // Keep the output file if the invocation of MlirOptMain was successful.
   output->keep();
   return success();
+}
+
+LogicalResult mlir::MlirOptMain(int argc, char **argv, llvm::StringRef toolName,
+                                DialectRegistry &registry) {
+
+  // Register and parse command line options.
+  std::string inputFilename, outputFilename;
+  std::tie(inputFilename, outputFilename) =
+      registerAndParseCLIOptions(argc, argv, toolName, registry);
+
+  return MlirOptMain(argc, argv, inputFilename, outputFilename, registry);
 }

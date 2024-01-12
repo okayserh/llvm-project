@@ -34,9 +34,11 @@ namespace exegesis {
 // Common code for all benchmark modes.
 class BenchmarkRunner {
 public:
-  explicit BenchmarkRunner(const LLVMState &State,
-                           Benchmark::ModeE Mode,
-                           BenchmarkPhaseSelectorE BenchmarkPhaseSelector);
+  enum ExecutionModeE { InProcess, SubProcess };
+
+  explicit BenchmarkRunner(const LLVMState &State, Benchmark::ModeE Mode,
+                           BenchmarkPhaseSelectorE BenchmarkPhaseSelector,
+                           ExecutionModeE ExecutionMode);
 
   virtual ~BenchmarkRunner();
 
@@ -54,7 +56,7 @@ public:
   private:
     RunnableConfiguration() = default;
 
-    Benchmark InstrBenchmark;
+    Benchmark BenchmarkResult;
     object::OwningBinary<object::ObjectFile> ObjectFile;
   };
 
@@ -63,7 +65,7 @@ public:
                            unsigned NumRepetitions, unsigned LoopUnrollFactor,
                            const SnippetRepetitor &Repetitor) const;
 
-  Expected<Benchmark>
+  std::pair<Error, Benchmark>
   runConfiguration(RunnableConfiguration &&RC,
                    const std::optional<StringRef> &DumpFile) const;
 
@@ -105,20 +107,25 @@ protected:
   const LLVMState &State;
   const Benchmark::ModeE Mode;
   const BenchmarkPhaseSelectorE BenchmarkPhaseSelector;
+  const ExecutionModeE ExecutionMode;
 
 private:
   virtual Expected<std::vector<BenchmarkMeasure>>
   runMeasurements(const FunctionExecutor &Executor) const = 0;
 
-  Expected<SmallString<0>> assembleSnippet(const BenchmarkCode &BC,
-                                           const SnippetRepetitor &Repetitor,
-                                           unsigned MinInstructions,
-                                           unsigned LoopBodySize) const;
+  Expected<SmallString<0>>
+  assembleSnippet(const BenchmarkCode &BC, const SnippetRepetitor &Repetitor,
+                  unsigned MinInstructions, unsigned LoopBodySize,
+                  bool GenerateMemoryInstructions) const;
 
   Expected<std::string> writeObjectFile(StringRef Buffer,
                                         StringRef FileName) const;
 
   const std::unique_ptr<ScratchSpace> Scratch;
+
+  Expected<std::unique_ptr<FunctionExecutor>>
+  createFunctionExecutor(object::OwningBinary<object::ObjectFile> Obj,
+                         const BenchmarkKey &Key) const;
 };
 
 } // namespace exegesis

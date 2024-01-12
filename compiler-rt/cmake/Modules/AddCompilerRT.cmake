@@ -123,17 +123,6 @@ function(add_compiler_rt_component name)
   add_dependencies(compiler-rt ${name})
 endfunction()
 
-function(add_asm_sources output)
-  set(${output} ${ARGN} PARENT_SCOPE)
-  # CMake doesn't pass the correct architecture for Apple prior to CMake 3.19. https://gitlab.kitware.com/cmake/cmake/-/issues/20771
-  # MinGW didn't work correctly with assembly prior to CMake 3.17. https://gitlab.kitware.com/cmake/cmake/-/merge_requests/4287 and https://reviews.llvm.org/rGb780df052dd2b246a760d00e00f7de9ebdab9d09
-  # Workaround these two issues by compiling as C.
-  # Same workaround used in libunwind. Also update there if changed here.
-  if((APPLE AND CMAKE_VERSION VERSION_LESS 3.19) OR (MINGW AND CMAKE_VERSION VERSION_LESS 3.17))
-    set_source_files_properties(${ARGN} PROPERTIES LANGUAGE C)
-  endif()
-endfunction()
-
 macro(set_output_name output name arch)
   if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR)
     set(${output} ${name})
@@ -321,6 +310,10 @@ function(add_compiler_rt_runtime name type)
       set(COMPONENT_OPTION COMPONENT ${LIB_PARENT_TARGET})
     else()
       set(COMPONENT_OPTION COMPONENT ${libname})
+    endif()
+
+    if(type STREQUAL "SHARED")
+      list(APPEND LIB_DEFS COMPILER_RT_SHARED_LIB)
     endif()
 
     if(type STREQUAL "OBJECT")
@@ -632,6 +625,8 @@ macro(add_custom_libcxx name prefix)
   set_target_properties(${name}-clobber PROPERTIES FOLDER "Compiler-RT Misc")
 
   set(PASSTHROUGH_VARIABLES
+    ANDROID
+    ANDROID_NATIVE_API_LEVEL
     CMAKE_C_COMPILER_TARGET
     CMAKE_CXX_COMPILER_TARGET
     CMAKE_SHARED_LINKER_FLAGS
@@ -648,6 +643,7 @@ macro(add_custom_libcxx name prefix)
     CMAKE_STRIP
     CMAKE_READELF
     CMAKE_SYSROOT
+    CMAKE_TOOLCHAIN_FILE
     LIBCXX_HAS_MUSL_LIBC
     LIBCXX_HAS_GCC_S_LIB
     LIBCXX_HAS_PTHREAD_LIB
@@ -674,6 +670,10 @@ macro(add_custom_libcxx name prefix)
   get_property(CXX_FLAGS CACHE CMAKE_CXX_FLAGS PROPERTY VALUE)
   set(LIBCXX_CXX_FLAGS "${LIBCXX_CXX_FLAGS} ${CXX_FLAGS}")
 
+  if(CMAKE_VERBOSE_MAKEFILE)
+    set(verbose -DCMAKE_VERBOSE_MAKEFILE=ON)
+  endif()
+
   ExternalProject_Add(${name}
     DEPENDS ${name}-clobber ${LIBCXX_DEPS}
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/${name}
@@ -681,6 +681,7 @@ macro(add_custom_libcxx name prefix)
     BINARY_DIR ${prefix}
     CMAKE_ARGS ${CMAKE_PASSTHROUGH_VARIABLES}
                ${compiler_args}
+               ${verbose}
                -DCMAKE_C_FLAGS=${LIBCXX_C_FLAGS}
                -DCMAKE_CXX_FLAGS=${LIBCXX_CXX_FLAGS}
                -DCMAKE_BUILD_TYPE=Release

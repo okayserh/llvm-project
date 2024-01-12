@@ -32,6 +32,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/TargetParser/Triple.h"
+#include <bitset>
 #include <memory>
 #include <string>
 
@@ -71,6 +72,7 @@ protected:
     CortexA9,
     CortexM3,
     CortexM7,
+    CortexM52,
     CortexR4,
     CortexR4F,
     CortexR5,
@@ -198,7 +200,7 @@ protected:
   /// operand cycle returned by the itinerary data for pre-ISel operands.
   int PreISelOperandLatencyAdjustment = 2;
 
-  /// What alignment is preferred for loop bodies, in log2(bytes).
+  /// What alignment is preferred for loop bodies and functions, in log2(bytes).
   unsigned PrefLoopLogAlignment = 0;
 
   /// The cost factor for MVE instructions, representing the multiple beats an
@@ -305,8 +307,6 @@ public:
   bool GETTER() const { return ATTRIBUTE; }
 #include "ARMGenSubtargetInfo.inc"
 
-  void computeIssueWidth();
-
   /// @{
   /// These functions are obsolete, please consider adding subtarget features
   /// or properties instead of calling them.
@@ -404,6 +404,10 @@ public:
 
   bool isTargetHardFloat() const;
 
+  bool isReadTPSoft() const {
+    return !(isReadTPTPIDRURW() || isReadTPTPIDRURO() || isReadTPTPIDRPRW());
+  }
+
   bool isTargetAndroid() const { return TargetTriple.isAndroid(); }
 
   bool isXRaySupported() const override;
@@ -495,6 +499,11 @@ public:
   /// stack frame on entry to the function and which must be maintained by every
   /// function for this subtarget.
   Align getStackAlignment() const { return stackAlignment; }
+
+  // Returns the required alignment for LDRD/STRD instructions
+  Align getDualLoadStoreAlignment() const {
+    return Align(hasV7Ops() || allowsUnalignedMem() ? 4 : 8);
+  }
 
   unsigned getMaxInterleaveFactor() const { return MaxInterleaveFactor; }
 

@@ -9,6 +9,7 @@ include "mlir/IR/OpBase.td"
 def Test_Dialect : Dialect {
   let name = "test";
   let cppNamespace = "foobar";
+  let usePropertiesForAttributes = 0;
 }
 class NS_Op<string mnemonic, list<Trait> traits> :
     Op<Test_Dialect, mnemonic, traits>;
@@ -21,6 +22,7 @@ def SomeAttr : Attr<CPred<"some-condition">, "some attribute kind"> {
 }
 
 def SomeAttrDef : AttrDef<Test_Dialect, "SomeAttr"> {
+  let attrName = "test.some_attr";
 }
 
 
@@ -97,25 +99,25 @@ def AOp : NS_Op<"a_op", []> {
 // ---
 
 // DEF:      some-attr-kind AOp::getAAttrAttr()
-// DEF-NEXT:   ::mlir::impl::getAttrFromSortedRange((*this)->getAttrs().begin() + 0, (*this)->getAttrs().end() - 0, getAAttrAttrName()).cast<some-attr-kind>()
+// DEF-NEXT:   ::llvm::cast<some-attr-kind>(::mlir::impl::getAttrFromSortedRange((*this)->getAttrs().begin() + 0, (*this)->getAttrs().end() - 0, getAAttrAttrName()))
 // DEF:      some-return-type AOp::getAAttr() {
 // DEF-NEXT:   auto attr = getAAttrAttr()
 // DEF-NEXT:   return attr.some-convert-from-storage();
 
 // DEF:      some-attr-kind AOp::getBAttrAttr()
-// DEF-NEXT:   ::mlir::impl::getAttrFromSortedRange((*this)->getAttrs().begin() + 1, (*this)->getAttrs().end() - 0, getBAttrAttrName()).dyn_cast_or_null<some-attr-kind>()
+// DEF-NEXT:   ::llvm::dyn_cast_or_null<some-attr-kind>(::mlir::impl::getAttrFromSortedRange((*this)->getAttrs().begin() + 1, (*this)->getAttrs().end() - 0, getBAttrAttrName()))
 // DEF:      some-return-type AOp::getBAttr() {
 // DEF-NEXT:   auto attr = getBAttrAttr();
 // DEF-NEXT:   return attr.some-convert-from-storage();
 
 // DEF:      some-attr-kind AOp::getCAttrAttr()
-// DEF-NEXT:   ::mlir::impl::getAttrFromSortedRange((*this)->getAttrs().begin() + 1, (*this)->getAttrs().end() - 0, getCAttrAttrName()).dyn_cast_or_null<some-attr-kind>()
+// DEF-NEXT:   ::llvm::dyn_cast_or_null<some-attr-kind>(::mlir::impl::getAttrFromSortedRange((*this)->getAttrs().begin() + 1, (*this)->getAttrs().end() - 0, getCAttrAttrName()))
 // DEF:      ::std::optional<some-return-type> AOp::getCAttr() {
 // DEF-NEXT:   auto attr = getCAttrAttr()
 // DEF-NEXT:   return attr ? ::std::optional<some-return-type>(attr.some-convert-from-storage()) : (::std::nullopt);
 
 // DEF:      some-attr-kind AOp::getDAttrAttr()
-// DEF-NEXT:   ::mlir::impl::getAttrFromSortedRange((*this)->getAttrs().begin() + 1, (*this)->getAttrs().end() - 0, getDAttrAttrName()).dyn_cast_or_null<some-attr-kind>()
+// DEF-NEXT:   ::llvm::dyn_cast_or_null<some-attr-kind>(::mlir::impl::getAttrFromSortedRange((*this)->getAttrs().begin() + 1, (*this)->getAttrs().end() - 0, getDAttrAttrName()))
 // DEF:      some-return-type AOp::getDAttr() {
 // DEF-NEXT:   auto attr = getDAttrAttr();
 // DEF-NEXT:   if (!attr)
@@ -176,6 +178,7 @@ def AOp : NS_Op<"a_op", []> {
 def Test2_Dialect : Dialect {
   let name = "test2";
   let cppNamespace = "foobar2";
+  let usePropertiesForAttributes = 0;
 }
 def AgetOp : Op<Test2_Dialect, "a_get_op", []> {
   let arguments = (ins
@@ -232,13 +235,13 @@ def AgetOp : Op<Test2_Dialect, "a_get_op", []> {
 // ---
 
 // DEF:      some-attr-kind AgetOp::getAAttrAttr()
-// DEF-NEXT:   ::mlir::impl::getAttrFromSortedRange({{.*}}).cast<some-attr-kind>()
+// DEF-NEXT:   ::llvm::cast<some-attr-kind>(::mlir::impl::getAttrFromSortedRange({{.*}}))
 // DEF:      some-return-type AgetOp::getAAttr() {
 // DEF-NEXT:   auto attr = getAAttrAttr()
 // DEF-NEXT:   return attr.some-convert-from-storage();
 
 // DEF:      some-attr-kind AgetOp::getBAttrAttr()
-// DEF-NEXT:   return ::mlir::impl::getAttrFromSortedRange({{.*}}).dyn_cast_or_null<some-attr-kind>()
+// DEF-NEXT:   return ::llvm::dyn_cast_or_null<some-attr-kind>(::mlir::impl::getAttrFromSortedRange({{.*}}))
 // DEF:      some-return-type AgetOp::getBAttr() {
 // DEF-NEXT:   auto attr = getBAttrAttr();
 // DEF-NEXT:   if (!attr)
@@ -246,7 +249,7 @@ def AgetOp : Op<Test2_Dialect, "a_get_op", []> {
 // DEF-NEXT:   return attr.some-convert-from-storage();
 
 // DEF:      some-attr-kind AgetOp::getCAttrAttr()
-// DEF-NEXT:   return ::mlir::impl::getAttrFromSortedRange({{.*}}).dyn_cast_or_null<some-attr-kind>()
+// DEF-NEXT:   return ::llvm::dyn_cast_or_null<some-attr-kind>(::mlir::impl::getAttrFromSortedRange({{.*}}))
 // DEF:      ::std::optional<some-return-type> AgetOp::getCAttr() {
 // DEF-NEXT:   auto attr = getCAttrAttr()
 // DEF-NEXT:   return attr ? ::std::optional<some-return-type>(attr.some-convert-from-storage()) : (::std::nullopt);
@@ -410,7 +413,7 @@ def DefaultDictAttrOp : NS_Op<"default_dict_attr_op", []> {
 // DEF:   attributes.append(attrNames[1], odsBuilder.getDictionaryAttr(getDefaultDictAttrs(odsBuilder)));
 
 // DECL-LABEL: DefaultDictAttrOp declarations
-// DECL: build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState, ::mlir::DictionaryAttr empty, ::mlir::DictionaryAttr non_empty)
+// DECL: build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState, ::mlir::DictionaryAttr empty = nullptr, ::mlir::DictionaryAttr non_empty = nullptr)
 
 
 // Test derived type attr.

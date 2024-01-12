@@ -15,13 +15,13 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/ADT/ilist_iterator.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/LLVMBitCodes.h"
@@ -53,6 +53,7 @@
 #include <deque>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -463,6 +464,9 @@ class MetadataLoader::MetadataLoaderImpl {
   bool NeedUpgradeToDIGlobalVariableExpression = false;
   bool NeedDeclareExpressionUpgrade = false;
 
+  /// Map DILocalScope to the enclosing DISubprogram, if any.
+  DenseMap<DILocalScope *, DISubprogram *> ParentSubprogram;
+
   /// True if metadata is being parsed for a module being ThinLTO imported.
   bool IsImporting = false;
 
@@ -519,6 +523,104 @@ class MetadataLoader::MetadataLoaderImpl {
         } else
           GV.addMetadata(LLVMContext::MD_dbg, *MD);
     }
+  }
+
+  DISubprogram *findEnclosingSubprogram(DILocalScope *S) {
+    if (!S)
+      return nullptr;
+    if (auto *SP = ParentSubprogram[S]) {
+      return SP;
+    }
+
+    DILocalScope *InitialScope = S;
+    DenseSet<DILocalScope *> Visited;
+    while (S && !isa<DISubprogram>(S)) {
+      S = dyn_cast_or_null<DILocalScope>(S->getScope());
+      if (Visited.contains(S))
+        break;
+      Visited.insert(S);
+    }
+    ParentSubprogram[InitialScope] = llvm::dyn_cast_or_null<DISubprogram>(S);
+
+    return ParentSubprogram[InitialScope];
+  }
+
+  /// Move local imports from DICompileUnit's 'imports' field to
+  /// DISubprogram's retainedNodes.
+  /// Move fucntion-local enums from DICompileUnit's enums
+  /// to DISubprogram's retainedNodes.
+  void upgradeCULocals() {
+    if (NamedMDNode *CUNodes = TheModule.getNamedMetadata("llvm.dbg.cu")) {
+      for (unsigned I = 0, E = CUNodes->getNumOperands(); I != E; ++I) {
+        auto *CU = dyn_cast<DICompileUnit>(CUNodes->getOperand(I));
+        if (!CU)
+          continue;
+
+        SetVector<Metadata *> MetadataToRemove;
+        // Collect imported entities to be moved.
+        if (CU->getRawImportedEntities())
+          for (Metadata *Op : CU->getImportedEntities()->operands()) {
+            auto *IE = cast<DIImportedEntity>(Op);
+            if (dyn_cast_or_null<DILocalScope>(IE->getScope()))
+              MetadataToRemove.insert(IE);
+          }
+        // Collect enums to be moved.
+        if (CU->getRawEnumTypes())
+          for (Metadata *Op : CU->getEnumTypes()->operands()) {
+            auto *Enum = cast<DICompositeType>(Op);
+            if (dyn_cast_or_null<DILocalScope>(Enum->getScope()))
+              MetadataToRemove.insert(Enum);
+          }
+
+        if (!MetadataToRemove.empty()) {
+          // Make a new list of CU's 'imports'.
+          SmallVector<Metadata *> NewImports;
+          if (CU->getRawImportedEntities())
+            for (Metadata *Op : CU->getImportedEntities()->operands())
+              if (!MetadataToRemove.contains(Op))
+                NewImports.push_back(Op);
+
+          // Make a new list of CU's 'enums'.
+          SmallVector<Metadata *> NewEnums;
+          if (CU->getRawEnumTypes())
+            for (Metadata *Op : CU->getEnumTypes()->operands())
+              if (!MetadataToRemove.contains(Op))
+                NewEnums.push_back(Op);
+
+          // Find DISubprogram corresponding to each entity.
+          std::map<DISubprogram *, SmallVector<Metadata *>> SPToEntities;
+          for (auto *I : MetadataToRemove) {
+            DILocalScope *Scope = nullptr;
+            if (auto *Entity = dyn_cast<DIImportedEntity>(I))
+              Scope = cast<DILocalScope>(Entity->getScope());
+            else if (auto *Enum = dyn_cast<DICompositeType>(I))
+              Scope = cast<DILocalScope>(Enum->getScope());
+
+            if (auto *SP = findEnclosingSubprogram(Scope))
+              SPToEntities[SP].push_back(I);
+          }
+
+          // Update DISubprograms' retainedNodes.
+          for (auto I = SPToEntities.begin(); I != SPToEntities.end(); ++I) {
+            auto *SP = I->first;
+            auto RetainedNodes = SP->getRetainedNodes();
+            SmallVector<Metadata *> MDs(RetainedNodes.begin(),
+                                        RetainedNodes.end());
+            MDs.append(I->second);
+            SP->replaceRetainedNodes(MDNode::get(Context, MDs));
+          }
+
+          // Remove entities with local scope from CU.
+          if (CU->getRawImportedEntities())
+            CU->replaceImportedEntities(MDTuple::get(Context, NewImports));
+          // Remove enums with local scope from CU.
+          if (CU->getRawEnumTypes())
+            CU->replaceEnumTypes(MDTuple::get(Context, NewEnums));
+        }
+      }
+    }
+
+    ParentSubprogram.clear();
   }
 
   /// Remove a leading DW_OP_deref from DIExpressions in a dbg.declare that
@@ -622,9 +724,34 @@ class MetadataLoader::MetadataLoaderImpl {
     return Error::success();
   }
 
-  void upgradeDebugInfo() {
+  void upgradeDebugInfo(bool ModuleLevel) {
     upgradeCUSubprograms();
     upgradeCUVariables();
+    if (ModuleLevel)
+      upgradeCULocals();
+  }
+
+  void cloneLocalTypes() {
+    for (unsigned I = 0; I < MetadataList.size(); ++I) {
+      if (auto *SP = dyn_cast_or_null<DISubprogram>(MetadataList[I])) {
+        auto RetainedNodes = SP->getRetainedNodes();
+        SmallVector<Metadata *> MDs(RetainedNodes.begin(), RetainedNodes.end());
+        bool HasChanged = false;
+        for (auto &N : MDs)
+          if (auto *T = dyn_cast<DIType>(N))
+            if (auto *LS = dyn_cast_or_null<DILocalScope>(T->getScope()))
+              if (auto *Parent = findEnclosingSubprogram(LS))
+                if (Parent != SP) {
+                  HasChanged = true;
+                  auto NewT = T->clone();
+                  NewT->replaceOperandWith(1, SP);
+                  N = MDNode::replaceWithUniqued(std::move(NewT));
+                }
+
+        if (HasChanged)
+          SP->replaceRetainedNodes(MDNode::get(Context, MDs));
+      }
+    }
   }
 
   void callMDTypeCallback(Metadata **Val, unsigned TypeID);
@@ -1001,7 +1128,8 @@ Error MetadataLoader::MetadataLoaderImpl::parseMetadata(bool ModuleLevel) {
       // Reading the named metadata created forward references and/or
       // placeholders, that we flush here.
       resolveForwardRefsAndPlaceholders(Placeholders);
-      upgradeDebugInfo();
+      upgradeDebugInfo(ModuleLevel);
+      cloneLocalTypes();
       // Return at the beginning of the block, since it is easy to skip it
       // entirely from there.
       Stream.ReadBlockEnd(); // Pop the abbrev block context.
@@ -1032,7 +1160,8 @@ Error MetadataLoader::MetadataLoaderImpl::parseMetadata(bool ModuleLevel) {
       return error("Malformed block");
     case BitstreamEntry::EndBlock:
       resolveForwardRefsAndPlaceholders(Placeholders);
-      upgradeDebugInfo();
+      upgradeDebugInfo(ModuleLevel);
+      cloneLocalTypes();
       return Error::success();
     case BitstreamEntry::Record:
       // The interesting case.
@@ -1127,6 +1256,26 @@ void MetadataLoader::MetadataLoaderImpl::resolveForwardRefsAndPlaceholders(
   // Finally, everything is in place, we can replace the placeholders operands
   // with the final node they refer to.
   Placeholders.flush(MetadataList);
+}
+
+static Value *getValueFwdRef(BitcodeReaderValueList &ValueList, unsigned Idx,
+                             Type *Ty, unsigned TyID) {
+  Value *V = ValueList.getValueFwdRef(Idx, Ty, TyID,
+                                      /*ConstExprInsertBB*/ nullptr);
+  if (V)
+    return V;
+
+  // This is a reference to a no longer supported constant expression.
+  // Pretend that the constant was deleted, which will replace metadata
+  // references with undef.
+  // TODO: This is a rather indirect check. It would be more elegant to use
+  // a separate ErrorInfo for constant materialization failure and thread
+  // the error reporting through getValueFwdRef().
+  if (Idx < ValueList.size() && ValueList[Idx] &&
+      ValueList[Idx]->getType() == Ty)
+    return UndefValue::get(Ty);
+
+  return nullptr;
 }
 
 Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
@@ -1231,7 +1380,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
 
     unsigned TyID = Record[0];
     Type *Ty = Callbacks.GetTypeByID(TyID);
-    if (Ty->isMetadataTy() || Ty->isVoidTy()) {
+    if (!Ty || Ty->isMetadataTy() || Ty->isVoidTy()) {
       dropRecord();
       break;
     }
@@ -1260,8 +1409,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
       if (Ty->isMetadataTy())
         Elts.push_back(getMD(Record[i + 1]));
       else if (!Ty->isVoidTy()) {
-        Value *V = ValueList.getValueFwdRef(Record[i + 1], Ty, TyID,
-                                            /*ConstExprInsertBB*/ nullptr);
+        Value *V = getValueFwdRef(ValueList, Record[i + 1], Ty, TyID);
         if (!V)
           return error("Invalid value reference from old metadata");
         Metadata *MD = ValueAsMetadata::get(V);
@@ -1282,11 +1430,10 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
 
     unsigned TyID = Record[0];
     Type *Ty = Callbacks.GetTypeByID(TyID);
-    if (Ty->isMetadataTy() || Ty->isVoidTy())
+    if (!Ty || Ty->isMetadataTy() || Ty->isVoidTy())
       return error("Invalid record");
 
-    Value *V = ValueList.getValueFwdRef(Record[1], Ty, TyID,
-                                        /*ConstExprInsertBB*/ nullptr);
+    Value *V = getValueFwdRef(ValueList, Record[1], Ty, TyID);
     if (!V)
       return error("Invalid value reference from metadata");
 
@@ -1531,7 +1678,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
         // DICompositeType flag specifying whether template parameters are
         // required on declarations of this type.
         StringRef NameStr = Name->getString();
-        if (!NameStr.contains('<') || NameStr.startswith("_STN|"))
+        if (!NameStr.contains('<') || NameStr.starts_with("_STN|"))
           TemplateParams = getMDOrNull(Record[14]);
       }
     } else {

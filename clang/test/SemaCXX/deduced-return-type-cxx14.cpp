@@ -296,7 +296,7 @@ namespace Constexpr {
   void f() {
     X<int>().f();
     Y<void>().f();
-    constexpr int q = Y<int>().f(); // expected-error {{must be initialized by a constant expression}} expected-note {{in call to '&Y<int>()->f()'}}
+    constexpr int q = Y<int>().f(); // expected-error {{must be initialized by a constant expression}} expected-note {{in call to 'Y<int>().f()'}}
   }
   struct NonLiteral { ~NonLiteral(); } nl; // cxx14-note {{user-provided destructor}}
   // cxx20_23-note@-1 {{'NonLiteral' is not literal because its destructor is not constexpr}}
@@ -639,4 +639,50 @@ namespace PR46637 {
   template<auto (*)() -> auto> struct X {}; // cxx14-error {{'auto' not allowed in template parameter until C++17}}
   template<typename T> struct Y { T x; };
   Y<auto() -> auto> y; // expected-error {{'auto' not allowed in template argument}}
+}
+
+namespace GH71015 {
+
+// Check that there is no error in case a templated function is recursive and
+// has a placeholder return type.
+struct Node {
+  int value;
+  Node* left;
+  Node* right;
+};
+
+bool parse(const char*);
+Node* parsePrimaryExpr();
+
+auto parseMulExpr(auto node) { // cxx14-error {{'auto' not allowed in function prototype}} \
+                               // cxx14-note {{not viable}}
+  if (node == nullptr) node = parsePrimaryExpr();
+  if (!parse("*")) return node;
+  return parseMulExpr(new Node{.left = node, .right = parsePrimaryExpr()});
+}
+
+template <typename T>
+auto parseMulExpr2(T node) {
+  if (node == nullptr) node = parsePrimaryExpr();
+  if (!parse("*")) return node;
+  return parseMulExpr2(new Node{.left = node, .right = parsePrimaryExpr()});
+}
+
+template <typename T>
+auto parseMulExpr3(T node) { // expected-note {{declared here}}
+  if (node == nullptr) node = parsePrimaryExpr();
+  return parseMulExpr3(new Node{.left = node, .right = parsePrimaryExpr()}); // expected-error {{cannot be used before it is defined}}
+}
+
+void foo() {
+  parseMulExpr(new Node{}); // cxx14-error {{no matching function}}
+  parseMulExpr2(new Node{});
+  parseMulExpr3(new Node{}); // expected-note {{in instantiation}}
+}
+
+auto f(auto x) { // cxx14-error {{'auto' not allowed in function prototype}}
+  if (x == 0) return 0;
+  return f(1) + 1;
+}
+
 }

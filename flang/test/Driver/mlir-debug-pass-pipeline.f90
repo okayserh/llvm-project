@@ -25,6 +25,8 @@ end program
 ! ALL: Pass statistics report
 
 ! ALL: Fortran::lower::VerifierPass
+! ALL-NEXT: 'func.func' Pipeline
+! ALL-NEXT:   InlineElementals
 ! ALL-NEXT: LowerHLFIROrderedAssignments
 ! ALL-NEXT: LowerHLFIRIntrinsics
 ! ALL-NEXT: BufferizeHLFIR
@@ -80,5 +82,5 @@ end program
 ! ALL-NEXT: ExternalNameConversion
 ! DEBUG-NEXT: AddDebugFoundation
 ! NO-DEBUG-NOT: AddDebugFoundation
-! ALL-NEXT: FIRToLLVMLowering
+! ALL: FIRToLLVMLowering
 ! ALL-NOT: LLVMIRLoweringPass

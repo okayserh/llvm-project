@@ -6,11 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-// UNSUPPORTED: c++03
-// ADDITIONAL_COMPILE_FLAGS: -I %S/../../../../../../src/filesystem
+// UNSUPPORTED: c++03, c++11, c++14
+// UNSUPPORTED: availability-filesystem-missing
+// UNSUPPORTED: no-filesystem
+// ADDITIONAL_COMPILE_FLAGS: -I %S/../../../../../../src
 
-// This test relies on calling functions from the libcxx internal header
-// filesystem_common.h; the Windows implementation uses different
+// This test relies on calling functions from the libcxx internal headers
+// of <filesystem>; the Windows implementation uses different
 // internals and doesn't provide the same set_file_times function as for
 // other platforms.
 // UNSUPPORTED: windows
@@ -22,7 +24,7 @@
 
 // class directory_entry
 
-#include "filesystem_include.h"
+#include <filesystem>
 #include <type_traits>
 #include <cassert>
 
@@ -30,8 +32,9 @@
 #include "test_macros.h"
 #include "filesystem_test_helper.h"
 
-#include "filesystem_common.h"
+#include "filesystem/time_utils.h"
 
+namespace fs = std::filesystem;
 using namespace fs::detail;
 
 static void last_write_time_not_representable_error() {

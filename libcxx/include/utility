@@ -240,7 +240,7 @@ template <size_t I>
 
 // [utility.underlying], to_underlying
 template <class T>
-    constexpr underlying_type_t<T> to_underlying( T value ) noexcept; // C++2b
+    constexpr underlying_type_t<T> to_underlying( T value ) noexcept; // C++23
 
 }  // std
 
@@ -249,6 +249,7 @@ template <class T>
 #include <__assert> // all public C++ headers provide the assertion handler
 #include <__config>
 #include <__utility/as_const.h>
+#include <__utility/as_lvalue.h>
 #include <__utility/auto_cast.h>
 #include <__utility/cmp.h>
 #include <__utility/declval.h>

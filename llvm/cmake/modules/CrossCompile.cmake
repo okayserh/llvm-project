@@ -67,6 +67,12 @@ function(llvm_create_cross_target project_name target_name toolchain buildtype)
          "-DLLVM_EXTERNAL_${name}_SOURCE_DIR=${LLVM_EXTERNAL_${name}_SOURCE_DIR}")
   endforeach()
 
+  if("libc" IN_LIST LLVM_ENABLE_PROJECTS)
+    if(LLVM_LIBC_FULL_BUILD AND NOT LIBC_HDRGEN_EXE)
+      set(libc_flags -DLLVM_LIBC_FULL_BUILD=ON -DLIBC_HDRGEN_ONLY=ON)
+    endif()
+  endif()
+
   add_custom_command(OUTPUT ${${project_name}_${target_name}_BUILD}/CMakeCache.txt
     COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}"
         -DCMAKE_MAKE_PROGRAM="${CMAKE_MAKE_PROGRAM}"
@@ -86,7 +92,7 @@ function(llvm_create_cross_target project_name target_name toolchain buildtype)
         -DLLVM_TEMPORARILY_ALLOW_OLD_TOOLCHAIN="${LLVM_TEMPORARILY_ALLOW_OLD_TOOLCHAIN}"
         -DLLVM_INCLUDE_BENCHMARKS=OFF
         -DLLVM_INCLUDE_TESTS=OFF
-        ${build_type_flags} ${linker_flag} ${external_clang_dir}
+        ${build_type_flags} ${linker_flag} ${external_clang_dir} ${libc_flags}
         ${ARGN}
     WORKING_DIRECTORY ${${project_name}_${target_name}_BUILD}
     DEPENDS CREATE_${project_name}_${target_name}
@@ -97,6 +103,15 @@ function(llvm_create_cross_target project_name target_name toolchain buildtype)
 
 endfunction()
 
+function(get_native_tool_path target output_path_var)
+  if(CMAKE_CONFIGURATION_TYPES)
+    set(output_path "${${PROJECT_NAME}_NATIVE_BUILD}/Release/bin/${target}")
+  else()
+    set(output_path "${${PROJECT_NAME}_NATIVE_BUILD}/bin/${target}")
+  endif()
+  set(${output_path_var} ${output_path}${LLVM_HOST_EXECUTABLE_SUFFIX} PARENT_SCOPE)
+endfunction()
+
 # Sets up a native build for a tool, used e.g. for cross-compilation and
 # LLVM_OPTIMIZED_TABLEGEN. Always builds in Release.
 # - target: The target to build natively
@@ -105,12 +120,7 @@ endfunction()
 function(build_native_tool target output_path_var)
   cmake_parse_arguments(ARG "" "" "DEPENDS" ${ARGN})
 
-  if(CMAKE_CONFIGURATION_TYPES)
-    set(output_path "${${PROJECT_NAME}_NATIVE_BUILD}/Release/bin/${target}")
-  else()
-    set(output_path "${${PROJECT_NAME}_NATIVE_BUILD}/bin/${target}")
-  endif()
-  set(output_path ${output_path}${LLVM_HOST_EXECUTABLE_SUFFIX})
+  get_native_tool_path(${target} output_path)
 
   # Make chain of preceding actions
   if(CMAKE_GENERATOR MATCHES "Visual Studio")

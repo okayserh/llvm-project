@@ -6,18 +6,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIBC_SRC_SUPPORT_FPUTIL_NEAREST_INTEGER_OPERATIONS_H
-#define LLVM_LIBC_SRC_SUPPORT_FPUTIL_NEAREST_INTEGER_OPERATIONS_H
+#ifndef LLVM_LIBC_SRC___SUPPORT_FPUTIL_NEARESTINTEGEROPERATIONS_H
+#define LLVM_LIBC_SRC___SUPPORT_FPUTIL_NEARESTINTEGEROPERATIONS_H
 
 #include "FEnvImpl.h"
 #include "FPBits.h"
+#include "rounding_mode.h"
 
 #include "src/__support/CPP/type_traits.h"
 #include "src/__support/common.h"
 
 #include <math.h>
 
-namespace __llvm_libc {
+namespace LIBC_NAMESPACE {
 namespace fputil {
 
 template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
@@ -35,7 +36,7 @@ LIBC_INLINE T trunc(T x) {
 
   // If the exponent is greater than the most negative mantissa
   // exponent, then x is already an integer.
-  if (exponent >= static_cast<int>(MantissaWidth<T>::VALUE))
+  if (exponent >= static_cast<int>(FPBits<T>::FRACTION_LEN))
     return x;
 
   // If the exponent is such that abs(x) is less than 1, then return 0.
@@ -46,7 +47,7 @@ LIBC_INLINE T trunc(T x) {
       return T(0.0);
   }
 
-  int trim_size = MantissaWidth<T>::VALUE - exponent;
+  int trim_size = FPBits<T>::FRACTION_LEN - exponent;
   bits.set_mantissa((bits.get_mantissa() >> trim_size) << trim_size);
   return T(bits);
 }
@@ -64,7 +65,7 @@ LIBC_INLINE T ceil(T x) {
 
   // If the exponent is greater than the most negative mantissa
   // exponent, then x is already an integer.
-  if (exponent >= static_cast<int>(MantissaWidth<T>::VALUE))
+  if (exponent >= static_cast<int>(FPBits<T>::FRACTION_LEN))
     return x;
 
   if (exponent <= -1) {
@@ -74,7 +75,7 @@ LIBC_INLINE T ceil(T x) {
       return T(1.0);
   }
 
-  uint32_t trim_size = MantissaWidth<T>::VALUE - exponent;
+  uint32_t trim_size = FPBits<T>::FRACTION_LEN - exponent;
   bits.set_mantissa((bits.get_mantissa() >> trim_size) << trim_size);
   T trunc_value = T(bits);
 
@@ -101,7 +102,7 @@ LIBC_INLINE T floor(T x) {
 
 template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
 LIBC_INLINE T round(T x) {
-  using UIntType = typename FPBits<T>::UIntType;
+  using StorageType = typename FPBits<T>::StorageType;
   FPBits<T> bits(x);
 
   // If x is infinity NaN or zero, return it.
@@ -113,7 +114,7 @@ LIBC_INLINE T round(T x) {
 
   // If the exponent is greater than the most negative mantissa
   // exponent, then x is already an integer.
-  if (exponent >= static_cast<int>(MantissaWidth<T>::VALUE))
+  if (exponent >= static_cast<int>(FPBits<T>::FRACTION_LEN))
     return x;
 
   if (exponent == -1) {
@@ -132,9 +133,9 @@ LIBC_INLINE T round(T x) {
       return T(0.0);
   }
 
-  uint32_t trim_size = MantissaWidth<T>::VALUE - exponent;
+  uint32_t trim_size = FPBits<T>::FRACTION_LEN - exponent;
   bool half_bit_set =
-      bool(bits.get_mantissa() & (UIntType(1) << (trim_size - 1)));
+      bool(bits.get_mantissa() & (StorageType(1) << (trim_size - 1)));
   bits.set_mantissa((bits.get_mantissa() >> trim_size) << trim_size);
   T trunc_value = T(bits);
 
@@ -153,7 +154,7 @@ LIBC_INLINE T round(T x) {
 
 template <typename T, cpp::enable_if_t<cpp::is_floating_point_v<T>, int> = 0>
 LIBC_INLINE T round_using_current_rounding_mode(T x) {
-  using UIntType = typename FPBits<T>::UIntType;
+  using StorageType = typename FPBits<T>::StorageType;
   FPBits<T> bits(x);
 
   // If x is infinity NaN or zero, return it.
@@ -162,11 +163,11 @@ LIBC_INLINE T round_using_current_rounding_mode(T x) {
 
   bool is_neg = bits.get_sign();
   int exponent = bits.get_exponent();
-  int rounding_mode = get_round();
+  int rounding_mode = quick_get_round();
 
   // If the exponent is greater than the most negative mantissa
   // exponent, then x is already an integer.
-  if (exponent >= static_cast<int>(MantissaWidth<T>::VALUE))
+  if (exponent >= static_cast<int>(FPBits<T>::FRACTION_LEN))
     return x;
 
   if (exponent <= -1) {
@@ -187,7 +188,7 @@ LIBC_INLINE T round_using_current_rounding_mode(T x) {
     }
   }
 
-  uint32_t trim_size = MantissaWidth<T>::VALUE - exponent;
+  uint32_t trim_size = FPBits<T>::FRACTION_LEN - exponent;
   FPBits<T> new_bits = bits;
   new_bits.set_mantissa((bits.get_mantissa() >> trim_size) << trim_size);
   T trunc_value = T(new_bits);
@@ -196,12 +197,14 @@ LIBC_INLINE T round_using_current_rounding_mode(T x) {
   if (trunc_value == x)
     return x;
 
-  UIntType trim_value = bits.get_mantissa() & ((UIntType(1) << trim_size) - 1);
-  UIntType half_value = (UIntType(1) << (trim_size - 1));
+  StorageType trim_value =
+      bits.get_mantissa() & ((StorageType(1) << trim_size) - 1);
+  StorageType half_value = (StorageType(1) << (trim_size - 1));
   // If exponent is 0, trimSize will be equal to the mantissa width, and
   // truncIsOdd` will not be correct. So, we handle it as a special case
   // below.
-  UIntType trunc_is_odd = new_bits.get_mantissa() & (UIntType(1) << trim_size);
+  StorageType trunc_is_odd =
+      new_bits.get_mantissa() & (StorageType(1) << trim_size);
 
   switch (rounding_mode) {
   case FE_DOWNWARD:
@@ -285,6 +288,6 @@ LIBC_INLINE I round_to_signed_integer_using_current_rounding_mode(F x) {
 }
 
 } // namespace fputil
-} // namespace __llvm_libc
+} // namespace LIBC_NAMESPACE
 
-#endif // LLVM_LIBC_SRC_SUPPORT_FPUTIL_NEAREST_INTEGER_OPERATIONS_H
+#endif // LLVM_LIBC_SRC___SUPPORT_FPUTIL_NEARESTINTEGEROPERATIONS_H

@@ -6,7 +6,7 @@
 //===----------------------------------------------------------------------===//
 
 // UNSUPPORTED: c++03, c++11, c++14, c++17, c++20
-// UNSUPPORTED: libcpp-has-no-incomplete-format
+// UNSUPPORTED: GCC-ALWAYS_INLINE-FIXME
 
 // TODO FMT This test should not require std::to_chars(floating-point)
 // XFAIL: availability-fp_to_chars-missing
@@ -150,7 +150,7 @@ void test_char() {
   // *** P2286 examples ***
   test_format(SV("['\\'', '\"']"), SV("[{:?}, {:?}]"), CharT('\''), CharT('"'));
 
-  // *** Specical cases ***
+  // *** Special cases ***
   test_format(SV("'\\t'"), SV("{:?}"), CharT('\t'));
   test_format(SV("'\\n'"), SV("{:?}"), CharT('\n'));
   test_format(SV("'\\r'"), SV("{:?}"), CharT('\r'));
@@ -282,7 +282,7 @@ void test_string() {
 
   test_format(SV("[\"🤷🏻\u200d♂\ufe0f\"]"), SV("[{:?}]"), SV("🤷🏻‍♂️"));
 
-  // *** Specical cases ***
+  // *** Special cases ***
   test_format(SV(R"("\t\n\r\\'\" ")"), SV("{:?}"), SV("\t\n\r\\'\" "));
 
   // *** Printable ***

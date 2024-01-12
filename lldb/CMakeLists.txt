@@ -27,11 +27,11 @@ include(GNUInstallDirs)
 option(LLDB_INCLUDE_TESTS "Generate build targets for the LLDB unit tests." ${LLVM_INCLUDE_TESTS})
 
 if(LLDB_BUILT_STANDALONE)
-  include(LLDBStandalone)
-
   set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to conform to")
   set(CMAKE_CXX_STANDARD_REQUIRED YES)
   set(CMAKE_CXX_EXTENSIONS NO)
+
+  include(LLDBStandalone)
 endif()
 
 include(LLDBConfig)
@@ -44,6 +44,10 @@ endif()
 
 if (WIN32)
   add_definitions(-D_ENABLE_EXTENDED_ALIGNED_STORAGE)
+  if (NOT MSVC)
+    # _BSD_SOURCE is required for MinGW's getopt.h to define optreset
+    add_definitions(-D_BSD_SOURCE)
+  endif()
 endif()
 
 if (LLDB_ENABLE_PYTHON)

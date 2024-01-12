@@ -19,6 +19,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/DFAPacketizer.h"
 #include "llvm/CodeGen/LivePhysRegs.h"
@@ -2177,11 +2178,17 @@ bool HexagonInstrInfo::isConstExtended(const MachineInstr &MI) const {
   // have 'isExtended' flag set.
   assert(MO.isImm() && "Extendable operand must be Immediate type");
 
-  int MinValue = getMinValue(MI);
-  int MaxValue = getMaxValue(MI);
-  int ImmValue = MO.getImm();
-
-  return (ImmValue < MinValue || ImmValue > MaxValue);
+  int64_t Value = MO.getImm();
+  if ((F >> HexagonII::ExtentSignedPos) & HexagonII::ExtentSignedMask) {
+    int32_t SValue = Value;
+    int32_t MinValue = getMinValue(MI);
+    int32_t MaxValue = getMaxValue(MI);
+    return SValue < MinValue || SValue > MaxValue;
+  }
+  uint32_t UValue = Value;
+  uint32_t MinValue = getMinValue(MI);
+  uint32_t MaxValue = getMaxValue(MI);
+  return UValue < MinValue || UValue > MaxValue;
 }
 
 bool HexagonInstrInfo::isDeallocRet(const MachineInstr &MI) const {
@@ -2219,15 +2226,11 @@ bool HexagonInstrInfo::isDependent(const MachineInstr &ProdMI,
       if (RegA == RegB)
         return true;
 
-      if (RegA.isPhysical())
-        for (MCPhysReg SubReg : HRI.subregs(RegA))
-          if (RegB == SubReg)
-            return true;
+      if (RegA.isPhysical() && llvm::is_contained(HRI.subregs(RegA), RegB))
+        return true;
 
-      if (RegB.isPhysical())
-        for (MCPhysReg SubReg : HRI.subregs(RegB))
-          if (RegA == SubReg)
-            return true;
+      if (RegB.isPhysical() && llvm::is_contained(HRI.subregs(RegB), RegA))
+        return true;
     }
 
   return false;
@@ -4292,11 +4295,9 @@ unsigned HexagonInstrInfo::getInstrTimingClassLatency(
 ///
 /// This is a raw interface to the itinerary that may be directly overriden by
 /// a target. Use computeOperandLatency to get the best estimate of latency.
-int HexagonInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
-                                        const MachineInstr &DefMI,
-                                        unsigned DefIdx,
-                                        const MachineInstr &UseMI,
-                                        unsigned UseIdx) const {
+std::optional<unsigned> HexagonInstrInfo::getOperandLatency(
+    const InstrItineraryData *ItinData, const MachineInstr &DefMI,
+    unsigned DefIdx, const MachineInstr &UseMI, unsigned UseIdx) const {
   const HexagonRegisterInfo &HRI = *Subtarget.getRegisterInfo();
 
   // Get DefIdx and UseIdx for super registers.
@@ -4325,9 +4326,9 @@ int HexagonInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
     }
   }
 
-  int Latency = TargetInstrInfo::getOperandLatency(ItinData, DefMI, DefIdx,
-                                                   UseMI, UseIdx);
-  if (!Latency)
+  std::optional<unsigned> Latency = TargetInstrInfo::getOperandLatency(
+      ItinData, DefMI, DefIdx, UseMI, UseIdx);
+  if (Latency == 0)
     // We should never have 0 cycle latency between two instructions unless
     // they can be packetized together. However, this decision can't be made
     // here.

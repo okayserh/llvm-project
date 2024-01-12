@@ -16,7 +16,9 @@
 #ifndef LLVM_IR_DEBUGINFO_H
 #define LLVM_IR_DEBUGINFO_H
 
+#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -32,18 +34,22 @@ namespace llvm {
 class DbgDeclareInst;
 class DbgValueInst;
 class DbgVariableIntrinsic;
+class DPValue;
 class Instruction;
 class Module;
 
 /// Finds dbg.declare intrinsics declaring local variables as living in the
 /// memory that 'V' points to.
-TinyPtrVector<DbgDeclareInst *> FindDbgDeclareUses(Value *V);
+void findDbgDeclares(SmallVectorImpl<DbgDeclareInst *> &DbgUsers, Value *V,
+                     SmallVectorImpl<DPValue *> *DPValues = nullptr);
 
 /// Finds the llvm.dbg.value intrinsics describing a value.
-void findDbgValues(SmallVectorImpl<DbgValueInst *> &DbgValues, Value *V);
+void findDbgValues(SmallVectorImpl<DbgValueInst *> &DbgValues,
+                   Value *V, SmallVectorImpl<DPValue *> *DPValues = nullptr);
 
 /// Finds the debug info intrinsics describing a value.
-void findDbgUsers(SmallVectorImpl<DbgVariableIntrinsic *> &DbgInsts, Value *V);
+void findDbgUsers(SmallVectorImpl<DbgVariableIntrinsic *> &DbgInsts,
+                  Value *V, SmallVectorImpl<DPValue *> *DPValues = nullptr);
 
 /// Find subprogram that is enclosing this scope.
 DISubprogram *getDISubprogram(const MDNode *Scope);
@@ -97,10 +103,12 @@ public:
   /// Process a single instruction and collect debug info anchors.
   void processInstruction(const Module &M, const Instruction &I);
 
-  /// Process DbgVariableIntrinsic.
-  void processVariable(const Module &M, const DbgVariableIntrinsic &DVI);
+  /// Process a DILocalVariable.
+  void processVariable(DILocalVariable *DVI);
   /// Process debug info location.
   void processLocation(const Module &M, const DILocation *Loc);
+  // Process a DPValue, much like a DbgVariableIntrinsic.
+  void processDPValue(const Module &M, const DPValue &DPV);
 
   /// Process subprogram.
   void processSubprogram(DISubprogram *SP);
@@ -112,6 +120,7 @@ private:
   void processCompileUnit(DICompileUnit *CU);
   void processScope(DIScope *Scope);
   void processType(DIType *DT);
+  void processLocalVariable(DILocalVariable *DV);
   bool addCompileUnit(DICompileUnit *CU);
   bool addGlobalVariable(DIGlobalVariableExpression *DIG);
   bool addScope(DIScope *Scope);
@@ -126,6 +135,8 @@ public:
       SmallVectorImpl<DIGlobalVariableExpression *>::const_iterator;
   using type_iterator = SmallVectorImpl<DIType *>::const_iterator;
   using scope_iterator = SmallVectorImpl<DIScope *>::const_iterator;
+  using local_variable_iterator =
+      SmallVectorImpl<DILocalVariable *>::const_iterator;
 
   iterator_range<compile_unit_iterator> compile_units() const {
     return make_range(CUs.begin(), CUs.end());
@@ -139,6 +150,10 @@ public:
     return make_range(GVs.begin(), GVs.end());
   }
 
+  iterator_range<local_variable_iterator> local_variables() const {
+    return make_range(LVs.begin(), LVs.end());
+  }
+
   iterator_range<type_iterator> types() const {
     return make_range(TYs.begin(), TYs.end());
   }
@@ -149,6 +164,7 @@ public:
 
   unsigned compile_unit_count() const { return CUs.size(); }
   unsigned global_variable_count() const { return GVs.size(); }
+  unsigned local_variable_count() const { return LVs.size(); }
   unsigned subprogram_count() const { return SPs.size(); }
   unsigned type_count() const { return TYs.size(); }
   unsigned scope_count() const { return Scopes.size(); }
@@ -157,6 +173,7 @@ private:
   SmallVector<DICompileUnit *, 8> CUs;
   SmallVector<DISubprogram *, 8> SPs;
   SmallVector<DIGlobalVariableExpression *, 8> GVs;
+  SmallVector<DILocalVariable *, 8> LVs;
   SmallVector<DIType *, 8> TYs;
   SmallVector<DIScope *, 8> Scopes;
   SmallPtrSet<const MDNode *, 32> NodesSeen;
@@ -259,11 +276,35 @@ struct VarRecord {
   }
 };
 
+} // namespace at
+
+template <> struct DenseMapInfo<at::VarRecord> {
+  static inline at::VarRecord getEmptyKey() {
+    return at::VarRecord(DenseMapInfo<DILocalVariable *>::getEmptyKey(),
+                         DenseMapInfo<DILocation *>::getEmptyKey());
+  }
+
+  static inline at::VarRecord getTombstoneKey() {
+    return at::VarRecord(DenseMapInfo<DILocalVariable *>::getTombstoneKey(),
+                         DenseMapInfo<DILocation *>::getTombstoneKey());
+  }
+
+  static unsigned getHashValue(const at::VarRecord &Var) {
+    return hash_combine(Var.Var, Var.DL);
+  }
+
+  static bool isEqual(const at::VarRecord &A, const at::VarRecord &B) {
+    return A == B;
+  }
+};
+
+namespace at {
 /// Map of backing storage to a set of variables that are stored to it.
 /// TODO: Backing storage shouldn't be limited to allocas only. Some local
 /// variables have their storage allocated by the calling function (addresses
 /// passed in with sret & byval parameters).
-using StorageToVarsMap = DenseMap<const AllocaInst *, SmallSet<VarRecord, 2>>;
+using StorageToVarsMap =
+    DenseMap<const AllocaInst *, SmallSetVector<VarRecord, 2>>;
 
 /// Track assignments to \p Vars between \p Start and \p End.
 
@@ -314,6 +355,7 @@ public:
 
 /// Return true if assignment tracking is enabled for module \p M.
 bool isAssignmentTrackingEnabled(const Module &M);
+
 } // end namespace llvm
 
 #endif // LLVM_IR_DEBUGINFO_H

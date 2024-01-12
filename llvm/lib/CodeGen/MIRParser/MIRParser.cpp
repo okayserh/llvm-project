@@ -13,7 +13,6 @@
 
 #include "llvm/CodeGen/MIRParser/MIRParser.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/AsmParser/SlotMapping.h"
@@ -402,7 +401,7 @@ bool MIRParserImpl::initializeCallSiteInfo(
   MachineFunction &MF = PFS.MF;
   SMDiagnostic Error;
   const LLVMTargetMachine &TM = MF.getTarget();
-  for (auto YamlCSInfo : YamlMF.CallSitesInfo) {
+  for (auto &YamlCSInfo : YamlMF.CallSitesInfo) {
     yaml::CallSiteInfo::MachineInstrLoc MILoc = YamlCSInfo.CallLocation;
     if (MILoc.BlockNum >= MF.size())
       return error(Twine(MF.getName()) +

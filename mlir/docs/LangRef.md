@@ -77,10 +77,12 @@ func.func @mul(%A: tensor<100x?xf32>, %B: tensor<?x50xf32>) -> (tensor<100x50xf3
 
   // Allocate addressable "buffers" and copy tensors %A and %B into them.
   %A_m = memref.alloc(%n) : memref<100x?xf32>
-  memref.tensor_store %A to %A_m : memref<100x?xf32>
+  bufferization.materialize_in_destination %A in writable %A_m
+      : (tensor<100x?xf32>, memref<100x?xf32>) -> ()
 
   %B_m = memref.alloc(%n) : memref<?x50xf32>
-  memref.tensor_store %B to %B_m : memref<?x50xf32>
+  bufferization.materialize_in_destination %B in writable %B_m
+      : (tensor<?x50xf32>, memref<?x50xf32>) -> ()
 
   // Call function @multiply passing memrefs as arguments,
   // and getting returned the result of the multiplication.
@@ -207,7 +209,7 @@ symbol-ref-id ::= `@` (suffix-id | string-literal) (`::` symbol-ref-id)?
 value-id-list ::= value-id (`,` value-id)*
 
 // Uses of value, e.g. in an operand list to an operation.
-value-use ::= value-id
+value-use ::= value-id (`#` decimal-literal)?
 value-use-list ::= value-use (`,` value-use)*
 ```
 
@@ -294,13 +296,13 @@ generic-operation     ::= string-literal `(` value-use-list? `)`  successor-list
                           `:` function-type
 custom-operation      ::= bare-id custom-operation-format
 op-result-list        ::= op-result (`,` op-result)* `=`
-op-result             ::= value-id (`:` integer-literal)
+op-result             ::= value-id (`:` integer-literal)?
 successor-list        ::= `[` successor (`,` successor)* `]`
 successor             ::= caret-id (`:` block-arg-list)?
 dictionary-properties ::= `<` dictionary-attribute `>`
 region-list           ::= `(` region (`,` region)* `)`
 dictionary-attribute  ::= `{` (attribute-entry (`,` attribute-entry)*)? `}`
-trailing-location     ::= (`loc` `(` location `)`)?
+trailing-location     ::= `loc` `(` location `)`
 ```
 
 MLIR introduces a uniform concept called *operations* to enable describing many

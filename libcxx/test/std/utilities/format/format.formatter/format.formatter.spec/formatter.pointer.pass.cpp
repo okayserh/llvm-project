@@ -6,7 +6,7 @@
 //===----------------------------------------------------------------------===//
 
 // UNSUPPORTED: c++03, c++11, c++14, c++17
-// UNSUPPORTED: libcpp-has-no-incomplete-format
+// UNSUPPORTED: GCC-ALWAYS_INLINE-FIXME
 
 // <format>
 
@@ -58,8 +58,8 @@ void test(StringT expected, StringViewT fmt, PointerT arg, std::size_t offset) {
     std::array<char, 128> buffer;
     buffer[0] = CharT('0');
     buffer[1] = CharT('x');
-    expected.append(buffer.begin(),
-                    std::to_chars(buffer.begin() + 2, buffer.end(), reinterpret_cast<std::uintptr_t>(arg), 16).ptr);
+    expected.append(buffer.data(),
+                    std::to_chars(buffer.data() + 2, buffer.data() + buffer.size(), reinterpret_cast<std::uintptr_t>(arg), 16).ptr);
   }
   assert(result == expected);
 }

@@ -29,7 +29,6 @@
 #include "llvm/Support/MemoryBufferRef.h"
 #include "llvm/Support/ThreadPool.h"
 #include <fstream>
-#include <set>
 
 using namespace llvm;
 
@@ -328,9 +327,6 @@ void llvm::runDeltaPass(TestRunner &Test, ReductionFunc ExtractChunksFromModule,
       FoundAtLeastOneNewUninterestingChunkWithCurrentGranularity = true;
       UninterestingChunks.insert(ChunkToCheckForUninterestingness);
       ReducedProgram = std::move(Result);
-
-      // FIXME: Report meaningful progress info
-      Test.writeOutput(" **** SUCCESS | Saved new best reduction to ");
     }
     // Delete uninteresting chunks
     erase_if(ChunksStillConsideredInteresting,
@@ -342,8 +338,11 @@ void llvm::runDeltaPass(TestRunner &Test, ReductionFunc ExtractChunksFromModule,
             increaseGranularity(ChunksStillConsideredInteresting)));
 
   // If we reduced the testcase replace it
-  if (ReducedProgram)
+  if (ReducedProgram) {
     Test.setProgram(std::move(ReducedProgram));
+    // FIXME: Report meaningful progress info
+    Test.writeOutput(" **** SUCCESS | Saved new best reduction to ");
+  }
   if (Verbose)
     errs() << "Couldn't increase anymore.\n";
   errs() << "----------------------------\n";

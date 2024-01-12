@@ -162,7 +162,6 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
-#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -355,7 +354,6 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<DominatorTreeWrapperPass>();
-    AU.addRequired<ScalarEvolutionWrapperPass>();
     AU.addRequired<TargetTransformInfoWrapperPass>();
     AU.addRequired<LoopInfoWrapperPass>();
     AU.setPreservesCFG();
@@ -374,14 +372,23 @@ private:
 class SeparateConstOffsetFromGEP {
 public:
   SeparateConstOffsetFromGEP(
-      DominatorTree *DT, ScalarEvolution *SE, LoopInfo *LI,
-      TargetLibraryInfo *TLI,
+      DominatorTree *DT, LoopInfo *LI, TargetLibraryInfo *TLI,
       function_ref<TargetTransformInfo &(Function &)> GetTTI, bool LowerGEP)
-      : DT(DT), SE(SE), LI(LI), TLI(TLI), GetTTI(GetTTI), LowerGEP(LowerGEP) {}
+      : DT(DT), LI(LI), TLI(TLI), GetTTI(GetTTI), LowerGEP(LowerGEP) {}
 
   bool run(Function &F);
 
 private:
+  /// Track the operands of an add or sub.
+  using ExprKey = std::pair<Value *, Value *>;
+
+  /// Create a pair for use as a map key for a commutable operation.
+  static ExprKey createNormalizedCommutablePair(Value *A, Value *B) {
+    if (A < B)
+      return {A, B};
+    return {B, A};
+  }
+
   /// Tries to split the given GEP into a variadic base and a constant offset,
   /// and returns true if the splitting succeeds.
   bool splitGEP(GetElementPtrInst *GEP);
@@ -446,8 +453,8 @@ private:
 
   /// Find the closest dominator of <Dominatee> that is equivalent to <Key>.
   Instruction *findClosestMatchingDominator(
-      const SCEV *Key, Instruction *Dominatee,
-      DenseMap<const SCEV *, SmallVector<Instruction *, 2>> &DominatingExprs);
+      ExprKey Key, Instruction *Dominatee,
+      DenseMap<ExprKey, SmallVector<Instruction *, 2>> &DominatingExprs);
 
   /// Verify F is free of dead code.
   void verifyNoDeadCode(Function &F);
@@ -463,7 +470,6 @@ private:
 
   const DataLayout *DL = nullptr;
   DominatorTree *DT = nullptr;
-  ScalarEvolution *SE;
   LoopInfo *LI;
   TargetLibraryInfo *TLI;
   // Retrieved lazily since not always used.
@@ -473,8 +479,8 @@ private:
   /// multiple GEPs with a single index.
   bool LowerGEP;
 
-  DenseMap<const SCEV *, SmallVector<Instruction *, 2>> DominatingAdds;
-  DenseMap<const SCEV *, SmallVector<Instruction *, 2>> DominatingSubs;
+  DenseMap<ExprKey, SmallVector<Instruction *, 2>> DominatingAdds;
+  DenseMap<ExprKey, SmallVector<Instruction *, 2>> DominatingSubs;
 };
 
 } // end anonymous namespace
@@ -518,7 +524,7 @@ bool ConstantOffsetExtractor::CanTraceInto(bool SignExtended,
   // FIXME: this does not appear to be covered by any tests
   //        (with x86/aarch64 backends at least)
   if (BO->getOpcode() == Instruction::Or &&
-      !haveNoCommonBitsSet(LHS, RHS, DL, nullptr, BO, DT))
+      !haveNoCommonBitsSet(LHS, RHS, SimplifyQuery(DL, DT, /*AC*/ nullptr, BO)))
     return false;
 
   // FIXME: We don't currently support constants from the RHS of subs,
@@ -655,15 +661,16 @@ Value *ConstantOffsetExtractor::applyExts(Value *V) {
   // in the reversed order.
   for (CastInst *I : llvm::reverse(ExtInsts)) {
     if (Constant *C = dyn_cast<Constant>(Current)) {
-      // If Current is a constant, apply s/zext using ConstantExpr::getCast.
-      // ConstantExpr::getCast emits a ConstantInt if C is a ConstantInt.
-      Current = ConstantExpr::getCast(I->getOpcode(), C, I->getType());
-    } else {
-      Instruction *Ext = I->clone();
-      Ext->setOperand(0, Current);
-      Ext->insertBefore(IP);
-      Current = Ext;
+      // Try to constant fold the cast.
+      Current = ConstantFoldCastOperand(I->getOpcode(), C, I->getType(), DL);
+      if (Current)
+        continue;
     }
+
+    Instruction *Ext = I->clone();
+    Ext->setOperand(0, Current);
+    Ext->insertBefore(IP);
+    Current = Ext;
   }
   return Current;
 }
@@ -824,7 +831,7 @@ SeparateConstOffsetFromGEP::accumulateByteOffset(GetElementPtrInst *GEP,
   for (unsigned I = 1, E = GEP->getNumOperands(); I != E; ++I, ++GTI) {
     if (GTI.isSequential()) {
       // Constant offsets of scalable types are not really constant.
-      if (isa<ScalableVectorType>(GTI.getIndexedType()))
+      if (GTI.getIndexedType()->isScalableTy())
         continue;
 
       // Tries to extract a constant offset from this GEP index.
@@ -836,7 +843,7 @@ SeparateConstOffsetFromGEP::accumulateByteOffset(GetElementPtrInst *GEP,
         // constant offset to a byte offset, and later offset the remainder of
         // the original GEP with this byte offset.
         AccumulativeByteOffset +=
-            ConstantOffset * DL->getTypeAllocSize(GTI.getIndexedType());
+            ConstantOffset * GTI.getSequentialElementStride(*DL);
       }
     } else if (LowerGEP) {
       StructType *StTy = GTI.getStructType();
@@ -857,8 +864,6 @@ void SeparateConstOffsetFromGEP::lowerToSingleIndexGEPs(
   IRBuilder<> Builder(Variadic);
   Type *PtrIndexTy = DL->getIndexType(Variadic->getType());
 
-  Type *I8PtrTy =
-      Builder.getInt8PtrTy(Variadic->getType()->getPointerAddressSpace());
   Value *ResultPtr = Variadic->getOperand(0);
   Loop *L = LI->getLoopFor(Variadic->getParent());
   // Check if the base is not loop invariant or used more than once.
@@ -866,9 +871,6 @@ void SeparateConstOffsetFromGEP::lowerToSingleIndexGEPs(
       L && L->isLoopInvariant(ResultPtr) &&
       !hasMoreThanOneUseInLoop(ResultPtr, L);
   Value *FirstResult = nullptr;
-
-  if (ResultPtr->getType() != I8PtrTy)
-    ResultPtr = Builder.CreateBitCast(ResultPtr, I8PtrTy);
 
   gep_type_iterator GTI = gep_type_begin(*Variadic);
   // Create an ugly GEP for each sequential index. We don't create GEPs for
@@ -882,7 +884,7 @@ void SeparateConstOffsetFromGEP::lowerToSingleIndexGEPs(
           continue;
 
       APInt ElementSize = APInt(PtrIndexTy->getIntegerBitWidth(),
-                                DL->getTypeAllocSize(GTI.getIndexedType()));
+                                GTI.getSequentialElementStride(*DL));
       // Scale the index by element size.
       if (ElementSize != 1) {
         if (ElementSize.isPowerOf2()) {
@@ -894,8 +896,7 @@ void SeparateConstOffsetFromGEP::lowerToSingleIndexGEPs(
         }
       }
       // Create an ugly GEP with a single index for each index.
-      ResultPtr =
-          Builder.CreateGEP(Builder.getInt8Ty(), ResultPtr, Idx, "uglygep");
+      ResultPtr = Builder.CreatePtrAdd(ResultPtr, Idx, "uglygep");
       if (FirstResult == nullptr)
         FirstResult = ResultPtr;
     }
@@ -904,8 +905,7 @@ void SeparateConstOffsetFromGEP::lowerToSingleIndexGEPs(
   // Create a GEP with the constant offset index.
   if (AccumulativeByteOffset != 0) {
     Value *Offset = ConstantInt::get(PtrIndexTy, AccumulativeByteOffset);
-    ResultPtr =
-        Builder.CreateGEP(Builder.getInt8Ty(), ResultPtr, Offset, "uglygep");
+    ResultPtr = Builder.CreatePtrAdd(ResultPtr, Offset, "uglygep");
   } else
     isSwapCandidate = false;
 
@@ -916,9 +916,6 @@ void SeparateConstOffsetFromGEP::lowerToSingleIndexGEPs(
   auto *SecondGEP = dyn_cast<GetElementPtrInst>(ResultPtr);
   if (isSwapCandidate && isLegalToSwapOperand(FirstGEP, SecondGEP, L))
     swapGEPOperand(FirstGEP, SecondGEP);
-
-  if (ResultPtr->getType() != Variadic->getType())
-    ResultPtr = Builder.CreateBitCast(ResultPtr, Variadic->getType());
 
   Variadic->replaceAllUsesWith(ResultPtr);
   Variadic->eraseFromParent();
@@ -947,7 +944,7 @@ SeparateConstOffsetFromGEP::lowerToArithmetics(GetElementPtrInst *Variadic,
           continue;
 
       APInt ElementSize = APInt(IntPtrTy->getIntegerBitWidth(),
-                                DL->getTypeAllocSize(GTI.getIndexedType()));
+                                GTI.getSequentialElementStride(*DL));
       // Scale the index by element size.
       if (ElementSize != 1) {
         if (ElementSize.isPowerOf2()) {
@@ -1021,7 +1018,7 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
   for (unsigned I = 1, E = GEP->getNumOperands(); I != E; ++I, ++GTI) {
     if (GTI.isSequential()) {
       // Constant offsets of scalable types are not really constant.
-      if (isa<ScalableVectorType>(GTI.getIndexedType()))
+      if (GTI.getIndexedType()->isScalableTy())
         continue;
 
       // Splits this GEP index into a variadic part and a constant offset, and
@@ -1094,72 +1091,24 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
   // => add the offset
   //
   //   %gep2                       ; clone of %gep
-  //   %new.gep = gep %gep2, <offset / sizeof(*%gep)>
+  //   %new.gep = gep i8, %gep2, %offset
   //   %gep                        ; will be removed
   //   ... %gep ...
   //
   // => replace all uses of %gep with %new.gep and remove %gep
   //
   //   %gep2                       ; clone of %gep
-  //   %new.gep = gep %gep2, <offset / sizeof(*%gep)>
-  //   ... %new.gep ...
-  //
-  // If AccumulativeByteOffset is not a multiple of sizeof(*%gep), we emit an
-  // uglygep (http://llvm.org/docs/GetElementPtr.html#what-s-an-uglygep):
-  // bitcast %gep2 to i8*, add the offset, and bitcast the result back to the
-  // type of %gep.
-  //
-  //   %gep2                       ; clone of %gep
-  //   %0       = bitcast %gep2 to i8*
-  //   %uglygep = gep %0, <offset>
-  //   %new.gep = bitcast %uglygep to <type of %gep>
+  //   %new.gep = gep i8, %gep2, %offset
   //   ... %new.gep ...
   Instruction *NewGEP = GEP->clone();
   NewGEP->insertBefore(GEP);
 
-  // Per ANSI C standard, signed / unsigned = unsigned and signed % unsigned =
-  // unsigned.. Therefore, we cast ElementTypeSizeOfGEP to signed because it is
-  // used with unsigned integers later.
-  int64_t ElementTypeSizeOfGEP = static_cast<int64_t>(
-      DL->getTypeAllocSize(GEP->getResultElementType()));
   Type *PtrIdxTy = DL->getIndexType(GEP->getType());
-  if (AccumulativeByteOffset % ElementTypeSizeOfGEP == 0) {
-    // Very likely. As long as %gep is naturally aligned, the byte offset we
-    // extracted should be a multiple of sizeof(*%gep).
-    int64_t Index = AccumulativeByteOffset / ElementTypeSizeOfGEP;
-    NewGEP = GetElementPtrInst::Create(GEP->getResultElementType(), NewGEP,
-                                       ConstantInt::get(PtrIdxTy, Index, true),
-                                       GEP->getName(), GEP);
-    NewGEP->copyMetadata(*GEP);
-    // Inherit the inbounds attribute of the original GEP.
-    cast<GetElementPtrInst>(NewGEP)->setIsInBounds(GEPWasInBounds);
-  } else {
-    // Unlikely but possible. For example,
-    // #pragma pack(1)
-    // struct S {
-    //   int a[3];
-    //   int64 b[8];
-    // };
-    // #pragma pack()
-    //
-    // Suppose the gep before extraction is &s[i + 1].b[j + 3]. After
-    // extraction, it becomes &s[i].b[j] and AccumulativeByteOffset is
-    // sizeof(S) + 3 * sizeof(int64) = 100, which is not a multiple of
-    // sizeof(int64).
-    //
-    // Emit an uglygep in this case.
-    IRBuilder<> Builder(GEP);
-    Type *I8PtrTy =
-        Builder.getInt8Ty()->getPointerTo(GEP->getPointerAddressSpace());
-
-    NewGEP = cast<Instruction>(Builder.CreateGEP(
-        Builder.getInt8Ty(), Builder.CreateBitCast(NewGEP, I8PtrTy),
-        {ConstantInt::get(PtrIdxTy, AccumulativeByteOffset, true)}, "uglygep",
-        GEPWasInBounds));
-
-    NewGEP->copyMetadata(*GEP);
-    NewGEP = cast<Instruction>(Builder.CreateBitCast(NewGEP, GEP->getType()));
-  }
+  IRBuilder<> Builder(GEP);
+  NewGEP = cast<Instruction>(Builder.CreatePtrAdd(
+      NewGEP, ConstantInt::get(PtrIdxTy, AccumulativeByteOffset, true),
+      GEP->getName(), GEPWasInBounds));
+  NewGEP->copyMetadata(*GEP);
 
   GEP->replaceAllUsesWith(NewGEP);
   GEP->eraseFromParent();
@@ -1171,13 +1120,12 @@ bool SeparateConstOffsetFromGEPLegacyPass::runOnFunction(Function &F) {
   if (skipFunction(F))
     return false;
   auto *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-  auto *SE = &getAnalysis<ScalarEvolutionWrapperPass>().getSE();
   auto *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   auto *TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
   auto GetTTI = [this](Function &F) -> TargetTransformInfo & {
     return this->getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
   };
-  SeparateConstOffsetFromGEP Impl(DT, SE, LI, TLI, GetTTI, LowerGEP);
+  SeparateConstOffsetFromGEP Impl(DT, LI, TLI, GetTTI, LowerGEP);
   return Impl.run(F);
 }
 
@@ -1207,8 +1155,8 @@ bool SeparateConstOffsetFromGEP::run(Function &F) {
 }
 
 Instruction *SeparateConstOffsetFromGEP::findClosestMatchingDominator(
-    const SCEV *Key, Instruction *Dominatee,
-    DenseMap<const SCEV *, SmallVector<Instruction *, 2>> &DominatingExprs) {
+    ExprKey Key, Instruction *Dominatee,
+    DenseMap<ExprKey, SmallVector<Instruction *, 2>> &DominatingExprs) {
   auto Pos = DominatingExprs.find(Key);
   if (Pos == DominatingExprs.end())
     return nullptr;
@@ -1228,7 +1176,7 @@ Instruction *SeparateConstOffsetFromGEP::findClosestMatchingDominator(
 }
 
 bool SeparateConstOffsetFromGEP::reuniteExts(Instruction *I) {
-  if (!SE->isSCEVable(I->getType()))
+  if (!I->getType()->isIntOrIntVectorTy())
     return false;
 
   //   Dom: LHS+RHS
@@ -1238,8 +1186,7 @@ bool SeparateConstOffsetFromGEP::reuniteExts(Instruction *I) {
   Value *LHS = nullptr, *RHS = nullptr;
   if (match(I, m_Add(m_SExt(m_Value(LHS)), m_SExt(m_Value(RHS))))) {
     if (LHS->getType() == RHS->getType()) {
-      const SCEV *Key =
-          SE->getAddExpr(SE->getUnknown(LHS), SE->getUnknown(RHS));
+      ExprKey Key = createNormalizedCommutablePair(LHS, RHS);
       if (auto *Dom = findClosestMatchingDominator(Key, I, DominatingAdds)) {
         Instruction *NewSExt = new SExtInst(Dom, I->getType(), "", I);
         NewSExt->takeName(I);
@@ -1250,9 +1197,8 @@ bool SeparateConstOffsetFromGEP::reuniteExts(Instruction *I) {
     }
   } else if (match(I, m_Sub(m_SExt(m_Value(LHS)), m_SExt(m_Value(RHS))))) {
     if (LHS->getType() == RHS->getType()) {
-      const SCEV *Key = SE->getAddExpr(
-          SE->getUnknown(LHS), SE->getNegativeSCEV(SE->getUnknown(RHS)));
-      if (auto *Dom = findClosestMatchingDominator(Key, I, DominatingSubs)) {
+      if (auto *Dom =
+              findClosestMatchingDominator({LHS, RHS}, I, DominatingSubs)) {
         Instruction *NewSExt = new SExtInst(Dom, I->getType(), "", I);
         NewSExt->takeName(I);
         I->replaceAllUsesWith(NewSExt);
@@ -1265,16 +1211,12 @@ bool SeparateConstOffsetFromGEP::reuniteExts(Instruction *I) {
   // Add I to DominatingExprs if it's an add/sub that can't sign overflow.
   if (match(I, m_NSWAdd(m_Value(LHS), m_Value(RHS)))) {
     if (programUndefinedIfPoison(I)) {
-      const SCEV *Key =
-          SE->getAddExpr(SE->getUnknown(LHS), SE->getUnknown(RHS));
+      ExprKey Key = createNormalizedCommutablePair(LHS, RHS);
       DominatingAdds[Key].push_back(I);
     }
   } else if (match(I, m_NSWSub(m_Value(LHS), m_Value(RHS)))) {
-    if (programUndefinedIfPoison(I)) {
-      const SCEV *Key = SE->getAddExpr(
-          SE->getUnknown(LHS), SE->getNegativeSCEV(SE->getUnknown(RHS)));
-      DominatingSubs[Key].push_back(I);
-    }
+    if (programUndefinedIfPoison(I))
+      DominatingSubs[{LHS, RHS}].push_back(I);
   }
   return false;
 }
@@ -1407,13 +1349,12 @@ void SeparateConstOffsetFromGEPPass::printPipeline(
 PreservedAnalyses
 SeparateConstOffsetFromGEPPass::run(Function &F, FunctionAnalysisManager &AM) {
   auto *DT = &AM.getResult<DominatorTreeAnalysis>(F);
-  auto *SE = &AM.getResult<ScalarEvolutionAnalysis>(F);
   auto *LI = &AM.getResult<LoopAnalysis>(F);
   auto *TLI = &AM.getResult<TargetLibraryAnalysis>(F);
   auto GetTTI = [&AM](Function &F) -> TargetTransformInfo & {
     return AM.getResult<TargetIRAnalysis>(F);
   };
-  SeparateConstOffsetFromGEP Impl(DT, SE, LI, TLI, GetTTI, LowerGEP);
+  SeparateConstOffsetFromGEP Impl(DT, LI, TLI, GetTTI, LowerGEP);
   if (!Impl.run(F))
     return PreservedAnalyses::all();
   PreservedAnalyses PA;

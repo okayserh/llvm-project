@@ -9,6 +9,7 @@
 #include "llvm/WindowsDriver/MSVCPaths.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/Path.h"
@@ -113,7 +114,7 @@ static bool getWindowsSDKDirViaCommandLine(
       else
         llvm::sys::path::append(
             SDKPath, getHighestNumericTupleInDirectory(VFS, SDKPath));
-      Path = std::string(SDKPath.str());
+      Path = std::string(SDKPath);
     } else {
       Path = WinSdkDir->str();
     }
@@ -490,7 +491,7 @@ bool findVCToolChainViaCommandLine(vfs::FileSystem &VFS,
       else
         ToolsVersion = getHighestNumericTupleInDirectory(VFS, ToolsPath);
       sys::path::append(ToolsPath, ToolsVersion);
-      Path = std::string(ToolsPath.str());
+      Path = std::string(ToolsPath);
     } else {
       Path = VCToolsDir->str();
     }
