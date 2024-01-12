@@ -68,7 +68,8 @@ static MCRegisterInfo *createT8xxMCRegisterInfo(const Triple &TT) {
 static MCSubtargetInfo *
 createT8xxMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
   if (CPU.empty())
-    CPU = (TT.getArch() == Triple::sparcv9) ? "v9" : "v8";
+    //    CPU = (TT.getArch() == Triple::sparcv9) ? "v9" : "v8";
+    CPU = "t8xx";
   return createT8xxMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
 }
 

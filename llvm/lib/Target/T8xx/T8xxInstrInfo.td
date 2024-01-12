@@ -444,4 +444,14 @@ def ADJCALLSTACKUP : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
 }
 
 
+
+//===----------------------------------------------------------------------===//
+// Floating Point Instructions
+//===----------------------------------------------------------------------===//
+
+// Include Assembler only opcodes
+include "T8xxInstrArithmetic.td"
+
+
+
 include "T8xxInstrAliases.td"

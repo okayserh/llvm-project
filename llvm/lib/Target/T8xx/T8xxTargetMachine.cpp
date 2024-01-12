@@ -30,9 +30,12 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
 }
 
 static std::string computeDataLayout(const Triple &T) {
+  // Note: This needs to be equivalent to the target string that
+  // is provided in clang/lib/Basic/Targets/T8xx.h (method T8xxTargetInfo)
+  
   // T8xx is typically big endian
   std::string Ret = "E";
-  Ret += "-m:E";
+  Ret += "-m:e";
 
   // Some ABIs have 32bit pointers.
   Ret += "-p:32:32:32";
@@ -84,7 +87,7 @@ T8xxTargetMachine::T8xxTargetMachine(const Target &T, const Triple &TT,
                                        const TargetOptions &Options,
                                        std::optional<Reloc::Model> RM,
                                        std::optional<CodeModel::Model> CM,
-                                       CodeGenOpt::Level OL, bool JIT)
+                                       CodeGenOptLevel OL, bool JIT)
     : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options,
                         getEffectiveRelocModel(RM),
                         getEffectiveT8xxCodeModel(

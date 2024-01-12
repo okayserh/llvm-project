@@ -32,7 +32,7 @@ namespace {
     unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
                           const MCFixup &Fixup, bool IsPCRel) const override;
 
-    bool needsRelocateWithSymbol(const MCSymbol &Sym,
+    bool needsRelocateWithSymbol(const MCValue & Val, const MCSymbol &Sym,
                                  unsigned Type) const override;
 
   };
@@ -87,7 +87,8 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
   return ELF::R_T8XX_NONE;
 }
 
-bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
+bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCValue &/*Val*/,
+						  const MCSymbol &/*Sym*/,
                                                  unsigned Type) const {
   switch (Type) {
     default:
