@@ -33,8 +33,8 @@ static std::string computeDataLayout(const Triple &T) {
   // Note: This needs to be equivalent to the target string that
   // is provided in clang/lib/Basic/Targets/T8xx.h (method T8xxTargetInfo)
   
-  // T8xx is typically big endian
-  std::string Ret = "E";
+  // T8xx is typically little endian
+  std::string Ret = "e";
   Ret += "-m:e";
 
   // Some ABIs have 32bit pointers.
