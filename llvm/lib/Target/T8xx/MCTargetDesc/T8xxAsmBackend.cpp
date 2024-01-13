@@ -60,8 +60,8 @@ namespace {
 
   public:
     T8xxAsmBackend(const Target &T)
-      : MCAsmBackend(llvm::endianness::big),
-          TheTarget(T), Is64Bit(StringRef(TheTarget.getName()) == "sparcv9") {}
+      : MCAsmBackend(llvm::endianness::little),
+          TheTarget(T), Is64Bit(false) {}
 
     unsigned getNumFixupKinds() const override {
       return T8xx::NumTargetFixupKinds;

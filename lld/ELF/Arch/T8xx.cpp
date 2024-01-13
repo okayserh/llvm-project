@@ -185,13 +185,13 @@ TargetInfo *elf::getT8xxTargetInfo() {
 }
 
 static uint32_t getEFlags(InputFile *file) {
-  return cast<ObjFile<ELF32BE>>(file)->getObj().getHeader().e_flags;
+  return cast<ObjFile<ELF32LE>>(file)->getObj().getHeader().e_flags;
 }
 
 uint32_t T8xx::calcEFlags() const {
   assert(!ctx.objectFiles.empty());
 
-  uint32_t flags = getEFlags(ctx.objectFiles[0]);
+  uint32_t target = getEFlags(ctx.objectFiles.front());
 
   /*
   bool hasLinkRelaxFlag = flags & EF_T8xx_LINKRELAX_PREPARED;
@@ -209,5 +209,5 @@ uint32_t T8xx::calcEFlags() const {
     flags &= ~EF_T8xx_LINKRELAX_PREPARED;
   */
   
-  return flags;
+  return target;
 }

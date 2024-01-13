@@ -1695,8 +1695,6 @@ Triple Triple::getBigEndianArchVariant() const {
   case Triple::ve:
   case Triple::csky:
   case Triple::xtensa:
-
-  case Triple::t8xx:
     
   // ARM is intentionally unsupported here, changing the architecture would
   // drop any arch suffixes.
@@ -1801,7 +1799,7 @@ bool Triple::isLittleEndian() const {
   case Triple::spirv:
   case Triple::spirv32:
   case Triple::spirv64:
-    //  case Triple::t8xx:  -> T8xx turns out to be big endian
+  case Triple::t8xx:
   case Triple::tcele:
   case Triple::thumb:
   case Triple::ve:

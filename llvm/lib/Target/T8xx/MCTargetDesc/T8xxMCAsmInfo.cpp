@@ -24,17 +24,12 @@ using namespace llvm;
 void T8xxELFMCAsmInfo::anchor() {}
 
 T8xxELFMCAsmInfo::T8xxELFMCAsmInfo(const Triple &TheTriple) {
-  bool isV9 = (TheTriple.getArch() == Triple::sparcv9);
-  IsLittleEndian = false;
-
-  if (isV9) {
-    CodePointerSize = CalleeSaveStackSlotSize = 8;
-  }
+  IsLittleEndian = true; // TODO: Remove -> Should be the default?
 
   Data16bitsDirective = "\t.half\t";
   Data32bitsDirective = "\t.word\t";
   // .xword is only supported by V9.
-  Data64bitsDirective = (isV9) ? "\t.xword\t" : nullptr;
+  //  Data64bitsDirective = (isV9) ? "\t.xword\t" : nullptr;
   ZeroDirective = "\t.skip\t";
   CommentString = "//";
   SupportsDebugInformation = true;
