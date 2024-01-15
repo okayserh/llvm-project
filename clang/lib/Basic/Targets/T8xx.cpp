@@ -28,21 +28,24 @@ bool T8xxTargetInfo::validateAsmConstraint(const char *&Name,
 					   TargetInfo::ConstraintInfo &Info) const {
   printf ("clang, validateAsmCons %s\n", Name);
 
+  // This needs to be aligned with T8xxISelLowering.cpp
+  // The constraints specify a range of registers that can be used
+  // at certain places of an inline assembler instruction.
+  
   switch (*Name) {
   default:
     break;
-  case 'c':
-    Name++;
+  case 'r':
+    Info.setAllowsRegister ();
     return true;
-  case 'b':
-    Name++;
+    /*
+  case 'r':
+    Info.setAllowsRegister ();
     return true;
   case 'a':
-    Name++;
+    Info.setAllowsRegister ();
     return true;
-  case 'F':
-    Name += 4;
-    return true;
+    */
   }
   
   return false;

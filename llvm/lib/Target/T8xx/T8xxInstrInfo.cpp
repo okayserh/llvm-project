@@ -359,8 +359,7 @@ void T8xxInstrInfo::storeRegStack (MachineInstr &MI, const unsigned int OpNum,
 
 
 
-void T8xxInstrInfo::createComparison(MachineInstr &MI, const unsigned int OpX, const unsigned int OpY,
-				     const bool negate, const bool diff) const
+void T8xxInstrInfo::createComparison(MachineInstr &MI, const bool rev, const bool neg, const bool diff) const
 {
   DebugLoc DL = MI.getDebugLoc();
   MachineBasicBlock &MBB = *MI.getParent();
@@ -368,14 +367,14 @@ void T8xxInstrInfo::createComparison(MachineInstr &MI, const unsigned int OpX, c
   const MachineRegisterInfo &MRI = MF->getRegInfo();
   const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
 
-  /*  loadRegStack (MI, OpX);
-      loadRegStack (MI, OpY);*/
+  if (rev)
+    BuildMI(MBB, MI, DL, get(T8xx::REV)); // Swap AReg and BReg. TODO: Might offer place for optimization
   if (diff)
     BuildMI(MBB, MI, DL, get(T8xx::DIFF), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG); // Difference
-  if (diff && negate)
+  if (diff && neg)
     BuildMI(MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0); // logical NOT
   BuildMI(MBB, MI, DL, get(T8xx::GT), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
-  if (negate && (~diff))
+  if (neg && (~diff))
     BuildMI(MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0); // logical NOT
 }
 
@@ -407,20 +406,24 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       switch (CC)
 	{
 	case ISD::SETLT:
-	  createComparison(MI, 2, 1, true, false);
+	  printf ("ISD::SETLT\n");
+	  createComparison(MI, false, false, false);
 	  MBB.erase (MI);
 	  break;
 	case ISD::SETLE:
-	  createComparison(MI, 1, 2, false, false);
+	  printf ("ISD::SETLE\n");
+	  createComparison(MI, true, true, false);
 	  MBB.erase (MI);
 	  break;
 
 	case ISD::SETGT:
-	  createComparison(MI, 1, 2, true, false);
+	  printf ("ISD::SETGT\n");
+	  createComparison(MI, true, false, false);
 	  MBB.erase (MI);
 	  break;
 	case ISD::SETGE:
-	  createComparison(MI, 2, 1, false, false);
+	  printf ("ISD::SETGE\n");
+	  createComparison(MI, false, true, false);
 	  MBB.erase (MI);
 	  break;
 

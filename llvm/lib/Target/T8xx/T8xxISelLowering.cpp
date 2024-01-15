@@ -313,7 +313,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
     assert (VA.getLocMemOffset() % 4 == 0 &&
 	    "Only 4 byte aligned offset allowed");
-    SDValue PtrOff = DAG.getIntPtrConstant(-(VA.getLocMemOffset() / 4 + 1), Loc);
+    SDValue PtrOff = DAG.getIntPtrConstant(-(VA.getLocMemOffset() + 4), Loc);
     PtrOff = DAG.getNode(T8xxISD::ADD_WPTR, Loc, MVT::i32, StackPtr, PtrOff);
 
     MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
@@ -579,6 +579,28 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 //  Inline Assembler Implementation Methods
 //===----------------------------------------------------------------------===//
 
+
+/* TODO: 
+Currently, the inline assembler does not work properly, since
+this method is used to determine the general constraint type.
+Default implementation is in CodeGen/SelectionDAG/TargetLowering.cpp
+
+T8xxTargetLowering::ConstraintType
+T8xxTargetLowering::getConstraintType(StringRef Constraint) const {
+  if (Constraint.size() == 1) {
+    switch (Constraint[0]) {
+    case 'R':
+    case 'q':
+    case 'Q':
+      return C_RegisterClass;
+    default:
+      break;
+    }
+  }
+  return TargetLowering::getConstraintType(Constraint);
+}
+*/
+
 std::pair<unsigned, const TargetRegisterClass *>
 T8xxTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
 						 StringRef Constraint,
@@ -587,6 +609,9 @@ T8xxTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
   case 1:
     // GCC ARM Constraint Letters
     switch (Constraint[0]) {
+    case 'a':
+    case 'b':
+    case 'c':
     case 'r':
       return std::make_pair(0U, &T8xx::ORegRegClass);
     }
