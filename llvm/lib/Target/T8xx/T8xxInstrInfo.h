@@ -48,8 +48,7 @@ class T8xxInstrInfo : public T8xxGenInstrInfo {
   void storeRegStack (MachineInstr &MI, const unsigned int OpNum,
 		      const bool InsertPostMI = false) const;
 
-  void createComparison(MachineInstr &MI, const unsigned int OpX,
-			const unsigned int OpY,
+  void createComparison(MachineInstr &MI, const bool rev,
 			const bool negate, const bool diff) const;
 
 public:
