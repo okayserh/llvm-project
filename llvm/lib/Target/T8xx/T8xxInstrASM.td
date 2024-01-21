@@ -128,9 +128,9 @@ def TESTPRANAL : T8InstOp8<0x2A, (outs OReg:$dst1), (ins), "testpranal", []>;
 def GAJW :    T8InstOp8<0x3C, (outs), (ins), "gajw", []>;
 
 // Long arithmetic
-def XDBLE :   T8InstOp8<0x1D, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src), "xdble", []>;
-def LSHR :    T8InstOp8<0x35, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$cnt, OReg:$src1, OReg:$src2), "lshr", []>;
-def LSHL :    T8InstOp8<0x36, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$cnt, OReg:$src1, OReg:$src2), "lshl", []>;
+def XDBLE :   T8InstOp8<0x1D, (outs LReg:$dst1), (ins OReg:$src), "xdble", []>;
+def LSHR :    T8InstOp8<0x35, (outs OReg:$dst1), (ins OReg:$cnt, LReg:$src1), "lshr", []>;
+def LSHL :    T8InstOp8<0x36, (outs LReg:$dst1), (ins OReg:$cnt, LReg:$src1), "lshl", []>;
 def LADD :    T8InstOp8<0x16, (outs OReg:$dst1), (ins OReg:$src1, OReg:$src2, OReg:$src3), "ladd", []>;
 def LSUB :    T8InstOp8<0x38, (outs OReg:$dst1), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lsub", []>;
 def LSUM :    T8InstOp8<0x37, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lsum", []>;

@@ -38,10 +38,9 @@ def AREG : T8xxReg<0, "AREG">, DwarfRegNum<[16]>;
 def BREG : T8xxReg<1, "BREG">, DwarfRegNum<[17]>;
 def CREG : T8xxReg<2, "CREG">, DwarfRegNum<[18]>;
 
-// Stack representation of operand registers
-def STA : T8xxReg<0, "STA">, DwarfRegNum<[22]>;
-def STB : T8xxReg<1, "STB">, DwarfRegNum<[23]>;
-def STC : T8xxReg<2, "STC">, DwarfRegNum<[24]>;
+// Long registers (combines two stack registers)
+def ABREG : T8xxReg<6, "ABREG">, DwarfRegNum<[25]>;
+def BCREG : T8xxReg<7, "BCREG">, DwarfRegNum<[25]>;
 
 def OREG : T8xxReg<3, "OREG">, DwarfRegNum<[19]>;
 
@@ -95,6 +94,9 @@ def WptrRegs : RegisterClass<"T8xx", [i32], 32,
 
 def OReg : RegisterClass<"T8xx", [i32], 32,
      	                  (add AREG, BREG)>;
+
+def LReg : RegisterClass<"T8xx", [i64], 32,
+     	                  (add ABREG, BCREG)>;
 
 def FPReg:  RegisterClass<"T8xx", [f32], 32,
      	                  (add FAREG, FBREG)>;

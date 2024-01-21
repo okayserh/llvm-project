@@ -61,6 +61,9 @@ def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
+//def simm32  : PatLeaf<(imm), [{ return isInt<32>(N->getSExtValue()); }]>;
+
+
 // Taken from LEG, matched by ComplexPattern ADDRri
 
 // The parameter MIOperandInfo defines the contribution for the
@@ -168,7 +171,7 @@ def LDLPb   : T8Inst<(outs OReg:$rd),
 def AddWptrImm : T8Inst<(outs OReg:$dst),
     		    (ins WptrRegs:$src, i32imm:$val),
                     "ldlp $val",
-		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, imm:$val))]> {
+		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, (i32 imm:$val)))]> {
     let isCodeGenOnly = 1;
     let isPseudo = 1;
   }
@@ -206,6 +209,8 @@ def XOR : T8BinaryOp8<0x33, "xor", xor>;  // #53
 def OR  : T8BinaryOp8<0x4B, "or", or>;  // #53
 def AND : T8BinaryOp8<0x46, "and", and>;  // #53
 
+def : Pat<(sra OReg:$cnt, OReg:$src),
+	  (LSHR OReg:$cnt, (XDBLE OReg:$src) )>;
 
 /* Define via patterns */
 /*
