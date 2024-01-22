@@ -42,6 +42,10 @@ namespace llvm {
   //  DAG node.
   virtual const char *getTargetNodeName(unsigned Opcode) const override;
 
+    // TODO: Check if there are cases, where this might not be true
+  virtual bool isIntDivCheap(EVT VT, AttributeList Attr) const override { return true; }
+
+    
     bool useSoftFloat() const override;
 
   private:
