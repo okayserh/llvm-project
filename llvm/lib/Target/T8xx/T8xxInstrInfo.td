@@ -209,8 +209,13 @@ def XOR : T8BinaryOp8<0x33, "xor", xor>;  // #53
 def OR  : T8BinaryOp8<0x4B, "or", or>;  // #53
 def AND : T8BinaryOp8<0x46, "and", and>;  // #53
 
-def : Pat<(sra OReg:$cnt, OReg:$src),
+
+// Dummy instruction to test the code generated
+def SRA : T8BinaryOp8<0x23, "sra", sra>;  // #53
+
+/*def : Pat<(sra OReg:$cnt, OReg:$src),
 	  (LSHR OReg:$cnt, (XDBLE OReg:$src) )>;
+*/
 
 /* Define via patterns */
 /*

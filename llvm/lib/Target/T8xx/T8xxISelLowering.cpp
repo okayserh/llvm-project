@@ -91,6 +91,14 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
+
+  // DIV/REM are legal on T8xx
+  setOperationAction(ISD::SREM, MVT::i32, Legal);
+  setOperationAction(ISD::SDIV, MVT::i32, Legal);
+
+  setOperationAction(ISD::MULHS, MVT::i32, Expand);
+  setOperationAction(ISD::MULHU, MVT::i32, Expand);
+
 }
 
 bool T8xxTargetLowering::useSoftFloat() const {
