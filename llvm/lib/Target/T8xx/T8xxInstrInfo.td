@@ -387,15 +387,23 @@ def CALL : T8Inst<(outs), (ins i32imm:$addr),
 // Version with absolute adressing
 def CALL : T8Inst<(outs), (ins i32imm:$addr),
                       "ldc $addr\n\tgcall \n\trev \n",
-                      [(call tglobaladdr:$addr)]> {
+//                      [(call tglobaladdr:$addr)]> {
+                      []> {
     let isCodeGenOnly = 1;
     let isPseudo = 1;
   }
 }
 
+// TODO: Needs clean up
+def : Pat<(call tglobaladdr:$dst),
+          (CALL tglobaladdr:$dst)>;
+
+def : Pat<(call texternalsym:$dst),
+          (CALL texternalsym:$dst)>;
+
 def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
 
-
+def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC $addr)]>;
 
 //===----------------------------------------------------------------------===//
 // Branch Instructions
