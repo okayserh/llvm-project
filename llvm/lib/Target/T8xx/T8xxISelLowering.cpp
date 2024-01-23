@@ -376,7 +376,10 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // the address as parameter
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0, T8xxMCExpr::VK_T8xx_IPTRREL);
+  else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee))
+    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), MVT::i32, T8xxMCExpr::VK_T8xx_IPTRREL);
 
+  
   std::vector<SDValue> Ops;
   Ops.push_back(Chain);
   Ops.push_back(Callee);
