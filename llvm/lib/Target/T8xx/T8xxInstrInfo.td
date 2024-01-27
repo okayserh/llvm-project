@@ -328,6 +328,13 @@ def CMP : T8xxPseudoInst<(outs), (ins i32imm:$cc, OReg:$lhs, OReg:$rhs),
 }
 
 
+def SELECT : T8xxPseudoInst<(outs OReg:$dst), (ins OReg:$cc, OReg:$T, OReg:$F),
+                    "select $cc, $T, $F", [(set i32:$dst, (select i32:$T, i32:$F, i32:$cc))]> {
+  let Defs = [CPSR];
+}
+
+
+
 /* Pattern to introduce an LEA in order to get the Framepointer
  into a operand register */
 def : Pat<(truncstorei8 i32:$val, ADDRri:$addr),
