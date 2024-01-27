@@ -87,6 +87,22 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   // Nodes that require custom lowering
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
+  // TODO: Maybe implement custom lowering?
+  /*
+  setOperationAction(ISD::SELECT, MVT::i8, Expand);
+  setOperationAction(ISD::SELECT, MVT::i16, Expand);
+  setOperationAction(ISD::SELECT, MVT::i32, Expand);
+  setOperationAction(ISD::SELECT, MVT::i64, Expand);
+  */
+
+  setOperationAction(ISD::SELECT_CC, MVT::i8, Expand);
+  setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
+  setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
+  
+  setOperationAction(ISD::SETCC, MVT::i8, Expand);
+  setOperationAction(ISD::SETCC, MVT::i16, Expand);
+  setOperationAction(ISD::SETCC, MVT::i32, Expand);
+
   // T8xx doesn't have sext_inreg, replace them with shl/sra
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
