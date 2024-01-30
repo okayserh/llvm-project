@@ -28,25 +28,33 @@ namespace llvm {
     RET_FLAG,        // Return with a flag operand.
     LOAD_SYM,
     LOAD_OP_STACK,
-    ADD_WPTR
+    ADD_WPTR,
+
+    // T8xx conditional moves.
+    CMOV
   };
   }
 
   class T8xxTargetLowering : public TargetLowering {
-    const T8xxSubtarget *Subtarget;
+    const T8xxSubtarget &Subtarget;
   public:
     T8xxTargetLowering(const TargetMachine &TM, const T8xxSubtarget &STI);
-    SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
-  /// getTargetNodeName - This method returns the name of a target specific
-  //  DAG node.
-  virtual const char *getTargetNodeName(unsigned Opcode) const override;
+    /// getTargetNodeName - This method returns the name of a target specific
+    //  DAG node.
+    const char *getTargetNodeName(unsigned Opcode) const override;
 
     // TODO: Check if there are cases, where this might not be true
-  virtual bool isIntDivCheap(EVT VT, AttributeList Attr) const override { return true; }
-
+    virtual bool isIntDivCheap(EVT VT, AttributeList Attr) const override { return true; }
     
     bool useSoftFloat() const override;
+
+    /// Provide custom lowering hooks for some operations
+    SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+
+    MachineBasicBlock *
+    EmitInstrWithCustomInserter(MachineInstr &MI,
+				MachineBasicBlock *MBB) const override;
 
   private:
     SDValue
@@ -76,9 +84,13 @@ namespace llvm {
                         LLVMContext &Context) const override;
 
     SDValue LowerStore(SDValue Op, SelectionDAG &DAG) const;
-
+    SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
 
+
+    MachineBasicBlock *EmitLoweredSelect(MachineInstr &I,
+					 MachineBasicBlock *MBB) const;
+    
     // Inline assembly
     std::pair<unsigned, const TargetRegisterClass *>
     getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,

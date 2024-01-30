@@ -60,8 +60,36 @@ def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
 
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
+/* Definitions for Conditional Move Pseudo instruction */
 
-//def simm32  : PatLeaf<(imm), [{ return isInt<32>(N->getSExtValue()); }]>;
+def MxSDT_Cmov : SDTypeProfile<1, 4, [
+  /*  ARG */ SDTCisSameAs<0, 1>,
+  /*  ARG */ SDTCisSameAs<1, 2>,
+  /* Cond */ SDTCisVT<3, i8>,
+  /*  CCR */ SDTCisVT<4, i8>
+]>;
+
+def MxCmov    : SDNode<"T8xxISD::CMOV",        MxSDT_Cmov>;
+
+//===----------------------------------------------------------------------===//
+// Conditional Move Pseudo Instructions
+//
+// CMOV* - Used to implement the SELECT DAG operation. Expanded after
+// instruction selection into a branch sequence.
+//===----------------------------------------------------------------------===//
+
+/*
+let usesCustomInserter = 1, Uses = [CCR] in
+class MxCMove<MxType TYPE>
+    : MxPseudo<(outs TYPE.ROp:$dst), (ins TYPE.ROp:$t, TYPE.ROp:$f, i8imm:$cond),
+               [(set TYPE.VT:$dst,
+                     (TYPE.VT (MxCmov TYPE.VT:$t, TYPE.VT:$f, imm:$cond, CCR)))]>;
+
+def CMOV8d  : MxCMove<MxType8d>;
+def CMOV16d : MxCMove<MxType16d>;
+def CMOV32r : MxCMove<MxType32r>;
+*/
+// TODO: Create a regular pseudo T8xx instruction
 
 
 // Taken from LEG, matched by ComplexPattern ADDRri
