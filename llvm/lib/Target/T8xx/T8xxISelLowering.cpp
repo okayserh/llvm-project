@@ -41,25 +41,31 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch (Opcode) {
   default:
     return NULL;
-  case T8xxISD::RET_FLAG: return "RetFlag";
-  case T8xxISD::LOAD_SYM: return "LOAD_SYM";
-    /*	case LEGISD::MOVEi32:  return "MOVEi32";*/
-  case T8xxISD::CALL:     return "CALL";
-  case T8xxISD::LOAD_OP_STACK:     return "LOAD_OP_STACK";
-  case T8xxISD::ADD_WPTR:     return "ADD_WPTR";
+  case T8xxISD::RET_FLAG:
+    return "RetFlag";
+  case T8xxISD::LOAD_SYM:
+    return "LOAD_SYM";
+  case T8xxISD::CALL:
+    return "CALL";
+  case T8xxISD::LOAD_OP_STACK:
+    return "LOAD_OP_STACK";
+  case T8xxISD::ADD_WPTR:
+    return "ADD_WPTR";
+  case T8xxISD::CMOV:
+    return "CMOV";
   }
 }
 
 
 T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
                                          const T8xxSubtarget &STI)
-    : TargetLowering(TM), Subtarget(&STI) {
+    : TargetLowering(TM), Subtarget(STI) {
   MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
 
   // Set up the register classes.
   addRegisterClass(MVT::i32, &T8xx::ORegRegClass);
 
-  computeRegisterProperties(Subtarget->getRegisterInfo());
+  computeRegisterProperties(Subtarget.getRegisterInfo());
 
   // Was used in LEG architecture. Unclear what it does ...
   //  setSchedulingPreference (Sched::Source);
@@ -88,17 +94,14 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
   // TODO: Maybe implement custom lowering?
-  /*
-  setOperationAction(ISD::SELECT, MVT::i8, Expand);
-  setOperationAction(ISD::SELECT, MVT::i16, Expand);
-  setOperationAction(ISD::SELECT, MVT::i32, Expand);
-  setOperationAction(ISD::SELECT, MVT::i64, Expand);
-  */
+  setOperationAction(ISD::SELECT, MVT::i8, Custom);
+  setOperationAction(ISD::SELECT, MVT::i16, Custom);
+  setOperationAction(ISD::SELECT, MVT::i32, Custom);
 
   setOperationAction(ISD::SELECT_CC, MVT::i8, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
-  
+
   setOperationAction(ISD::SETCC, MVT::i8, Expand);
   setOperationAction(ISD::SETCC, MVT::i16, Expand);
   setOperationAction(ISD::SETCC, MVT::i32, Expand);
@@ -118,7 +121,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 }
 
 bool T8xxTargetLowering::useSoftFloat() const {
-  return Subtarget->useSoftFloat();
+  return Subtarget.useSoftFloat();
 }
 
 
@@ -133,6 +136,9 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     printf ("### Lower Store ###\n");
     return LowerStore(Op, DAG);
     */
+  case ISD::SELECT:
+    printf ("####### Lower Select  #########\n");
+    return LowerSELECT(Op, DAG);
   case ISD::GlobalAddress:
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
@@ -151,7 +157,7 @@ SDValue T8xxTargetLowering::LowerStore(SDValue Op, SelectionDAG& DAG) const
   SDValue Value = ST->getValue();
   //  MVT VT = Value.getSimpleValueType();
   EVT VT = ST->getMemoryVT();
-  
+
   // Storing a single byte works only towards addresses in
   // an register operand
 	Chain.dump ();
@@ -186,7 +192,7 @@ SDValue T8xxTargetLowering::LowerStore(SDValue Op, SelectionDAG& DAG) const
 
   /* Some sample code of how to build instruction sequences in the DAG
   Hi = DAG.getNode(ISD::SRL, dl, Value.getValueType(), Value,
-		   DAG.getConstant(ExtraWidth, dl, 
+		   DAG.getConstant(ExtraWidth, dl,
 				   TLI.getShiftAmountTy(Value.getValueType(), DL)));
   Hi = DAG.getTruncStore(Chain, dl, Hi, Ptr, ST->getPointerInfo(), RoundVT,
 			 ST->getOriginalAlign(), MMOFlags, AAInfo);
@@ -201,13 +207,31 @@ SDValue T8xxTargetLowering::LowerStore(SDValue Op, SelectionDAG& DAG) const
 			 ExtraVT, ST->getOriginalAlign(), MMOFlags, AAInfo);
   */
   //  print ("Store Value Type %i\n");
-  
-  
+
+
   //Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32);
 
   return Op;
 }
-  
+
+
+SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
+{
+  bool addTest = true;
+  SDValue Cond = Op.getOperand(0);
+  SDValue Op1 = Op.getOperand(1);
+  SDValue Op2 = Op.getOperand(2);
+  SDLoc DL(Op);
+  SDValue CC;
+
+  // T8xxISD::CMOV means set the result (which is operand 1) to the RHS if
+  // condition is true.
+  SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
+  SDValue Ops[] = {Op2, Op1, CC, Cond};
+  return DAG.getNode(T8xxISD::CMOV, DL, VTs, Ops);
+
+}
+
 
 SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) const
 {
@@ -231,6 +255,246 @@ SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) co
 
   return Result;
 }
+
+
+// This function creates nodes to replicate a select function
+// in the DAG
+
+MachineBasicBlock *
+T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
+                                      MachineBasicBlock *MBB) const {
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+
+  // To "insert" a SELECT_CC instruction, we actually have to insert the
+  // diamond control-flow pattern.  The incoming instruction knows the
+  // destination vreg to set, the condition code register to branch on, the
+  // true/false values to select between, and a branch opcode to use.
+  const BasicBlock *BB = MBB->getBasicBlock();
+  MachineFunction::iterator It = ++MBB->getIterator();
+
+  //  ThisMBB:
+  //  ...
+  //   TrueVal = ...
+  //   cmp ccX, r1, r2
+  //   bcc Copy1MBB
+  //   fallthrough --> Copy0MBB
+  MachineBasicBlock *ThisMBB = MBB;
+  MachineFunction *F = MBB->getParent();
+
+  // This code lowers all pseudo-CMOV instructions. Generally it lowers these
+  // as described above, by inserting a MBB, and then making a PHI at the join
+  // point to select the true and false operands of the CMOV in the PHI.
+  //
+  // The code also handles two different cases of multiple CMOV opcodes
+  // in a row.
+  //
+  // Case 1:
+  // In this case, there are multiple CMOVs in a row, all which are based on
+  // the same condition setting (or the exact opposite condition setting).
+  // In this case we can lower all the CMOVs using a single inserted MBB, and
+  // then make a number of PHIs at the join point to model the CMOVs. The only
+  // trickiness here, is that in a case like:
+  //
+  // t2 = CMOV cond1 t1, f1
+  // t3 = CMOV cond1 t2, f2
+  //
+  // when rewriting this into PHIs, we have to perform some renaming on the
+  // temps since you cannot have a PHI operand refer to a PHI result earlier
+  // in the same block.  The "simple" but wrong lowering would be:
+  //
+  // t2 = PHI t1(BB1), f1(BB2)
+  // t3 = PHI t2(BB1), f2(BB2)
+  //
+  // but clearly t2 is not defined in BB1, so that is incorrect. The proper
+  // renaming is to note that on the path through BB1, t2 is really just a
+  // copy of t1, and do that renaming, properly generating:
+  //
+  // t2 = PHI t1(BB1), f1(BB2)
+  // t3 = PHI t1(BB1), f2(BB2)
+  //
+  // Case 2, we lower cascaded CMOVs such as
+  //
+  //   (CMOV (CMOV F, T, cc1), T, cc2)
+  //
+  // to two successives branches.
+  MachineInstr *CascadedCMOV = nullptr;
+  MachineInstr *LastCMOV = &MI;
+  //  T8xx::CondCode CC = T8xx::CondCode(MI.getOperand(3).getImm());   // M68k specific, Operand 3 of the CMOV8d Pseudo instructions
+  //  T8xx::CondCode OppCC = T8xx::GetOppositeBranchCondition(CC);     // M68k specific, finds opposite condition
+  MachineBasicBlock::iterator NextMIIt =
+      std::next(MachineBasicBlock::iterator(MI));
+
+  // Check for case 1, where there are multiple CMOVs with the same condition
+  // first.  Of the two cases of multiple CMOV lowerings, case 1 reduces the
+  // number of jumps the most.
+
+  if (isCMOVPseudo(MI)) {
+    // See if we have a string of CMOVS with the same condition.
+    while (NextMIIt != MBB->end() && isCMOVPseudo(*NextMIIt) &&
+           (NextMIIt->getOperand(3).getImm() == CC ||
+            NextMIIt->getOperand(3).getImm() == OppCC)) {
+      LastCMOV = &*NextMIIt;
+      ++NextMIIt;
+    }
+  }
+
+  // This checks for case 2, but only do this if we didn't already find
+  // case 1, as indicated by LastCMOV == MI.
+  if (LastCMOV == &MI && NextMIIt != MBB->end() &&
+      NextMIIt->getOpcode() == MI.getOpcode() &&
+      NextMIIt->getOperand(2).getReg() == MI.getOperand(2).getReg() &&
+      NextMIIt->getOperand(1).getReg() == MI.getOperand(0).getReg() &&
+      NextMIIt->getOperand(1).isKill()) {
+    CascadedCMOV = &*NextMIIt;
+  }
+
+  MachineBasicBlock *Jcc1MBB = nullptr;
+
+  // If we have a cascaded CMOV, we lower it to two successive branches to
+  // the same block.  CCR is used by both, so mark it as live in the second.
+  if (CascadedCMOV) {
+    Jcc1MBB = F->CreateMachineBasicBlock(BB);
+    F->insert(It, Jcc1MBB);
+    Jcc1MBB->addLiveIn(T8xx::CCR);
+  }
+
+  MachineBasicBlock *Copy0MBB = F->CreateMachineBasicBlock(BB);
+  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);
+  F->insert(It, Copy0MBB);
+  F->insert(It, SinkMBB);
+
+  // Set the call frame size on entry to the new basic blocks.
+  unsigned CallFrameSize = TII->getCallFrameSizeAt(MI);
+  Copy0MBB->setCallFrameSize(CallFrameSize);
+  SinkMBB->setCallFrameSize(CallFrameSize);
+
+  // If the CCR register isn't dead in the terminator, then claim that it's
+  // live into the sink and copy blocks.
+  const TargetRegisterInfo *TRI = Subtarget.getRegisterInfo();
+
+  MachineInstr *LastCCRSUser = CascadedCMOV ? CascadedCMOV : LastCMOV;
+  if (!LastCCRSUser->killsRegister(T8xx::CCR) &&
+      !checkAndUpdateCCRKill(LastCCRSUser, MBB, TRI)) {
+    Copy0MBB->addLiveIn(T8xx::CCR);
+    SinkMBB->addLiveIn(T8xx::CCR);
+  }
+
+  // Transfer the remainder of MBB and its successor edges to SinkMBB.
+  SinkMBB->splice(SinkMBB->begin(), MBB,
+                  std::next(MachineBasicBlock::iterator(LastCMOV)), MBB->end());
+  SinkMBB->transferSuccessorsAndUpdatePHIs(MBB);
+
+  // Add the true and fallthrough blocks as its successors.
+  if (CascadedCMOV) {
+    // The fallthrough block may be Jcc1MBB, if we have a cascaded CMOV.
+    MBB->addSuccessor(Jcc1MBB);
+
+    // In that case, Jcc1MBB will itself fallthrough the Copy0MBB, and
+    // jump to the SinkMBB.
+    Jcc1MBB->addSuccessor(Copy0MBB);
+    Jcc1MBB->addSuccessor(SinkMBB);
+  } else {
+    MBB->addSuccessor(Copy0MBB);
+  }
+
+  // The true block target of the first (or only) branch is always SinkMBB.
+  MBB->addSuccessor(SinkMBB);
+
+  // Create the conditional branch instruction.
+  unsigned Opc = T8xx::GetCondBranchFromCond(CC);
+  BuildMI(MBB, DL, TII->get(Opc)).addMBB(SinkMBB);
+
+  if (CascadedCMOV) {
+    unsigned Opc2 = T8xx::GetCondBranchFromCond(
+        (T8xx::CondCode)CascadedCMOV->getOperand(3).getImm());
+    BuildMI(Jcc1MBB, DL, TII->get(Opc2)).addMBB(SinkMBB);
+  }
+
+  //  Copy0MBB:
+  //   %FalseValue = ...
+  //   # fallthrough to SinkMBB
+  Copy0MBB->addSuccessor(SinkMBB);
+
+  //  SinkMBB:
+  //   %Result = phi [ %FalseValue, Copy0MBB ], [ %TrueValue, ThisMBB ]
+  //  ...
+  MachineBasicBlock::iterator MIItBegin = MachineBasicBlock::iterator(MI);
+  MachineBasicBlock::iterator MIItEnd =
+      std::next(MachineBasicBlock::iterator(LastCMOV));
+  MachineBasicBlock::iterator SinkInsertionPoint = SinkMBB->begin();
+  DenseMap<unsigned, std::pair<unsigned, unsigned>> RegRewriteTable;
+  MachineInstrBuilder MIB;
+
+  // As we are creating the PHIs, we have to be careful if there is more than
+  // one.  Later CMOVs may reference the results of earlier CMOVs, but later
+  // PHIs have to reference the individual true/false inputs from earlier PHIs.
+  // That also means that PHI construction must work forward from earlier to
+  // later, and that the code must maintain a mapping from earlier PHI's
+  // destination registers, and the registers that went into the PHI.
+
+  for (MachineBasicBlock::iterator MIIt = MIItBegin; MIIt != MIItEnd; ++MIIt) {
+    Register DestReg = MIIt->getOperand(0).getReg();
+    Register Op1Reg = MIIt->getOperand(1).getReg();
+    Register Op2Reg = MIIt->getOperand(2).getReg();
+
+    // If this CMOV we are generating is the opposite condition from
+    // the jump we generated, then we have to swap the operands for the
+    // PHI that is going to be generated.
+    if (MIIt->getOperand(3).getImm() == OppCC)
+      std::swap(Op1Reg, Op2Reg);
+
+    if (RegRewriteTable.find(Op1Reg) != RegRewriteTable.end())
+      Op1Reg = RegRewriteTable[Op1Reg].first;
+
+    if (RegRewriteTable.find(Op2Reg) != RegRewriteTable.end())
+      Op2Reg = RegRewriteTable[Op2Reg].second;
+
+    MIB =
+        BuildMI(*SinkMBB, SinkInsertionPoint, DL, TII->get(T8xx::PHI), DestReg)
+            .addReg(Op1Reg)
+            .addMBB(Copy0MBB)
+            .addReg(Op2Reg)
+            .addMBB(ThisMBB);
+
+    // Add this PHI to the rewrite table.
+    RegRewriteTable[DestReg] = std::make_pair(Op1Reg, Op2Reg);
+  }
+
+  // If we have a cascaded CMOV, the second Jcc provides the same incoming
+  // value as the first Jcc (the True operand of the SELECT_CC/CMOV nodes).
+  if (CascadedCMOV) {
+    MIB.addReg(MI.getOperand(2).getReg()).addMBB(Jcc1MBB);
+    // Copy the PHI result to the register defined by the second CMOV.
+    BuildMI(*SinkMBB, std::next(MachineBasicBlock::iterator(MIB.getInstr())),
+            DL, TII->get(TargetOpcode::COPY),
+            CascadedCMOV->getOperand(0).getReg())
+        .addReg(MI.getOperand(0).getReg());
+    CascadedCMOV->eraseFromParent();
+  }
+
+  // Now remove the CMOV(s).
+  for (MachineBasicBlock::iterator MIIt = MIItBegin; MIIt != MIItEnd;)
+    (MIIt++)->eraseFromParent();
+
+  return SinkMBB;
+}
+
+
+MachineBasicBlock *
+T8xxTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
+						MachineBasicBlock *MBB) const
+{
+  switch (MI.getOpcode()) {
+  default:
+    llvm_unreachable("Unexpected instr type to insert");
+  case T8xx::EQU:  //TODO: Need an pseudo instruction definition in the target description
+    return EmitLoweredSelect(MI, MBB);
+  }
+
+}
+
+
 
 
 
@@ -280,7 +544,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   //  const unsigned NumBytes = CCInfo.getNextStackOffset();
   // New Code (LLVM 18) ???
   unsigned NumBytes = CCInfo.getStackSize();
-  
+
   /* Old LEG Code
   Chain =
     DAG.getCALLSEQ_START(Chain, DAG.getIntPtrConstant(NumBytes, Loc, true), 0,
@@ -395,7 +659,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee))
     Callee = DAG.getTargetExternalSymbol(E->getSymbol(), MVT::i32, T8xxMCExpr::VK_T8xx_IPTRREL);
 
-  
+
   std::vector<SDValue> Ops;
   Ops.push_back(Chain);
   Ops.push_back(Callee);
@@ -578,9 +842,9 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     assert(VA.isRegLoc() && "Can only return in registers!");
 
     Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), OutVals[i], Flag);
-    
+
     Flag = Chain.getValue(1);
-    
+
     RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
   }
 
@@ -607,7 +871,7 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 //===----------------------------------------------------------------------===//
 
 
-/* TODO: 
+/* TODO:
 Currently, the inline assembler does not work properly, since
 this method is used to determine the general constraint type.
 Default implementation is in CodeGen/SelectionDAG/TargetLowering.cpp
