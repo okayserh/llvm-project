@@ -65,8 +65,8 @@ def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 def MxSDT_Cmov : SDTypeProfile<1, 4, [
   /*  ARG */ SDTCisSameAs<0, 1>,
   /*  ARG */ SDTCisSameAs<1, 2>,
-  /* Cond */ SDTCisVT<3, i8>,
-  /*  CCR */ SDTCisVT<4, i8>
+  /* Cond */ SDTCisVT<3, i32>,
+  /*  CCR */ SDTCisVT<4, i32>
 ]>;
 
 def MxCmov    : SDNode<"T8xxISD::CMOV",        MxSDT_Cmov>;
@@ -89,6 +89,20 @@ def CMOV8d  : MxCMove<MxType8d>;
 def CMOV16d : MxCMove<MxType16d>;
 def CMOV32r : MxCMove<MxType32r>;
 */
+
+
+def CMOV32 : T8Inst<(outs OReg:$dst),
+    		    (ins OReg:$t, OReg:$f, i32imm:$cond, OReg:$ccr),
+                    "",
+		    [(set i32:$dst,
+		    (i32 (MxCmov i32:$t, i32:$f, imm:$cond, i32:$ccr)))]> {
+    let usesCustomInserter = 1;
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+  }
+
+
+
 // TODO: Create a regular pseudo T8xx instruction
 
 

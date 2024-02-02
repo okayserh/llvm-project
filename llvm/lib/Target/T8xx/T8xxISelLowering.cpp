@@ -224,6 +224,17 @@ SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
   SDLoc DL(Op);
   SDValue CC;
 
+  Cond.dump ();
+  Op1.dump ();
+  Op2.dump ();
+
+  // TODO: 
+  if (Cond.getOpcode() == ISD::SETCC) {
+    if (SDValue NewCond = LowerSETCC(Cond, DAG))
+      Cond = NewCond;
+  }
+
+  
   // T8xxISD::CMOV means set the result (which is operand 1) to the RHS if
   // condition is true.
   SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
@@ -282,6 +293,11 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   MachineBasicBlock *ThisMBB = MBB;
   MachineFunction *F = MBB->getParent();
 
+  // TODO: Temporary to have a definition for the return value.
+  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);
+
+#if 0
+  
   // This code lowers all pseudo-CMOV instructions. Generally it lowers these
   // as described above, by inserting a MBB, and then making a PHI at the join
   // point to select the true and false operands of the CMOV in the PHI.
@@ -476,6 +492,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   // Now remove the CMOV(s).
   for (MachineBasicBlock::iterator MIIt = MIItBegin; MIIt != MIItEnd;)
     (MIIt++)->eraseFromParent();
+#endif
 
   return SinkMBB;
 }
@@ -488,7 +505,7 @@ T8xxTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   switch (MI.getOpcode()) {
   default:
     llvm_unreachable("Unexpected instr type to insert");
-  case T8xx::EQU:  //TODO: Need an pseudo instruction definition in the target description
+  case T8xx::CMOV32:  //TODO: Need an pseudo instruction definition in the target description
     return EmitLoweredSelect(MI, MBB);
   }
 
