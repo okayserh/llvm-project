@@ -31,7 +31,8 @@ namespace llvm {
     ADD_WPTR,
 
     // T8xx conditional moves.
-    CMOV
+    CMOV,
+    EQ
   };
   }
 
@@ -84,6 +85,7 @@ namespace llvm {
                         LLVMContext &Context) const override;
 
     SDValue LowerStore(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
 

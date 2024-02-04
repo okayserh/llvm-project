@@ -53,6 +53,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "ADD_WPTR";
   case T8xxISD::CMOV:
     return "CMOV";
+  case T8xxISD::EQ:
+    return "EQ";
   }
 }
 
@@ -102,9 +104,10 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
 
-  setOperationAction(ISD::SETCC, MVT::i8, Expand);
-  setOperationAction(ISD::SETCC, MVT::i16, Expand);
-  setOperationAction(ISD::SETCC, MVT::i32, Expand);
+  // TODO: Check wheter promote is correct for the other types
+  setOperationAction(ISD::SETCC, MVT::i8, Promote);
+  setOperationAction(ISD::SETCC, MVT::i16, Promote);
+  setOperationAction(ISD::SETCC, MVT::i32, Legal);
 
   // T8xx doesn't have sext_inreg, replace them with shl/sra
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
@@ -215,6 +218,34 @@ SDValue T8xxTargetLowering::LowerStore(SDValue Op, SelectionDAG& DAG) const
 }
 
 
+SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
+{
+  /*
+  MVT VT = Op.getSimpleValueType();
+  assert(VT == MVT::i8 && "SetCC type must be 8-bit integer");
+  */
+
+  SDValue Op0 = Op.getOperand(0);
+  SDValue Op1 = Op.getOperand(1);
+  SDLoc DL(Op);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
+
+  printf ("LowerSETCC\n");
+  
+  Op0.dump ();
+  Op1.dump ();
+  Op.getOperand(2).dump ();
+
+  if (CC == ISD::SETEQ || CC == ISD::SETNE)
+    {
+      return DAG.getNode(T8xxISD::EQ, DL, MVT::i32, Op0, Op1);
+    }
+
+  //  return (DAG.getNode (T8xxISD::CMP, 
+
+}
+  
+
 SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
 {
   bool addTest = true;
@@ -228,13 +259,15 @@ SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
   Op1.dump ();
   Op2.dump ();
 
-  // TODO: 
+  // TODO:
   if (Cond.getOpcode() == ISD::SETCC) {
     if (SDValue NewCond = LowerSETCC(Cond, DAG))
       Cond = NewCond;
   }
 
-  
+  CC = DAG.getConstant(0, DL, MVT::i32);
+
+ 
   // T8xxISD::CMOV means set the result (which is operand 1) to the RHS if
   // condition is true.
   SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
@@ -277,6 +310,9 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
+  printf ("EmitLoweredSelect\n");
+
+  
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
   // destination vreg to set, the condition code register to branch on, the
