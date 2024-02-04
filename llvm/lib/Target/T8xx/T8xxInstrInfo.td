@@ -60,6 +60,16 @@ def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
 
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
+
+def MxSDT_EQ : SDTypeProfile<1, 2, [
+  /*  Cond */ SDTCisVT<0, i32>,  // Actually a boolean. However on the Transputer those are represented as 32 bit ints
+  /*  ARG1 */ SDTCisVT<1, i32>,
+  /*  ARG2 */ SDTCisVT<2, i32>
+]>;
+
+
+def MxEQ : SDNode<"T8xxISD::EQ",  MxSDT_EQ>;
+
 /* Definitions for Conditional Move Pseudo instruction */
 
 def MxSDT_Cmov : SDTypeProfile<1, 4, [
@@ -369,9 +379,21 @@ def CMP : T8xxPseudoInst<(outs), (ins i32imm:$cc, OReg:$lhs, OReg:$rhs),
   let Defs = [CPSR];
 }
 
+def SETCC : T8xxPseudoInst<(outs OReg:$ccode), (ins OReg:$lhs, OReg:$rhs, i32imm:$cc),
+                    "setcc $lhs, $rhs, $cc", []> {
+  let Defs = [CPSR];
+}
+
 
 def SELECT : T8xxPseudoInst<(outs OReg:$dst), (ins OReg:$cc, OReg:$T, OReg:$F),
                     "select $cc, $T, $F", [(set i32:$dst, (select i32:$T, i32:$F, i32:$cc))]> {
+  let Defs = [CPSR];
+}
+
+
+def EQ : T8xxPseudoInst<(outs OReg:$dst), (ins OReg:$lhs, i32imm:$rhs),
+                    "eq $lhs, $rhs", [(set i32:$dst,
+		    	(i32 (MxEQ i32:$lhs, imm:$rhs)))]> {
   let Defs = [CPSR];
 }
 
