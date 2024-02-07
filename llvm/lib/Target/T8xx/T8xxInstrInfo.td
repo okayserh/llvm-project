@@ -73,10 +73,10 @@ def MxEQ : SDNode<"T8xxISD::EQ",  MxSDT_EQ>;
 /* Definitions for Conditional Move Pseudo instruction */
 
 def MxSDT_Cmov : SDTypeProfile<1, 4, [
-  /*  ARG */ SDTCisSameAs<0, 1>,
-  /*  ARG */ SDTCisSameAs<1, 2>,
-  /* Cond */ SDTCisVT<3, i32>,
-  /*  CCR */ SDTCisVT<4, i32>
+  /*  CCR */ SDTCisVT<1, i32>,
+  /*  ARG */ SDTCisSameAs<0, 2>,
+  /*  ARG */ SDTCisSameAs<2, 3>,
+  /* Cond */ SDTCisVT<4, i32>
 ]>;
 
 def MxCmov    : SDNode<"T8xxISD::CMOV",        MxSDT_Cmov>;
@@ -102,15 +102,14 @@ def CMOV32r : MxCMove<MxType32r>;
 
 
 def CMOV32 : T8Inst<(outs OReg:$dst),
-    		    (ins OReg:$t, OReg:$f, i32imm:$cond, OReg:$ccr),
+    		    (ins OReg:$ccr, OReg:$t, OReg:$f, i32imm:$cond),
                     "",
 		    [(set i32:$dst,
-		    (i32 (MxCmov i32:$t, i32:$f, imm:$cond, i32:$ccr)))]> {
+		    (i32 (MxCmov i32:$ccr, i32:$t, i32:$f, imm:$cond)))]> {
     let usesCustomInserter = 1;
     let isCodeGenOnly = 1;
     let isPseudo = 1;
   }
-
 
 
 // TODO: Create a regular pseudo T8xx instruction
@@ -505,8 +504,8 @@ def BRimm2  : T8InstImm<0x0,
 
 let isTerminator = 1, isBranch = 1, Uses = [CPSR] in {
   def Bcc : T8InstImm<0xA,
-		(outs), 
-		(ins brtarget:$imm),
+		(outs),
+		(ins OReg:$cc, brtarget:$imm),
                 "cj $imm",
 		[]>;
 }
