@@ -59,6 +59,22 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
 }
 
 
+
+// Return true if it is OK for this CMOV pseudo-opcode to be cascaded
+// together with other CMOV pseudo-opcodes into a single basic-block with
+// conditional jump around it.
+static bool isCMOVPseudo(MachineInstr &MI) {
+  switch (MI.getOpcode()) {
+  case T8xx::CMOV32:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+
+
 T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
                                          const T8xxSubtarget &STI)
     : TargetLowering(TM), Subtarget(STI) {
@@ -267,11 +283,10 @@ SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
 
   CC = DAG.getConstant(0, DL, MVT::i32);
 
- 
   // T8xxISD::CMOV means set the result (which is operand 1) to the RHS if
   // condition is true.
   SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
-  SDValue Ops[] = {Op2, Op1, CC, Cond};
+  SDValue Ops[] = {Cond, Op2, Op1, CC};
   return DAG.getNode(T8xxISD::CMOV, DL, VTs, Ops);
 
 }
@@ -311,7 +326,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   DebugLoc DL = MI.getDebugLoc();
 
   printf ("EmitLoweredSelect\n");
-
+  MI.dump ();
   
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -330,10 +345,8 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   MachineFunction *F = MBB->getParent();
 
   // TODO: Temporary to have a definition for the return value.
-  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);
+  //  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);
 
-#if 0
-  
   // This code lowers all pseudo-CMOV instructions. Generally it lowers these
   // as described above, by inserting a MBB, and then making a PHI at the join
   // point to select the true and false operands of the CMOV in the PHI.
@@ -381,6 +394,8 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   // first.  Of the two cases of multiple CMOV lowerings, case 1 reduces the
   // number of jumps the most.
 
+  /* TODO: These optimizations will be left out for the moment
+  
   if (isCMOVPseudo(MI)) {
     // See if we have a string of CMOVS with the same condition.
     while (NextMIIt != MBB->end() && isCMOVPseudo(*NextMIIt) &&
@@ -400,16 +415,20 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
       NextMIIt->getOperand(1).isKill()) {
     CascadedCMOV = &*NextMIIt;
   }
+  */
+
 
   MachineBasicBlock *Jcc1MBB = nullptr;
 
   // If we have a cascaded CMOV, we lower it to two successive branches to
   // the same block.  CCR is used by both, so mark it as live in the second.
+  /* TODO See above. Optimization left out for the moment
   if (CascadedCMOV) {
     Jcc1MBB = F->CreateMachineBasicBlock(BB);
     F->insert(It, Jcc1MBB);
     Jcc1MBB->addLiveIn(T8xx::CCR);
   }
+  */
 
   MachineBasicBlock *Copy0MBB = F->CreateMachineBasicBlock(BB);
   MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);
@@ -420,17 +439,6 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   unsigned CallFrameSize = TII->getCallFrameSizeAt(MI);
   Copy0MBB->setCallFrameSize(CallFrameSize);
   SinkMBB->setCallFrameSize(CallFrameSize);
-
-  // If the CCR register isn't dead in the terminator, then claim that it's
-  // live into the sink and copy blocks.
-  const TargetRegisterInfo *TRI = Subtarget.getRegisterInfo();
-
-  MachineInstr *LastCCRSUser = CascadedCMOV ? CascadedCMOV : LastCMOV;
-  if (!LastCCRSUser->killsRegister(T8xx::CCR) &&
-      !checkAndUpdateCCRKill(LastCCRSUser, MBB, TRI)) {
-    Copy0MBB->addLiveIn(T8xx::CCR);
-    SinkMBB->addLiveIn(T8xx::CCR);
-  }
 
   // Transfer the remainder of MBB and its successor edges to SinkMBB.
   SinkMBB->splice(SinkMBB->begin(), MBB,
@@ -453,15 +461,19 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   // The true block target of the first (or only) branch is always SinkMBB.
   MBB->addSuccessor(SinkMBB);
 
-  // Create the conditional branch instruction.
-  unsigned Opc = T8xx::GetCondBranchFromCond(CC);
-  BuildMI(MBB, DL, TII->get(Opc)).addMBB(SinkMBB);
+  // Note:
+  // cj, conditional jump
+  // Areg = 0  -> Areg' = Areg
+  //              Breg' = Breg
+  //              Creg' = Creg
+  //              Iptr' = ByteIndex NextInst Oreg0
+  // Areg != 0 -> Areg' = Breg
+  //              Breg' = Creg
+  //              Creg' = undefined
+  //              Iptr' = ByteIndex
 
-  if (CascadedCMOV) {
-    unsigned Opc2 = T8xx::GetCondBranchFromCond(
-        (T8xx::CondCode)CascadedCMOV->getOperand(3).getImm());
-    BuildMI(Jcc1MBB, DL, TII->get(Opc2)).addMBB(SinkMBB);
-  }
+  // Create the conditional branch instruction.
+  BuildMI(MBB, DL, TII->get(T8xx::Bcc)).addReg(MI.getOperand(1).getReg()).addMBB(SinkMBB);
 
   //  Copy0MBB:
   //   %FalseValue = ...
@@ -487,14 +499,17 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
 
   for (MachineBasicBlock::iterator MIIt = MIItBegin; MIIt != MIItEnd; ++MIIt) {
     Register DestReg = MIIt->getOperand(0).getReg();
-    Register Op1Reg = MIIt->getOperand(1).getReg();
-    Register Op2Reg = MIIt->getOperand(2).getReg();
+    // Operand 1 is the condition
+    Register Op1Reg = MIIt->getOperand(2).getReg();
+    Register Op2Reg = MIIt->getOperand(3).getReg();
 
     // If this CMOV we are generating is the opposite condition from
     // the jump we generated, then we have to swap the operands for the
     // PHI that is going to be generated.
+    /*
     if (MIIt->getOperand(3).getImm() == OppCC)
       std::swap(Op1Reg, Op2Reg);
+    */
 
     if (RegRewriteTable.find(Op1Reg) != RegRewriteTable.end())
       Op1Reg = RegRewriteTable[Op1Reg].first;
@@ -513,22 +528,9 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
     RegRewriteTable[DestReg] = std::make_pair(Op1Reg, Op2Reg);
   }
 
-  // If we have a cascaded CMOV, the second Jcc provides the same incoming
-  // value as the first Jcc (the True operand of the SELECT_CC/CMOV nodes).
-  if (CascadedCMOV) {
-    MIB.addReg(MI.getOperand(2).getReg()).addMBB(Jcc1MBB);
-    // Copy the PHI result to the register defined by the second CMOV.
-    BuildMI(*SinkMBB, std::next(MachineBasicBlock::iterator(MIB.getInstr())),
-            DL, TII->get(TargetOpcode::COPY),
-            CascadedCMOV->getOperand(0).getReg())
-        .addReg(MI.getOperand(0).getReg());
-    CascadedCMOV->eraseFromParent();
-  }
-
   // Now remove the CMOV(s).
   for (MachineBasicBlock::iterator MIIt = MIItBegin; MIIt != MIItEnd;)
     (MIIt++)->eraseFromParent();
-#endif
 
   return SinkMBB;
 }
