@@ -381,12 +381,6 @@ def SB : T8InstOp8<0x3B,
 		}
 
 
-def CMP : T8xxPseudoInst<(outs), (ins i32imm:$cc, OReg:$lhs, OReg:$rhs),
-                    "cmp$cc $lhs, $rhs", []> {
-  let Defs = [CPSR];
-}
-
-
 /* These are the core comparisons offered by the Transputer */
 /// floating point.  For integer, only the
 // SETEQ +
