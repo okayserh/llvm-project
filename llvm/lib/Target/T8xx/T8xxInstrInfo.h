@@ -35,6 +35,7 @@ namespace SPII {
   };
 }
 
+
 class T8xxInstrInfo : public T8xxGenInstrInfo {
   const T8xxRegisterInfo RI;
   const T8xxSubtarget& Subtarget;

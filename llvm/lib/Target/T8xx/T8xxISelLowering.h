@@ -32,7 +32,8 @@ namespace llvm {
 
     // T8xx conditional moves.
     CMOV,
-    EQ
+    EQ,
+    BRNCOND
   };
   }
 
@@ -84,11 +85,10 @@ namespace llvm {
                         const SmallVectorImpl<ISD::OutputArg> &Outs,
                         LLVMContext &Context) const override;
 
-    SDValue LowerStore(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
-
 
     MachineBasicBlock *EmitLoweredSelect(MachineInstr &I,
 					 MachineBasicBlock *MBB) const;

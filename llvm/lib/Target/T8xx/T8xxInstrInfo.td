@@ -67,16 +67,24 @@ def MxSDT_EQ : SDTypeProfile<1, 2, [
   /*  ARG2 */ SDTCisVT<2, i32>
 ]>;
 
-
 def MxEQ : SDNode<"T8xxISD::EQ",  MxSDT_EQ>;
+
+/* The transputer conditional jump goes the conditional branch on
+  false! Hence we introduce a special code for this one */
+
+def MxSDTBrnotcond : SDTypeProfile<0, 2, [       // brnotcond
+  SDTCisInt<0>, SDTCisVT<1, OtherVT>
+]>;
+
+def MxBrNotCond     : SDNode<"T8xxISD::BRNCOND"     , MxSDTBrnotcond, [SDNPHasChain]>;
+
 
 /* Definitions for Conditional Move Pseudo instruction */
 
-def MxSDT_Cmov : SDTypeProfile<1, 4, [
+def MxSDT_Cmov : SDTypeProfile<1, 3, [
   /*  CCR */ SDTCisVT<1, i32>,
   /*  ARG */ SDTCisSameAs<0, 2>,
-  /*  ARG */ SDTCisSameAs<2, 3>,
-  /* Cond */ SDTCisVT<4, i32>
+  /*  ARG */ SDTCisSameAs<2, 3>
 ]>;
 
 def MxCmov    : SDNode<"T8xxISD::CMOV",        MxSDT_Cmov>;
@@ -102,10 +110,10 @@ def CMOV32r : MxCMove<MxType32r>;
 
 
 def CMOV32 : T8Inst<(outs OReg:$dst),
-    		    (ins OReg:$ccr, OReg:$t, OReg:$f, i32imm:$cond),
+    		    (ins OReg:$ccr, OReg:$t, OReg:$f),
                     "",
 		    [(set i32:$dst,
-		    (i32 (MxCmov i32:$ccr, i32:$t, i32:$f, imm:$cond)))]> {
+		    (i32 (MxCmov i32:$ccr, i32:$t, i32:$f)))]> {
     let usesCustomInserter = 1;
     let isCodeGenOnly = 1;
     let isPseudo = 1;
@@ -378,24 +386,49 @@ def CMP : T8xxPseudoInst<(outs), (ins i32imm:$cc, OReg:$lhs, OReg:$rhs),
   let Defs = [CPSR];
 }
 
-def SETCC : T8xxPseudoInst<(outs OReg:$ccode), (ins OReg:$lhs, OReg:$rhs, i32imm:$cc),
-                    "setcc $lhs, $rhs, $cc", []> {
-  let Defs = [CPSR];
-}
 
+/* These are the core comparisons offered by the Transputer */
+/// floating point.  For integer, only the
+// SETEQ +
+// SETNE +
+// SETLT +
+// SETLE +
+// SETGT +
+// SETGE +
+// SETULT
+// SETULE
+// SETUGT
+// SETUGE
 
-def SELECT : T8xxPseudoInst<(outs OReg:$dst), (ins OReg:$cc, OReg:$T, OReg:$F),
-                    "select $cc, $T, $F", [(set i32:$dst, (select i32:$T, i32:$F, i32:$cc))]> {
-  let Defs = [CPSR];
-}
+def EQC   : T8InstImm<0xC,
+		(outs OReg:$cc),
+		(ins OReg:$lhs, i32imm:$imm),
+		"eqc $imm",
+		[(set i32:$cc,
+		(i32 (setcc i32:$lhs, imm:$imm, SETEQ)))]>;
 
+def GT :      T8InstOp4<0x9,
+                (outs OReg:$cc),
+       	 	(ins OReg:$lhs, OReg:$rhs),
+		"gt",
+		[(set i32:$cc,
+		(i32 (setcc i32:$lhs, i32:$rhs, SETGT)))]>;
 
-def EQ : T8xxPseudoInst<(outs OReg:$dst), (ins OReg:$lhs, i32imm:$rhs),
-                    "eq $lhs, $rhs", [(set i32:$dst,
-		    	(i32 (MxEQ i32:$lhs, imm:$rhs)))]> {
-  let Defs = [CPSR];
-}
+/* Other comparisons will be created by patterns */
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETNE),
+           (DIFF $rhs, $lhs)>;
 
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETEQ),
+           (EQC (DIFF $rhs, $lhs), 0)>;
+
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLT),
+           (GT $rhs, $lhs)>;
+
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETGE),
+           (EQC (GT $rhs, $lhs), 0)>;
+
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLE),
+           (EQC (DIFF $lhs, $rhs), 0)>;
 
 
 /* Pattern to introduce an LEA in order to get the Framepointer
@@ -492,22 +525,18 @@ def BRimm  : T8Inst<(outs), (ins i32imm:$addr),
 
 // Note j is a relative call
 
-def BRimm2  : T8InstImm<0x0,
-		   (outs),
-		   (ins brtarget:$imm),
-                   "j $imm",
-                   [(br bb:$imm)]> {
-		   let isTerminator = 1;
-		   let isBranch = 1;
-}
-
-
-let isTerminator = 1, isBranch = 1, Uses = [CPSR] in {
-  def Bcc : T8InstImm<0xA,
+let isTerminator = 1, isBranch = 1 in {
+def CJ    : T8InstImm<0xA,
 		(outs),
 		(ins OReg:$cc, brtarget:$imm),
                 "cj $imm",
-		[]>;
+		[(MxBrNotCond i32:$cc, bb:$imm)]>;
+
+def JUMP  : T8InstImm<0x0,
+		   (outs),
+		   (ins brtarget:$imm),
+                   "j $imm",
+                   [(br bb:$imm)]>;
 }
 
 

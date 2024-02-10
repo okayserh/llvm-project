@@ -16,6 +16,7 @@
 #include "T8xxMachineFunctionInfo.h"
 #include "T8xxSubtarget.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -103,28 +104,178 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                             MachineBasicBlock *&FBB,
                             SmallVectorImpl<MachineOperand> &Cond,
                             bool AllowModify) const {
-  bool HasCondBranch = false;
-  TBB = nullptr;
-  FBB = nullptr;
-
   printf ("T8xx::analyzeBranch\n");
 
-  for (MachineInstr &MI : MBB) {
-    if (MI.getOpcode() == T8xx::BRimm2) {
-      MachineBasicBlock *TargetBB = MI.getOperand(0).getMBB();
-      if (HasCondBranch) {
-        FBB = TargetBB;
-      } else {
-        TBB = TargetBB;
+  auto UncondBranch =
+      std::pair<MachineBasicBlock::reverse_iterator, MachineBasicBlock *>{
+          MBB.rend(), nullptr};
+
+  // Erase any instructions if allowed at the end of the scope.
+  std::vector<std::reference_wrapper<llvm::MachineInstr>> EraseList;
+  auto FinalizeOnReturn = llvm::make_scope_exit([&EraseList] {
+    std::for_each(EraseList.begin(), EraseList.end(),
+                  [](auto &ref) { ref.get().eraseFromParent(); });
+  });
+
+  // Start from the bottom of the block and work up, examining the
+  // terminator instructions.
+  for (auto iter = MBB.rbegin(); iter != MBB.rend(); iter = std::next(iter)) {
+
+    unsigned Opcode = iter->getOpcode();
+
+    if (iter->isDebugInstr())
+      continue;
+
+    // Working from the bottom, when we see a non-terminator instruction, we're
+    // done.
+    if (!isUnpredicatedTerminator(*iter))
+      break;
+
+    // A terminator that isn't a branch can't easily be handled by this
+    // analysis.
+    if (!iter->isBranch())
+      return true;
+
+    // Handle unconditional branches.
+    if (Opcode == T8xx::JUMP) {
+      if (!iter->getOperand(0).isMBB())
+        return true;
+      UncondBranch = {iter, iter->getOperand(0).getMBB()};
+
+      // TBB is used to indicate the unconditional destination.
+      TBB = UncondBranch.second;
+
+      if (!AllowModify)
+        continue;
+
+      // If the block has any instructions after a JMP, erase them.
+      EraseList.insert(EraseList.begin(), MBB.rbegin(), iter);
+
+      Cond.clear();
+      FBB = nullptr;
+
+      // Erase the JMP if it's equivalent to a fall-through.
+      if (MBB.isLayoutSuccessor(UncondBranch.second)) {
+        TBB = nullptr;
+        EraseList.push_back(*iter);
+        UncondBranch = {MBB.rend(), nullptr};
       }
-    } else if (MI.getOpcode() == T8xx::Bcc) {
-      MachineBasicBlock *TargetBB = MI.getOperand(0).getMBB();
-      TBB = TargetBB;
-      Cond.push_back(MI.getOperand(0));
-      HasCondBranch = true;
+
+      continue;
     }
+
+    // Handle conditional branches.
+    // Note: On the T8xx there is only one type of conditional branch
+    // Hence no BranchCode is neede
+    //    auto BranchCode = M68k::GetCondFromBranchOpc(Opcode);
+
+    // Can't handle indirect branch.
+    /*
+    if (BranchCode == M68k::COND_INVALID)
+      return true;
+    */
+
+    // In practice we should never have an undef CCR operand, if we do
+    // abort here as we are not prepared to preserve the flag.
+    // ??? Is this required?
+    // if (iter->getOperand(1).isUndef())
+    //   return true;
+
+    // Working from the bottom, handle the first conditional branch.
+    if (Cond.empty()) {
+      if (!iter->getOperand(1).isMBB())
+        return true;
+      MachineBasicBlock *CondBranchTarget = iter->getOperand(1).getMBB();
+
+      // If we see something like this:
+      //
+      //     bcc l1
+      //     bra l2
+      //     ...
+      //   l1:
+      //     ...
+      //   l2:
+      /*
+      if (UncondBranch.first != MBB.rend()) {
+
+        assert(std::next(UncondBranch.first) == iter && "Wrong block layout.");
+
+        // And we are allowed to modify the block and the target block of the
+        // conditional branch is the direct successor of this block:
+        //
+        //     bcc l1
+        //     bra l2
+        //   l1:
+        //     ...
+        //   l2:
+        //
+        // we change it to this if allowed:
+        //
+        //     bncc l2
+        //   l1:
+        //     ...
+        //   l2:
+        //
+        // Which is a bit more efficient.
+        if (AllowModify && MBB.isLayoutSuccessor(CondBranchTarget)) {
+
+          BranchCode = GetOppositeBranchCondition(BranchCode);
+          unsigned BNCC = GetCondBranchFromCond(BranchCode);
+
+          BuildMI(MBB, *UncondBranch.first, MBB.rfindDebugLoc(iter), get(BNCC))
+              .addMBB(UncondBranch.second);
+
+          EraseList.push_back(*iter);
+          EraseList.push_back(*UncondBranch.first);
+
+          TBB = UncondBranch.second;
+          FBB = nullptr;
+          Cond.push_back(MachineOperand::CreateImm(BranchCode));
+
+          // Otherwise preserve TBB, FBB and Cond as requested
+        } else {
+          TBB = CondBranchTarget;
+          FBB = UncondBranch.second;
+	  //          Cond.push_back(MachineOperand::CreateImm(BranchCode));
+	  Cond.push_back(MachineOperand::CreateImm(ISD::CondCode::SETFALSE));
+    }
+	  
+        UncondBranch = {MBB.rend(), nullptr};
+        continue;
+      }
+	  */
+
+      TBB = CondBranchTarget;
+      FBB = nullptr;
+
+      //Cond.push_back(MachineOperand::CreateImm(BranchCode));
+      Cond.push_back(MachineOperand::CreateImm(ISD::CondCode::SETFALSE));
+
+      continue;
+    }
+
+  /* TODO: Check what needs to be done here
+  // Handle subsequent conditional branches. Only handle the case where all
+    // conditional branches branch to the same destination and their condition
+    // opcodes fit one of the special multi-branch idioms.
+    assert(Cond.size() == 1);
+    assert(TBB);
+
+    // If the conditions are the same, we can leave them alone.
+    auto OldBranchCode = static_cast<M68k::CondCode>(Cond[0].getImm());
+    if (!iter->getOperand(0).isMBB())
+      return true;
+    auto NewTBB = iter->getOperand(0).getMBB();
+    if (OldBranchCode == BranchCode && TBB == NewTBB)
+      continue;
+  */
+
+  // If they differ we cannot do much here.
+    return true;
   }
+
   return false;
+
 }
 
 /// RemoveBranch - Remove the branching code at the end of the specific MBB.
@@ -142,7 +293,7 @@ T8xxInstrInfo::removeBranch(MachineBasicBlock &MBB,
   do {
     --I;
     unsigned Opc = I->getOpcode();
-    if ((Opc == T8xx::BRimm2) || (Opc == T8xx::Bcc)) {
+    if ((Opc == T8xx::JUMP) || (Opc == T8xx::CJ)) {
       auto ToDelete = I;
       ++I;
       MBB.erase(ToDelete);
@@ -175,15 +326,14 @@ unsigned T8xxInstrInfo::insertBranch(MachineBasicBlock &MBB,
   // TODO: Quick fix. Need to figure right way to do this
   if (!Cond.empty ())
     {
-      //    BuildMI(MBB, MBB.end(), DL, get(T8xx::Bcc)).addImm(Cond[0].getImm()).addMBB(TBB);
-      BuildMI(MBB, MBB.end(), DL, get(T8xx::Bcc)).addMBB(TBB);
+      BuildMI(MBB, MBB.end(), DL, get(T8xx::CJ)).addReg(Cond[0].getReg()).addMBB(TBB);
       NumInserted++;
     }
   else
     {
       // Insert any unconditional branch.
       if (Cond.empty() || FBB) {
-	BuildMI(MBB, MBB.end(), DL, get(T8xx::BRimm2)).addMBB(Cond.empty() ? TBB : FBB);
+	BuildMI(MBB, MBB.end(), DL, get(T8xx::JUMP)).addMBB(Cond.empty() ? TBB : FBB);
 	NumInserted++;
       }
     }
