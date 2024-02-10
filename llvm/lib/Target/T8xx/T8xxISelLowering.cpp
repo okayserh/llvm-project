@@ -55,6 +55,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "CMOV";
   case T8xxISD::EQ:
     return "EQ";
+  case T8xxISD::BRNCOND:
+    return "BRNCOND";
   }
 }
 
@@ -111,7 +113,12 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   // Nodes that require custom lowering
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
-  // TODO: Maybe implement custom lowering?
+  setOperationAction(ISD::BRCOND, MVT::Other, Custom);
+  
+  setOperationAction(ISD::BR_CC, MVT::i8, Expand);
+  setOperationAction(ISD::BR_CC, MVT::i16, Expand);
+  setOperationAction(ISD::BR_CC, MVT::i32, Expand);
+
   setOperationAction(ISD::SELECT, MVT::i8, Custom);
   setOperationAction(ISD::SELECT, MVT::i16, Custom);
   setOperationAction(ISD::SELECT, MVT::i32, Custom);
@@ -150,87 +157,15 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Unimplemented operand");
-    /* Temporary disabled to see whether this can be avoided
-  case ISD::STORE:
-    printf ("### Lower Store ###\n");
-    return LowerStore(Op, DAG);
-    */
   case ISD::SELECT:
     printf ("####### Lower Select  #########\n");
     return LowerSELECT(Op, DAG);
+  case ISD::BRCOND:
+    return LowerBRCOND(Op, DAG);
   case ISD::GlobalAddress:
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
   }
-}
-
-
-// Technically, only truncated stores should come to this replacement
-SDValue T8xxTargetLowering::LowerStore(SDValue Op, SelectionDAG& DAG) const
-{
-  StoreSDNode *ST = cast<StoreSDNode>(Op.getNode());
-  SDValue Chain = ST->getChain();
-  SDValue Ptr = ST->getBasePtr();
-  SDLoc dl(Op.getNode ());
-
-  SDValue Value = ST->getValue();
-  //  MVT VT = Value.getSimpleValueType();
-  EVT VT = ST->getMemoryVT();
-
-  // Storing a single byte works only towards addresses in
-  // an register operand
-	Chain.dump ();
-	Ptr.dump ();
-	Value.dump ();
-	VT.dump ();
-
-  if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Ptr)) {
-    if ((VT == MVT::i8) && (ST->isTruncatingStore ()))
-      {
-	printf ("### ISD:ADD ###\n");
-	SDValue Result;
-	EVT RoundVT = EVT::getIntegerVT(*DAG.getContext(), 8);
-
-	// This seems to produce the right code.
-	// However, when the offset is 0, the instruction is simply
-	// "optimized" away.
-	// Maybe a "CopyToReg" might helpin this context?
-
-	Result = DAG.getNode(ISD::ADD, dl, MVT::i32, Ptr,
-			     DAG.getConstant(2, dl, MVT::i32));
-	Result.dump ();
-
-	Result = DAG.getTruncStore(Chain, dl, Value, Result, ST->getPointerInfo(),
-				   RoundVT, ST->getOriginalAlign());
-	Result.dump ();
-
-	return Result;
-	//return (Ptr);
-    }
-  }
-
-  /* Some sample code of how to build instruction sequences in the DAG
-  Hi = DAG.getNode(ISD::SRL, dl, Value.getValueType(), Value,
-		   DAG.getConstant(ExtraWidth, dl,
-				   TLI.getShiftAmountTy(Value.getValueType(), DL)));
-  Hi = DAG.getTruncStore(Chain, dl, Hi, Ptr, ST->getPointerInfo(), RoundVT,
-			 ST->getOriginalAlign(), MMOFlags, AAInfo);
-
-  // Store the remaining ExtraWidth bits.
-  IncrementSize = RoundWidth / 8;
-  Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-		    DAG.getConstant(IncrementSize, dl,
-				    Ptr.getValueType()));
-  Lo = DAG.getTruncStore(Chain, dl, Value, Ptr,
-			 ST->getPointerInfo().getWithOffset(IncrementSize),
-			 ExtraVT, ST->getOriginalAlign(), MMOFlags, AAInfo);
-  */
-  //  print ("Store Value Type %i\n");
-
-
-  //Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32);
-
-  return Op;
 }
 
 
@@ -262,6 +197,37 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
 }
   
 
+
+SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
+  bool AddTest = true;
+  SDValue Chain = Op.getOperand(0);
+  SDValue Cond = Op.getOperand(1);
+  SDValue Dest = Op.getOperand(2);
+  SDLoc DL(Op);
+  SDValue CC;
+  bool Inverted = false;
+
+  printf ("#### LowerBRCOND\n");
+  
+  SDValue NewCond;
+  if (Cond.getOpcode() == ISD::SETCC) {
+    // For SETCC use "inverse" comparison
+    CondCodeSDNode *CCNode = cast<CondCodeSDNode>(Cond.getOperand(2));
+    NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
+				 Cond.getOperand(0),
+				 Cond.getOperand(1),
+				 getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ()));
+  } else {
+    // Otherwise insert logical not (= EQ 0)
+    SDValue CompConst = DAG.getConstant(0, DL, MVT::i32);
+    NewCond = DAG.getNode(T8xxISD::EQ, DL, Op.getValueType (), Chain, Cond, CompConst);
+  }
+
+  // Use the "negative" BRCOND.
+  return DAG.getNode(T8xxISD::BRNCOND, DL, Op.getValueType(), Chain, NewCond, Dest);  
+}
+
+
 SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
 {
   bool addTest = true;
@@ -269,26 +235,20 @@ SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
   SDValue Op1 = Op.getOperand(1);
   SDValue Op2 = Op.getOperand(2);
   SDLoc DL(Op);
-  SDValue CC;
-
-  Cond.dump ();
-  Op1.dump ();
-  Op2.dump ();
 
   // TODO:
+  /*
   if (Cond.getOpcode() == ISD::SETCC) {
     if (SDValue NewCond = LowerSETCC(Cond, DAG))
       Cond = NewCond;
   }
-
-  CC = DAG.getConstant(0, DL, MVT::i32);
+  */
 
   // T8xxISD::CMOV means set the result (which is operand 1) to the RHS if
   // condition is true.
   SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
-  SDValue Ops[] = {Cond, Op2, Op1, CC};
+  SDValue Ops[] = {Cond, Op2, Op1};
   return DAG.getNode(T8xxISD::CMOV, DL, VTs, Ops);
-
 }
 
 
@@ -473,7 +433,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   //              Iptr' = ByteIndex
 
   // Create the conditional branch instruction.
-  BuildMI(MBB, DL, TII->get(T8xx::Bcc)).addReg(MI.getOperand(1).getReg()).addMBB(SinkMBB);
+  BuildMI(MBB, DL, TII->get(T8xx::CJ)).addReg(MI.getOperand(1).getReg()).addMBB(SinkMBB);
 
   //  Copy0MBB:
   //   %FalseValue = ...

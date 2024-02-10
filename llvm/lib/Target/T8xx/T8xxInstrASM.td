@@ -52,12 +52,6 @@ def AJW   : T8InstImm<0xB,
 		"ajw $imm",
 		[]>;
 
-def EQC   : T8InstImm<0xC,
-		(outs OReg:$dst),
-		(ins OReg:$src1, i32imm:$imm),
-		"eqc $imm",
-		[]>;
-
 def REV :     T8InstOp4<0x0,
 		(outs),
 		(ins),
@@ -71,12 +65,6 @@ def DIFF :    T8InstOp4<0x4,
                 (outs OReg:$dst),
        	 	(ins OReg:$src1, OReg:$src2),
 		"diff",
-		[]>;
-
-def GT :      T8InstOp4<0x9,
-                (outs OReg:$dst),
-       	 	(ins OReg:$src1, OReg:$src2),
-		"gt",
 		[]>;
 
 def GCALL :   T8InstOp4<0x6,
