@@ -113,8 +113,8 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   // Attempt to adjust stack offset
   /* Note: This is just a helper variable in the MFI object. */
   printf ("Current FI Offset = %i\n", MFI.getOffsetAdjustment ());
-  // Note: The +1 is for R0, which is reserved
-  MFI.setOffsetAdjustment ((used_regs + 1) * 4);
+  // Note: The +1 is for R0, which is reserved for the return address
+  MFI.setOffsetAdjustment (4);
   
   // Adjust the stack pointer.
   /* Save the return address on old stack position 0 */ 
