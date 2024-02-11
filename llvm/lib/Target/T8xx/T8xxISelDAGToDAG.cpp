@@ -74,7 +74,7 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
     // Test to see whether the alignment can be used to select
     // only proper frame objects
     MachineFrameInfo &MFI = MF->getFrameInfo ();
-    printf ("Object %i  Alignment %i\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
+    printf ("Object %i  Alignment %li\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
 
     // ADDRri ensures that only 32 bit aligned relatives to the WPTR are
     // selected
@@ -142,7 +142,7 @@ bool T8xxDAGToDAGISel::SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offse
     // Test to see whether the alignment can be used to select
     // only proper frame objects
     MachineFrameInfo &MFI = MF->getFrameInfo ();
-    printf ("Object %i  Alignment %i\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
+    printf ("Object %i  Alignment %li\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
     return true;
   }
   if (Addr.getOpcode() == ISD::TargetExternalSymbol ||

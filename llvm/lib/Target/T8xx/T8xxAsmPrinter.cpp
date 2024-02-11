@@ -152,7 +152,7 @@ void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
 // Print a 'memsrc' operand which is a (Register, Offset) pair.
 void T8xxAsmPrinter::printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
                                          raw_ostream &O) {
-  const MachineOperand &Op1 = MI->getOperand(OpNum);
+  //  const MachineOperand &Op1 = MI->getOperand(OpNum);
   const MachineOperand &Op2 = MI->getOperand(OpNum + 1);
   O << "[";
   //  printRegName(O, Op1.getReg());

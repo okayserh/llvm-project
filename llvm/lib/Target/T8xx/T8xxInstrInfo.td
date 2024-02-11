@@ -345,7 +345,6 @@ def : Pat<(sextloadi8 ADDRri:$addr),
 def : Pat<(sextloadi8 ADDRri8:$addr),
           (XWORD (LB (LDLPb ADDRri8:$addr) ), (LDC 128))>;
 
-
 //defm LDRzi16 : T8Load<"ldl $addr \n", zextloadi16>;
 //defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
 
@@ -384,7 +383,6 @@ def : Pat<(truncstorei8 i32:$val, ADDRri:$addr),
 
 def : Pat<(truncstorei8 i32:$val, ADDRri8:$addr),
           (SB i32:$val, (LDLPb ADDRri8:$addr) )>;
-
 
 /* These are the core comparisons offered by the Transputer */
 /// floating point.  For integer, only the

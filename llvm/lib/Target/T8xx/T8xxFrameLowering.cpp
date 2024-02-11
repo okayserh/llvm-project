@@ -55,12 +55,12 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
 
   printf ("emitSPAdjustment\n");
 
+  /* TODO: This was used for the SPARC to adjust the stack pointer register.
+     Could possible be the WPtr register that needs adjustment.
   DebugLoc dl;
   const T8xxInstrInfo &TII =
       *static_cast<const T8xxInstrInfo *>(MF.getSubtarget().getInstrInfo());
 
-  /* TODO: This was used for the SPARC to adjust the stack pointer register.
-     Could possible be the WPtr register that needs adjustment.
   if (NumBytes >= -4096 && NumBytes < 4096) {
     BuildMI(MBB, MBBI, dl, TII.get(ADDri), T8xx::R6)
       .addReg(T8xx::R6).addImm(NumBytes);
@@ -72,14 +72,12 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
 
 uint64_t T8xxFrameLowering::computeStackSize(MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  uint64_t StackSize = MFI.getStackSize();
-  unsigned StackAlign = getStackAlignment();
 
   // Get the size of parameters on the stack
-  uint64_t fixed_obj_size = 0;
+  int64_t fixed_obj_size = 0;
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
     fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ());
-  uint64_t obj_size = 0;
+  int64_t obj_size = 0;
   /* Old version, where the object size with stack alignment is used. Produces
      incorrect results, when the larger alignments are requested the LLVM code */
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
@@ -155,7 +153,6 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 
   // First write down all registers
   MachineRegisterInfo &RI = MF.getRegInfo ();
-  const TargetRegisterInfo *TRI = RI.getTargetRegisterInfo ();
 
   // Restore the stack pointer to what it was at the beginning of the function.
   /* Real stack adjustment */
