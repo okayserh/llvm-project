@@ -327,14 +327,6 @@ def : Pat<(extloadi8 ADDRri:$addr),
 def : Pat<(extloadi8 ADDRri8:$addr),
           (LB (LDLPb ADDRri8:$addr) )>;
 
-//defm LDRi8 :  T8Load<"lb \n", extloadi8>;
-//defm LDRzi8 :  T8Load<"lb \n", zextloadi8>;
-//defm LDRsi8 :  T8Load<"lb \n\tldc #128 \n\txword \n", sextloadi8>;
-
-//defm LDRzi16 : T8Load<"ldl $addr \n", zextloadi16>;
-//defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
-
-
 def : Pat<(zextloadi8 ADDRr:$addr),
           (LB ADDRr:$addr)>;
 
@@ -352,6 +344,10 @@ def : Pat<(sextloadi8 ADDRri:$addr),
 
 def : Pat<(sextloadi8 ADDRri8:$addr),
           (XWORD (LB (LDLPb ADDRri8:$addr) ), (LDC 128))>;
+
+
+//defm LDRzi16 : T8Load<"ldl $addr \n", zextloadi16>;
+//defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
 
 
 // Store i32 onto frame
@@ -379,6 +375,15 @@ def SB : T8InstOp8<0x3B,
 		"sb",
 		[(truncstorei8 i32:$val, ADDRr:$addr)]> {
 		}
+
+
+/* Pattern to introduce an LEA in order to get the Framepointer
+ into a operand register */
+def : Pat<(truncstorei8 i32:$val, ADDRri:$addr),
+          (SB i32:$val, (LDLP ADDRri:$addr) )>;
+
+def : Pat<(truncstorei8 i32:$val, ADDRri8:$addr),
+          (SB i32:$val, (LDLPb ADDRri8:$addr) )>;
 
 
 /* These are the core comparisons offered by the Transputer */
@@ -423,15 +428,6 @@ def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETGE),
 
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLE),
            (EQC (DIFF $lhs, $rhs), 0)>;
-
-
-/* Pattern to introduce an LEA in order to get the Framepointer
- into a operand register */
-def : Pat<(truncstorei8 i32:$val, ADDRri:$addr),
-          (SB i32:$val, (LDLP ADDRri:$addr) )>;
-
-def : Pat<(truncstorei8 i32:$val, ADDRri8:$addr),
-          (SB i32:$val, (LDLPb ADDRri8:$addr) )>;
 
 
 //===----------------------------------------------------------------------===//

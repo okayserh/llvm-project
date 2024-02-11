@@ -24,7 +24,6 @@ def CC_T8xx32 : CallingConv<[
 
 def RetCC_T8xx32 : CallingConv<[
   // i32 are returned in registers R1, R2
-//  CCIfType<[i32], CCAssignToReg<[R1, R2]>>,
   CCIfType<[i32], CCAssignToReg<[AREG]>>,
 
   // Integer values get stored in stack slots that are 4 bytes in
@@ -34,4 +33,4 @@ def RetCC_T8xx32 : CallingConv<[
 
 // TODO: Probably needs to span all integer registers
 // (registers are all on stack)
-def CC_Save : CalleeSavedRegs<(add R0, R1, R2, R3)>;
+def CC_Save : CalleeSavedRegs<(add AREG)>;

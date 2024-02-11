@@ -30,7 +30,7 @@ using namespace llvm;
 #include "T8xxGenRegisterInfo.inc"
 
 // The first parameter is RAReg (MCRegisterInfo.h -> "Return address register"!?)
-T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8xx::R0, 0, 0, T8xx::IPTR) {}
+T8xxRegisterInfo::T8xxRegisterInfo() : T8xxGenRegisterInfo(T8xx::AREG, 0, 0, T8xx::IPTR) {}
 
 const MCPhysReg*
 T8xxRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
@@ -88,29 +88,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %i\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
   MI.dump ();
 
-  // To be verified if this code is needed at this place, or if there's build in functionality for this
-  const MachineRegisterInfo &RI = MF.getRegInfo ();
-  const TargetRegisterInfo *TRI = RI.getTargetRegisterInfo ();
-  int max_reg_id = 0;
-  int used_regs = 0;
-  
-  for (TargetRegisterInfo::regclass_iterator ri = TRI->regclass_begin (); ri != TRI->regclass_end (); ++ri)
-    {
-      const TargetRegisterClass *rc = (*ri);
-      for (int j = 0; j < (*ri)->getNumRegs (); ++j)
-	{
-	  // Note: only R1 to R15 as used stack registers
-	  // are relevant as they need some reserved space on the stack
-	  unsigned reg_id = (*ri)->getRegister(j).id();
-	  if ((reg_id >= T8xx::R1) && (reg_id <= T8xx::R15))
-	    {
-	      if (!RI.reg_empty (reg_id))
-		used_regs++;
-	    }
-	}
-    }
-  printf ("Function uses %i regs\n", used_regs);
-  
   // Determine if we can eliminate the index from this kind of instruction.
   unsigned ImmOpIdx = 0;
   switch (MI.getOpcode()) {
@@ -139,14 +116,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   fixed_obj_size = (fixed_obj_size + 3) / 4 * 4;
   printf ("Aligned Fixed objects size = %i\n", fixed_obj_size);
 
-  /*
-  unsigned obj_size = 0;
-  for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
-    obj_size += MFI.getObjectSize (i) > 0 ? RoundUpToAlignment (MFI.getObjectSize (i), 4) : 0;
-  printf ("Objects size = %i\n", obj_size);
-  obj_size = (obj_size + 3) / 4 * 4;
-  printf ("Aligned Objects size = %i\n", obj_size);
-  */
   unsigned obj_size = 0;
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
     if (MFI.getObjectSize (i) > 0)

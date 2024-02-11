@@ -353,12 +353,6 @@ void T8xxInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   uint16_t hweSrcReg = TRI->getEncodingValue (SrcReg);
   uint16_t hweDstReg = TRI->getEncodingValue (DestReg);
 
-  /* 16 Register in Workspace approach */
-  if ((SrcReg >= T8xx::R0) and (SrcReg <= T8xx::R15))
-    BuildMI(MBB, I, DL, get(T8xx::LDL)).addImm(hweSrcReg);
-
-  if ((DestReg >= T8xx::R0) and (DestReg <= T8xx::R15))
-    BuildMI(MBB, I, DL, get(T8xx::STL)).addImm(hweDstReg);
 }
 
 void T8xxInstrInfo::
@@ -367,25 +361,8 @@ storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                     const TargetRegisterClass *RC,
                     const TargetRegisterInfo *TRI,
 		    Register VReg) const {
-  printf ("Store %u into %u\n", SrcReg, VReg);
-  if (SrcReg.isVirtual ())
-    printf ("Src Virt\n");
-  if (VReg.isVirtual ())
-    printf ("VReg Virt\n");
-
   BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL)).addReg(SrcReg, getKillRegState(true))
     .addFrameIndex(FI).addImm(0);
-
-  /* TODO: See how to deal with these cases.
-  uint16_t hweSrcReg = TRI->getEncodingValue (SrcReg.asMCReg());
-
-  // With Stack relative to WPTR
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL)).addImm(hweSrcReg);
-  if (FI % 4 == 0)
-    BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL)).addImm(FI / 4);
-  else
-    printf ("Error: storeRegToStackSlot, unaligned frame access\n");
-  */
 }
 
 void T8xxInstrInfo::
@@ -394,88 +371,10 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                      const TargetRegisterClass *RC,
                      const TargetRegisterInfo *TRI,
 		     Register VReg) const {
-  printf ("Load %u from %u\n", DestReg, VReg);
-  if (DestReg.isVirtual ())
-    printf ("Dest Virt\n");
-  if (VReg.isVirtual ())
-    printf ("VReg Virt\n");
-
   if (RC == &T8xx::ORegRegClass)
     BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL), DestReg).addFrameIndex(FI).addImm(0);
   else
     llvm_unreachable("Can't load this register from stack slot");
-  /*
-  uint16_t hweDestReg = TRI->getEncodingValue (DestReg.asMCReg());
-
-  // With Stack relative to WPTR
-  if (FI % 4 == 0)
-    BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL)).addImm(FI / 4);
-  else
-    printf ("Error: loadRegFromStackSlot, unaligned frame access\n");
-  BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL)).addImm(hweDestReg);
-  */
-}
-
-
-/*
- * Load the operand to the processor register stack
- */
-
-void T8xxInstrInfo::loadRegStack (MachineInstr &MI, const unsigned int OpNum, const int OReg) const
-{
-  DebugLoc DL = MI.getDebugLoc();
-  MachineBasicBlock &MBB = *MI.getParent();
-  const MachineFunction *MF = MBB.getParent();
-  const MachineRegisterInfo &MRI = MF->getRegInfo();
-  const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
-
-  const MachineOperand::MachineOperandType MOT = MI.getOperand(OpNum).getType ();  // X
-  printf ("loadRegStack TYPE: %i\n", (int) MOT);
-  switch (MOT)
-    {
-    case MachineOperand::MO_Register:
-      {
-	MCRegister SrcReg = MI.getOperand(OpNum).getReg ();
-	if (SrcReg == T8xx::WPTR)
-	  BuildMI(MBB, MI, DL, get(T8xx::LDLP)).addImm(OReg);
-	if ((SrcReg >= T8xx::R0) and (SrcReg <= T8xx::R15))
-	  BuildMI(MBB, MI, DL, get(T8xx::LDL)).addImm(TRI->getEncodingValue(MI.getOperand(OpNum).getReg().asMCReg()));
-      }
-      break;
-    case MachineOperand::MO_Immediate:
-      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addImm(MI.getOperand(OpNum).getImm());
-      break;
-    case MachineOperand::MO_ExternalSymbol:
-      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addSym(MI.getOperand(OpNum).getMCSymbol());
-      break;
-    case MachineOperand::MO_GlobalAddress:
-      BuildMI(MBB, MI, DL, get(T8xx::LDC)).addGlobalAddress(MI.getOperand(OpNum).getGlobal());
-      break;
-    }
-}
-
-
-void T8xxInstrInfo::addAddrOffset (MachineInstr &MI, const unsigned int OpNum) const
-{
-  DebugLoc DL = MI.getDebugLoc();
-  MachineBasicBlock &MBB = *MI.getParent();
-  const MachineFunction *MF = MBB.getParent();
-  const MachineRegisterInfo &MRI = MF->getRegInfo();
-  const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
-
-  const MachineOperand::MachineOperandType MOT = MI.getOperand(OpNum).getType ();  // X
-  printf ("addAddrOffset TYPE: %i\n", (int) MOT);
-  switch (MOT)
-    {
-    case MachineOperand::MO_Register:
-      loadRegStack (MI, OpNum);
-      BuildMI(MBB, MI, DL, get(T8xx::ADD));
-      break;
-    case MachineOperand::MO_Immediate:
-      if (MI.getOperand(OpNum).getImm() != 0)
-	BuildMI(MBB, MI, DL, get(T8xx::ADC)).addImm(MI.getOperand(OpNum).getImm());
-      break;
-    }
 }
 
 
@@ -505,27 +404,6 @@ void T8xxInstrInfo::storeRegStack (MachineInstr &MI, const unsigned int OpNum,
       printf ("Failed in storeRegStack! Wrong destination operand type\n");
       break;
     }
-}
-
-
-
-void T8xxInstrInfo::createComparison(MachineInstr &MI, const bool rev, const bool neg, const bool diff) const
-{
-  DebugLoc DL = MI.getDebugLoc();
-  MachineBasicBlock &MBB = *MI.getParent();
-  const MachineFunction *MF = MBB.getParent();
-  const MachineRegisterInfo &MRI = MF->getRegInfo();
-  const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
-
-  if (rev)
-    BuildMI(MBB, MI, DL, get(T8xx::REV)); // Swap AReg and BReg. TODO: Might offer place for optimization
-  if (diff)
-    BuildMI(MBB, MI, DL, get(T8xx::DIFF), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG); // Difference
-  if (diff && neg)
-    BuildMI(MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0); // logical NOT
-  BuildMI(MBB, MI, DL, get(T8xx::GT), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
-  if (neg && (~diff))
-    BuildMI(MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0); // logical NOT
 }
 
 
