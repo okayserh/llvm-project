@@ -138,7 +138,7 @@ void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
   }
 
   if (MI->getOperand(opNum+1).isReg() &&
-      MI->getOperand(opNum+1).getReg() == T8xx::R0)
+      MI->getOperand(opNum+1).getReg() == T8xx::AREG)
     return;   // don't print "+%g0"
   if (MI->getOperand(opNum+1).isImm() &&
       MI->getOperand(opNum+1).getImm() == 0)

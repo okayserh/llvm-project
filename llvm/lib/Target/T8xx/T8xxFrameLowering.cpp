@@ -59,12 +59,14 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
   const T8xxInstrInfo &TII =
       *static_cast<const T8xxInstrInfo *>(MF.getSubtarget().getInstrInfo());
 
+  /* TODO: This was used for the SPARC to adjust the stack pointer register.
+     Could possible be the WPtr register that needs adjustment.
   if (NumBytes >= -4096 && NumBytes < 4096) {
     BuildMI(MBB, MBBI, dl, TII.get(ADDri), T8xx::R6)
       .addReg(T8xx::R6).addImm(NumBytes);
     return;
   }
-
+  */
 }
 
 
@@ -108,66 +110,20 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
     return;
   }
 
-  // First write down all registers
-  MachineRegisterInfo &RI = MF.getRegInfo ();
-  const TargetRegisterInfo *TRI = RI.getTargetRegisterInfo ();
-
-  int max_reg_id = 0;
-  int used_regs = 0;
-  
-  printf ("No Reg Classes %i\n", TRI->getNumRegClasses ());
-  for (TargetRegisterInfo::regclass_iterator ri = TRI->regclass_begin (); ri != TRI->regclass_end (); ++ri)
-    {
-      const TargetRegisterClass *rc = (*ri);
-      printf ("Regs %i\n", (*ri)->getNumRegs ());
-      for (int j = 0; j < (*ri)->getNumRegs (); ++j)
-	{
-	  unsigned reg_id = (*ri)->getRegister(j).id();
-	  printf ("Register %i, ID = %i\n", j, reg_id);
-	  if (reg_id > max_reg_id)
-	    max_reg_id = reg_id;
-
-	  if ((reg_id >= T8xx::R1) && (reg_id <= T8xx::R15))
-	    {
-	      if (!RI.reg_empty (reg_id))
-		used_regs++;
-	    }
-	}
-    }
-  printf ("Function uses %i regs, Stack size = %i\n", used_regs, StackSize);
-
   // Attempt to adjust stack offset
   /* Note: This is just a helper variable in the MFI object. */
   printf ("Current FI Offset = %i\n", MFI.getOffsetAdjustment ());
   // Note: The +1 is for R0, which is reserved
   MFI.setOffsetAdjustment ((used_regs + 1) * 4);
   
-  // Try to evaluate used registers
-#if 0
-  printf ("Virt Regs %i\n", RI.getNumVirtRegs ());
-  for (int i = 1; i <= max_reg_id; ++i)
-    {
-      printf ("Reg %i Used %s\n", i, RI.reg_empty (i) ? "No" : "Yes");
-      /*
-      const TargetRegisterClass *rc = RI.getRegClassOrNull(i);
-      if (rc != NULL)
-	printf ("Class ID %i  Num Regs %i\n", rc->getID (), rc->getNumRegs ());
-      */
-      RI.dumpUses (i);
-    }
-#endif
-  
   // Adjust the stack pointer.
   /* Save the return address on old stack position 0 */ 
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
-  /*  BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL))
-      .addImm(0);*/
 
   /* Real adjustment via AJW */
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-    .addImm(-((StackSize / 4) + used_regs + 1))
+    .addImm(-((StackSize / 4) + 1))
         .setMIFlag(MachineInstr::FrameSetup);
-
 }
 
 MachineBasicBlock::iterator T8xxFrameLowering::
@@ -178,9 +134,6 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
     int Size = MI.getOperand(0).getImm();
     if (MI.getOpcode() == T8xx::ADJCALLSTACKDOWN)
       Size = -Size;
-
-    /*    if (Size)
-	  emitSPAdjustment(MF, MBB, I, Size, T8xx::ADDrr, T8xx::ADDri); */
   }
   return MBB.erase(I);
   //  return MBB.end ();
@@ -200,40 +153,14 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
     return;
   }
 
-
   // First write down all registers
   MachineRegisterInfo &RI = MF.getRegInfo ();
   const TargetRegisterInfo *TRI = RI.getTargetRegisterInfo ();
 
-  int max_reg_id = 0;
-  int used_regs = 0;
-  
-  printf ("No Reg Classes %i\n", TRI->getNumRegClasses ());
-  for (TargetRegisterInfo::regclass_iterator ri = TRI->regclass_begin (); ri != TRI->regclass_end (); ++ri)
-    {
-      const TargetRegisterClass *rc = (*ri);
-      printf ("Regs %i\n", (*ri)->getNumRegs ());
-      for (int j = 0; j < (*ri)->getNumRegs (); ++j)
-	{
-	  unsigned reg_id = (*ri)->getRegister(j).id();
-	  printf ("Register %i, ID = %i\n", j, reg_id);
-	  if (reg_id > max_reg_id)
-	    max_reg_id = reg_id;
-
-	  if ((reg_id >= T8xx::R1) && (reg_id <= T8xx::R15))
-	    {
-	      if (!RI.reg_empty (reg_id))
-		used_regs++;
-	    }
-	}
-    }
-  printf ("Function uses %i regs\n", used_regs);
-
-  
   // Restore the stack pointer to what it was at the beginning of the function.
   /* Real stack adjustment */
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-    .addImm((StackSize / 4) + used_regs + 1)
+    .addImm((StackSize / 4) + 1)
         .setMIFlag(MachineInstr::FrameSetup);
 
   printf ("emitEpilogue End\n");
