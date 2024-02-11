@@ -80,7 +80,7 @@ static bool isCMOVPseudo(MachineInstr &MI) {
 T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
                                          const T8xxSubtarget &STI)
     : TargetLowering(TM), Subtarget(STI) {
-  MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
+  //  MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
 
   // Set up the register classes.
   addRegisterClass(MVT::i32, &T8xx::ORegRegClass);
@@ -97,7 +97,9 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   }
 
   // We don't accept any truncstore of integer registers.
-  //  setTruncStoreAction(MVT::i64, MVT::i32, Expand);
+  //  setTruncStoreAction(MVT::i32, MVT::i16, Custom);
+
+
   // setTruncStoreAction(MVT::i64, MVT::i16, Expand);
   //setTruncStoreAction(MVT::i64, MVT::i8, Expand);
 
@@ -157,6 +159,9 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Unimplemented operand");
+  case ISD::STORE:
+    printf ("#### Lower Store #####\n");
+    return LowerSTORE(Op, DAG);
   case ISD::SELECT:
     printf ("####### Lower Select  #########\n");
     return LowerSELECT(Op, DAG);
@@ -166,6 +171,21 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
   }
+}
+
+
+SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
+{
+  // First test ...
+  SDValue Op0 = Op.getOperand(0);
+  SDValue Op1 = Op.getOperand(1);
+  SDValue Op2 = Op.getOperand(2);
+
+  Op0.dump ();
+  Op1.dump ();
+  Op2.dump ();
+  
+  return (Op);
 }
 
 
@@ -199,13 +219,13 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
 
 
 SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
-  bool AddTest = true;
+  //  bool AddTest = true;
   SDValue Chain = Op.getOperand(0);
   SDValue Cond = Op.getOperand(1);
   SDValue Dest = Op.getOperand(2);
   SDLoc DL(Op);
   SDValue CC;
-  bool Inverted = false;
+  //  bool Inverted = false;
 
   printf ("#### LowerBRCOND\n");
   
@@ -347,8 +367,9 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   MachineInstr *LastCMOV = &MI;
   //  T8xx::CondCode CC = T8xx::CondCode(MI.getOperand(3).getImm());   // M68k specific, Operand 3 of the CMOV8d Pseudo instructions
   //  T8xx::CondCode OppCC = T8xx::GetOppositeBranchCondition(CC);     // M68k specific, finds opposite condition
-  MachineBasicBlock::iterator NextMIIt =
-      std::next(MachineBasicBlock::iterator(MI));
+
+  // MachineBasicBlock::iterator NextMIIt =
+  //    std::next(MachineBasicBlock::iterator(MI));
 
   // Check for case 1, where there are multiple CMOVs with the same condition
   // first.  Of the two cases of multiple CMOV lowerings, case 1 reduces the
@@ -863,7 +884,6 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
   }
 
-  unsigned RetAddrOffset = 8; // Call Inst + Delay Slot
   RetOps[0] = Chain;  // Update chain.
 
   // Add the flag if we have it.

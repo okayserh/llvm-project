@@ -51,7 +51,7 @@ T8xxRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
 
 BitVector T8xxRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
-  const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
+  //  const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
 
   return Reserved;
 }
@@ -59,7 +59,7 @@ BitVector T8xxRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 const TargetRegisterClass*
 T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
                                       unsigned Kind) const {
-  const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
+  //  const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
   //  return &T8xx::IntRegsRegClass;
   return &T8xx::ORegRegClass;
 }
@@ -85,7 +85,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   bool bWordAlignedFO = false;
   
-  printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %i\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
+  printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %li\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
   MI.dump ();
 
   // Determine if we can eliminate the index from this kind of instruction.
@@ -98,7 +98,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::LDL:
   case T8xx::LDLP:
     bWordAlignedFO = true;
-    // Fallthrough intended!
+    [[fallthrough]];
     
   case T8xx::LDLPb:
     ImmOpIdx = FIOperandNum + 1;
@@ -140,7 +140,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
   Offset += MFI.getOffsetAdjustment ();
   
-  printf ("eliminateFrameIndex  FI: %i Offset: %i Size: %i StackSize %i  ImmOp %i  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
+  printf ("eliminateFrameIndex  FI: %i Offset: %li Size: %li StackSize %li  ImmOp %li  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
 
 
   // Note: There was erroneous behavior in the initial version

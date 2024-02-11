@@ -346,13 +346,14 @@ void T8xxInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator I,
                                  const DebugLoc &DL, MCRegister DestReg,
                                  MCRegister SrcReg, bool KillSrc) const {
+  /*
   const MachineFunction *MF = MBB.getParent();
   const MachineRegisterInfo &MRI = MF->getRegInfo();
   const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
 
   uint16_t hweSrcReg = TRI->getEncodingValue (SrcReg);
   uint16_t hweDstReg = TRI->getEncodingValue (DestReg);
-
+  */
 }
 
 void T8xxInstrInfo::
@@ -414,7 +415,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   MachineBasicBlock &MBB = *MI.getParent();
   const MachineFunction *MF = MBB.getParent();
   const MachineRegisterInfo &MRI = MF->getRegInfo();
-  const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   switch (MI.getOpcode())

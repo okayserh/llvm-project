@@ -441,7 +441,7 @@ static MachineInstr *rematerializeCheapDef(
   // If that was the last use of the original, delete the original.
   if (IsDead) {
     LLVM_DEBUG(dbgs() << " - Deleting original\n");
-    SlotIndex Idx = LIS.getInstructionIndex(Def).getRegSlot();
+    //SlotIndex Idx = LIS.getInstructionIndex(Def).getRegSlot();
     // ??
     //    LIS.removePhysRegDefAt(MCRegister::from(WebAssembly::ARGUMENTS), Idx);
     LIS.removeInterval(Reg);
@@ -464,7 +464,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
                        "********** Function: "
                     << MF.getName() << '\n');
 
-  bool Changed = false;
   MachineRegisterInfo &MRI = MF.getRegInfo();
   T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
   const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
@@ -495,12 +494,11 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
     // Don't use a range-based for loop, because we modify the list as we're
     // iterating over it and the end iterator may change.
-  int count = 0;
   for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII) {
       printf ("########\nNewInstruction\n");
 
       MachineInstr *Insert = &*MII;
-      MachineInstr &MI = *MII;
+      //      MachineInstr &MI = *MII;
       // Don't nest anything inside an inline asm, because we don't have
       // constraints for $push inputs.
       if (Insert->isInlineAsm())
@@ -645,7 +643,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       if (Insert != &*MII) {
 	//        imposeStackOrdering(&*MII);
         MII = MachineBasicBlock::iterator(Insert).getReverse();
-        Changed = true;
+	//        Changed = true;
       }
 
       /*
