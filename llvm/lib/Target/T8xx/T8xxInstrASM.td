@@ -52,12 +52,6 @@ def AJW   : T8InstImm<0xB,
 		"ajw $imm",
 		[]>;
 
-def REV :     T8InstOp4<0x0,
-		(outs),
-		(ins),
-		"rev",
-		[]>;
-
 def DUP :         T8InstOp8<0x5A, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1), "dup", []>;   // T800 only
 
 
@@ -122,7 +116,6 @@ def LSHL :    T8InstOp8<0x36, (outs LReg:$dst1), (ins OReg:$cnt, LReg:$src1), "l
 def LADD :    T8InstOp8<0x16, (outs OReg:$dst1), (ins OReg:$src1, OReg:$src2, OReg:$src3), "ladd", []>;
 def LSUB :    T8InstOp8<0x38, (outs OReg:$dst1), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lsub", []>;
 def LSUM :    T8InstOp8<0x37, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lsum", []>;
-def LDIFF :   T8InstOp8<0x4F, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "ldiff", []>;
 def LMUL :    T8InstOp8<0x31, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lmul", []>;
 def LDIV :    T8InstOp8<0x1A, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "ldiv", []>;
 def NORM :    T8InstOp8<0x19, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "norm", []>;
