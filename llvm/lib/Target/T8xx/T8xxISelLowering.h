@@ -33,7 +33,9 @@ namespace llvm {
     // T8xx conditional moves.
     CMOV,
     EQ,
-    BRNCOND
+    BRNCOND,
+    LDIFF,
+    REV
   };
   }
 

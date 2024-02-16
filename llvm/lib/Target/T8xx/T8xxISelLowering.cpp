@@ -57,6 +57,10 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "EQ";
   case T8xxISD::BRNCOND:
     return "BRNCOND";
+  case T8xxISD::LDIFF:
+    return "LDIFF";
+  case T8xxISD::REV:
+    return "REV";
   }
 }
 
@@ -132,7 +136,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   // TODO: Check wheter promote is correct for the other types
   setOperationAction(ISD::SETCC, MVT::i8, Promote);
   setOperationAction(ISD::SETCC, MVT::i16, Promote);
-  setOperationAction(ISD::SETCC, MVT::i32, Legal);
+  setOperationAction(ISD::SETCC, MVT::i32, Custom);
 
   // T8xx doesn't have sext_inreg, replace them with shl/sra
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
@@ -162,6 +166,9 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
   case ISD::STORE:
     printf ("#### Lower Store #####\n");
     return LowerSTORE(Op, DAG);
+  case ISD::SETCC:
+    printf ("#### SETCC #####\n");
+    return LowerSETCC(Op, DAG);
   case ISD::SELECT:
     printf ("####### Lower Select  #########\n");
     return LowerSELECT(Op, DAG);
@@ -201,19 +208,34 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
   SDLoc DL(Op);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
 
-  printf ("LowerSETCC\n");
-  
-  Op0.dump ();
-  Op1.dump ();
-  Op.getOperand(2).dump ();
-
-  if (CC == ISD::SETEQ || CC == ISD::SETNE)
+  // Catch the unsigned comparisons
+  if (CC == ISD::SETUGT || CC == ISD::SETUGE ||
+      CC == ISD::SETULT || CC == ISD::SETULE ||
+      CC == ISD::SETUEQ || CC == ISD::SETUNE)
     {
-      return DAG.getNode(T8xxISD::EQ, DL, MVT::i32, Op0, Op1);
+      Op0.dump ();
+      Op1.dump ();
+      Op.getOperand(2).dump ();
+
+
+      SDValue OneConst = DAG.getConstant(1, DL, MVT::i32);
+      // TODO: In the VTList try to adapt this to the original node!
+      SDValue Diff = DAG.getNode(T8xxISD::LDIFF, DL, DAG.getVTList(MVT::i32, MVT::i32),
+				 OneConst, Op1, Op0);
+      SDValue Rev = DAG.getNode(T8xxISD::REV, DL, MVT::i32,
+				Diff.getValue(0), Diff.getValue(1));
+      
+      SDValue SetCC = DAG.getSetCC (DL, Rev.getOperand(0).getValueType (),
+			    Rev.getValue(0),
+			    DAG.getConstant(0, DL, MVT::i32),
+			    ISD::CondCode::SETEQ);
+
+      // TODO: Not the correct code.
+      //return DAG.getNode(T8xxISD::EQ, DL, MVT::i32, Op0, Op1);
+      return SetCC;
     }
-
-  //  return (DAG.getNode (T8xxISD::CMP, 
-
+  else
+    return (Op);
 }
   
 

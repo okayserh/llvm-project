@@ -89,6 +89,29 @@ def MxSDT_Cmov : SDTypeProfile<1, 3, [
 
 def MxCmov    : SDNode<"T8xxISD::CMOV",        MxSDT_Cmov>;
 
+
+/* Example for an operation that yields to results. Might be used for
+the long arithmetic operations of the Transputer (i.e. ldiff etc.) */
+def MxLongArithmetic : SDTypeProfile<2, 3, [
+  /* RES 1 */ SDTCisInt<0>,
+  /* RES 2 */ SDTCisInt<1>,
+  /*   LHS */ SDTCisSameAs<0, 2>,
+  /*   RHS */ SDTCisSameAs<0, 3>,
+  /*   CCR */ SDTCisSameAs<1, 4>
+]>;
+
+def MxLongDiff : SDNode<"T8xxISD::LDIFF", MxLongArithmetic>;
+
+
+def MxStackSelect : SDTypeProfile<1, 2, [
+  /* RES */ SDTCisInt<0>,
+  /*   AREG */ SDTCisSameAs<0, 1>,
+  /*   BREG */ SDTCisSameAs<0, 2>,
+]>;
+
+def MxSelect : SDNode<"T8xxISD::REV", MxStackSelect>;
+
+
 //===----------------------------------------------------------------------===//
 // Conditional Move Pseudo Instructions
 //
@@ -426,6 +449,19 @@ def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETGE),
 
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLE),
            (EQC (DIFF $lhs, $rhs), 0)>;
+
+def LDIFF :   T8InstOp8<0x4F,
+    	      (outs OReg:$dst1, OReg:$dst2),
+	      (ins OReg:$src1, OReg:$src2, OReg:$src3),
+	      "ldiff",
+	      [(set i32:$dst1, i32:$dst2, (MxLongDiff i32:$src1, i32:$src2, i32:$src3))]>;
+
+
+def REV :     T8InstOp4<0x0,
+		(outs OReg:$dst),
+		(ins OReg:$src1, OReg:$src2),
+		"rev",
+		[(set i32:$dst, (MxSelect i32:$src1, i32:$src2))]>;
 
 
 //===----------------------------------------------------------------------===//
