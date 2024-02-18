@@ -826,6 +826,9 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
       continue;
     }
 
+    /* This generates a sequence of "LDL" instructions, the results of which
+       are not used later
+       NOTE: Leads to exception when this code is not present! */
     printf ("VA %i is Mem\n", i++);
 
     assert(VA.isMemLoc() &&
