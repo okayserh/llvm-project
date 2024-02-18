@@ -223,14 +223,29 @@ public:
 static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
                                 const MachineRegisterInfo &MRI,
                                 const LiveIntervals &LIS) {
+  printf ("getVRegDef P1\n");
+
   // Most registers are in SSA form here so we try a quick MRI query first.
   if (MachineInstr *Def = MRI.getUniqueVRegDef(Reg))
     return Def;
 
+  printf ("getVRegDef P2\n");
+  
   // MRI doesn't know what the Def is. Try asking LIS.
   if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
           LIS.getInstructionIndex(*Insert)))
+    {
+      const LiveInterval &li = LIS.getInterval(Reg);
+      li.dump ();
+      printf ("SlotIndex %i\n", ValNo->def);
+      MachineInstr *temp = LIS.getInstructionFromIndex(ValNo->def);
+      if (temp)
+	temp->dump ();
+
     return LIS.getInstructionFromIndex(ValNo->def);
+    }
+
+  printf ("getVRegDef P3\n");
 
   return nullptr;
 }
@@ -533,13 +548,19 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
           continue;
 
         // Identify the definition for this register at this point.
-        MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
+	if (MRI.hasOneDef(Reg) && MRI.hasOneNonDBGUse(Reg)) {
+	  printf ("Has one def %i\n", Reg);
+	} else
+	  printf ("Has multiple def %i\n", Reg);
+
+
+	MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
         if (!DefI)
           continue;
 
 	// Debug
 	printf ("Defined by \n");
-	DefI->dump ();	
+	DefI->dump ();
 
 	// Don't nest an INLINE_ASM def into anything, because we don't have
         // constraints for $pop outputs.
@@ -591,7 +612,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  MachineBasicBlock::iterator MBBI = *Insert;
 	  // Note: The AREG is used later to identify this as a special code segment
 	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	  //BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 
 	  // Move iterator to "LDL"
 	  --MBBI;
