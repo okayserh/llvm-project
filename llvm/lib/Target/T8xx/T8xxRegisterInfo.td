@@ -20,10 +20,6 @@ def AREG : T8xxReg<0, "AREG">, DwarfRegNum<[16]>;
 def BREG : T8xxReg<1, "BREG">, DwarfRegNum<[17]>;
 def CREG : T8xxReg<2, "CREG">, DwarfRegNum<[18]>;
 
-// Long registers (combines two stack registers)
-def ABREG : T8xxReg<6, "ABREG">, DwarfRegNum<[25]>;
-def BCREG : T8xxReg<7, "BCREG">, DwarfRegNum<[25]>;
-
 def OREG : T8xxReg<3, "OREG">, DwarfRegNum<[19]>;
 
 def IPTR : T8xxReg<4, "IPTR">, DwarfRegNum<[20]>;
@@ -33,6 +29,11 @@ def WPTR : T8xxReg<5, "WPTR">, DwarfRegNum<[21]>;
 def FAREG : T8xxReg<0, "FAREG">, DwarfRegNum<[22]>;
 def FBREG : T8xxReg<1, "FBREG">, DwarfRegNum<[23]>;
 def FCREG : T8xxReg<2, "FCREG">, DwarfRegNum<[24]>;
+
+// Long registers (combines two stack registers)
+def ABREG : T8xxReg<6, "ABREG">, DwarfRegNum<[25]>;
+def BCREG : T8xxReg<7, "BCREG">, DwarfRegNum<[26]>;
+
 
 /*
 // Aliases of the F* registers to hold 64-bit fp values (doubles)
@@ -51,10 +52,6 @@ def DFCREG: T8xxDFReg<72, "DFCREG", [FCREG]>, DwarfRegNum<[72]>;
 // FIXME: the register order should be defined in terms of the preferred
 // allocation order...
 //
-// This register class should not be used to hold i64 values, use the I64Regs
-// register class for that. The i64 type is included here to allow i64 patterns
-// using the integer instructions.
-
 
 // The frame pointer or workspace pointer is special
 // in that it is used in special adressing modes
