@@ -62,10 +62,16 @@ namespace llvm {
   struct T8xxStackPass : public MachineFunctionPass {
 
   protected:
-    
+    // Attempt to implement the algorithm to determine the depth of
+    // an expression as outlined in the transputer compiler writers
+    // guide.
+    unsigned int getDepth (MachineInstr *MI,
+			   const MachineRegisterInfo &MRI,
+			   const LiveIntervals &LIS);
+
   public:
     static char ID;
-    
+
     T8xxStackPass() : MachineFunctionPass(ID) {
     }
 
@@ -99,7 +105,7 @@ namespace llvm {
       return MachineFunctionProperties().set(
           MachineFunctionProperties::Property::NoVRegs);
     }
-    
+
     StringRef getPassName() const override { return "T8xx INT Stackifier"; }
 
   private:
@@ -173,7 +179,7 @@ public:
       }
   }
 
-  
+
   /// Push Instr's operands onto the stack to be visited.
   void pushOperands(MachineInstr *Instr) {
     const iterator_range<mop_iterator> &Range(Instr->explicit_uses());
@@ -230,7 +236,7 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
     return Def;
 
   printf ("getVRegDef P2\n");
-  
+
   // MRI doesn't know what the Def is. Try asking LIS.
   if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
           LIS.getInstructionIndex(*Insert)))
@@ -468,6 +474,78 @@ static MachineInstr *rematerializeCheapDef(
 }
 
 
+
+unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
+				      const MachineRegisterInfo &MRI,
+				      const LiveIntervals &LIS)
+{
+      // Debugging Write out all definitions and operators
+      const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI->defs();
+      const iterator_range<MachineInstr::mop_iterator> &Range_uses = MI->explicit_uses();
+      int RegDefCount = 0,
+	RegUseCount = 0;
+      unsigned int DepthE = 0,
+	DepthSubE = 0;
+
+      // Find out how many registers are defined and how many are needed as input
+      for (auto I = Range_defs.begin (); I != Range_defs.end (); ++I)
+	{
+	  if (I->isReg())
+	    ++RegDefCount;
+	}
+      for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
+	{
+	  if (I->isReg())
+	    ++RegUseCount;
+	}
+
+      if (RegUseCount == 0)
+	DepthE = RegDefCount;
+      else
+	{
+	  for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
+	    {
+	      if (I->isReg () && !I->getReg().isPhysical())
+		{
+		  Register Reg = I->getReg();
+		  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+		  if (DefI)
+		    {
+		      unsigned int SubE = getDepth (DefI, MRI, LIS);
+		      if (SubE > DepthSubE)
+			DepthSubE = SubE;
+		    }
+		}
+	    }
+
+	  if (MI->getOpcode() == T8xx::REV)
+	    // REV is special in that it does not change the depth of the instruction.
+	    DepthE = DepthSubE;
+	  else
+	    {
+	      DepthE = DepthSubE + (RegUseCount - 1);
+	      if (RegDefCount > DepthE)
+		DepthE = RegDefCount;
+	    }
+	}
+
+      // Determine the depth on an instruction
+      // Lower limit is the maximum of produced and used stack registers
+      // LowLimit = max(RegDefCount,RegUseCount)
+      //
+      // RegUseCount needs to be adjusted to functions that need more registers to fill one used Reg
+      // Largest register use + RegUse Count - 1
+
+
+      printf ("---> Insert structure\n");
+      MI->dump ();
+      printf ("RegUseCount %i  RegDefCount %i  DepthE %i  DepthSubE %i\n", RegUseCount, RegDefCount, DepthE, DepthSubE);
+
+      //      printf ("<--- Insert structure  Defs = %i   Uses = %i\n", RegDefCount, RegUseCount);
+      return (DepthE);
+}
+
+
 /// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
 /// register references into FP stack references.
 ///
@@ -497,7 +575,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
   // Some map to keep track of registers that have already been created as
   // workspace registers
-  std::map<unsigned, unsigned> wp_reg_map;  
+  std::map<unsigned, unsigned> wp_reg_map;
 
   // Walk the instructions from the bottom up. Currently we don't look past
   // block boundaries, and the blocks aren't ordered so the block visitation
@@ -522,6 +600,10 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       // Ignore debugging intrinsics.
       if (Insert->isDebugValue())
         continue;
+
+      // Calculate depth (according to Transputer compiler writing guide
+      unsigned int MIDepth = getDepth (Insert, MRI, LIS);
+      printf ("--> Instruction Depth = %i\n", MIDepth);
       
       //  Insert iterator to the used operands (may be registers)
       TreeWalkerState TreeWalker(Insert);
@@ -535,7 +617,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	// Debug
 	printf ("MO dump\n");
 	Insert->dump ();
-	
+
 	// We're only interested in explicit virtual register operands.
         if (!Use.isReg())
           continue;
@@ -581,7 +663,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	Def->dump ();
 	/* OKH: DefI is the instruction that defines the register, Def is the defined operand */
 
-	
+
 	// Decide which strategy to take. Prefer to move a single-use value
         // over cloning it, and prefer cloning over introducing a tee.
         // For moving, we require the def to be in the same block as the use;
@@ -596,7 +678,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 	// Note: Problems occur with instructions that don't consume
 	// any registers. In that case, the instruction should be skipped.
-	
+
 	if (CanMove && hasOneNonDBGUse(Reg, DefI, MRI, MDT, LIS)) {
           Insert = moveForSingleUse(Reg, Use, DefI, MBB, Insert, LIS, MFI, MRI);
 	}
@@ -604,9 +686,9 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  // Simply introduce a workspace register
 	  if (VRM.isAssignedReg (Reg))
 	    VRM.assignVirt2StackSlot (Reg);
-	      
+
 	  VRM.dump ();
-	  
+
 	  // Insert a "ldl" for the workspace register before the instruction
 	  DebugLoc DL = Insert->getDebugLoc();
 	  MachineBasicBlock::iterator MBBI = *Insert;
@@ -619,7 +701,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 	  continue;
 	}
-	
+
 #if 0
 	else if (shouldRematerialize(*DefI, TII)) {
 	  printf ("Rematerialize\n");
@@ -651,7 +733,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         if (Insert->getOpcode() == TargetOpcode::IMPLICIT_DEF)
           convertImplicitDefToConstZero(Insert, MRI, TII, MF, LIS);
 	*/
-	
+
         // We stackified an operand. Add the defining instruction's operands to
         // the worklist stack now to continue to build an ever deeper tree.
 	//        Commuting.reset();
@@ -672,10 +754,10 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       if (count > 1)
 	break;
       */
-      
+
 	}  // MachineInstruction
   } // MachineBasicBlock
-  
+
   // Insert some code to save the virtual register in a stack slot
   // after the definition
   printf ("############ Convert to stack registers\n");
@@ -700,7 +782,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  if (Range.begin()->isReg())
 	    {
 	      Register Reg = Range.begin()->getReg();
-	      
+
 	      if (Reg.isVirtual() && !VRM.isAssignedReg(Reg))
 		{
 		  dbgs() << printReg(Reg, TRI) << "\n";
@@ -713,7 +795,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	    }
 	}
   } // MachineInstr
-  
+
   } // MachineBasicBlock
 
 
@@ -740,7 +822,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  if (OP->isReg())
 	    {
 	      Register Reg = OP->getReg();
-	  
+
 	      if (Reg.isVirtual())
 		{
 		  OP->setReg(T8xx::AREG);
@@ -756,17 +838,25 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  if (OP->isReg())
 	    {
 	      Register Reg = OP->getReg();
-	      
+
 	      if (Reg.isVirtual())
 		{
-		  OP->setReg(T8xx::AREG+RegAdd);
+		  switch (RegAdd)
+		    {
+		    case 0: OP->setReg(T8xx::AREG);
+		      break;
+		    case 1: OP->setReg(T8xx::BREG);
+		      break;
+		    case 2: OP->setReg(T8xx::CREG);
+		      break;
+		    }
 		  ++RegAdd;
 		}
 	    }
 	}
 
   } // MachineInstr
-  
+
   } // MachineBasicBlock
 
 
@@ -829,9 +919,9 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   }
   */
 
-  /*  
+  /*
   */
-  
+
 
   printf ("############ Register Map\n");
   VRM.dump ();
@@ -839,4 +929,3 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   //  return Changed;
   return false;
 }
-

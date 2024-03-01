@@ -120,7 +120,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
   setOperationAction(ISD::BRCOND, MVT::Other, Custom);
-  
+
   setOperationAction(ISD::BR_CC, MVT::i8, Expand);
   setOperationAction(ISD::BR_CC, MVT::i16, Expand);
   setOperationAction(ISD::BR_CC, MVT::i32, Expand);
@@ -191,7 +191,7 @@ SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
   Op0.dump ();
   Op1.dump ();
   Op2.dump ();
-  
+
   return (Op);
 }
 
@@ -224,7 +224,7 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
 				 OneConst, Op1, Op0);
       SDValue Rev = DAG.getNode(T8xxISD::REV, DL, MVT::i32,
 				Diff.getValue(0), Diff.getValue(1));
-      
+
       SDValue SetCC = DAG.getSetCC (DL, Rev.getOperand(0).getValueType (),
 			    Rev.getValue(0),
 			    DAG.getConstant(0, DL, MVT::i32),
@@ -237,7 +237,7 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
   else
     return (Op);
 }
-  
+
 
 
 SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
@@ -250,7 +250,7 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   //  bool Inverted = false;
 
   printf ("#### LowerBRCOND\n");
-  
+
   SDValue NewCond;
   if (Cond.getOpcode() == ISD::SETCC) {
     // For SETCC use "inverse" comparison
@@ -266,7 +266,7 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   }
 
   // Use the "negative" BRCOND.
-  return DAG.getNode(T8xxISD::BRNCOND, DL, Op.getValueType(), Chain, NewCond, Dest);  
+  return DAG.getNode(T8xxISD::BRNCOND, DL, Op.getValueType(), Chain, NewCond, Dest);
 }
 
 
@@ -329,7 +329,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
 
   printf ("EmitLoweredSelect\n");
   MI.dump ();
-  
+
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
   // destination vreg to set, the condition code register to branch on, the
@@ -398,7 +398,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   // number of jumps the most.
 
   /* TODO: These optimizations will be left out for the moment
-  
+
   if (isCMOVPseudo(MI)) {
     // See if we have a string of CMOVS with the same condition.
     while (NextMIIt != MBB->end() && isCMOVPseudo(*NextMIIt) &&
