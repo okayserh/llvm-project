@@ -27,6 +27,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializeT8xxDAGToDAGISelPass(PR);
   initializeT8xxStackPassPass(PR);
+  initializeT8xxMoveConstPassPass(PR);
 }
 
 static std::string computeDataLayout(const Triple &T) {
@@ -144,6 +145,9 @@ public:
   
   void addIRPasses() override;
   bool addInstSelector() override;
+
+  //  void addPreRegAlloc() override;
+
   void addPostRegAlloc() override;
   void addPreEmitPass() override;
 
@@ -176,6 +180,14 @@ bool T8xxPassConfig::addInstSelector() {
   addPass(createT8xxISelDag(getT8xxTargetMachine()));
   return false;
 }
+
+// This should move LDC instructions to the appropriate blocks
+/*
+void T8xxPassConfig::addPreRegAlloc() {
+  printf ("Added T8xx Move Const Pass\n");
+  addPass(createT8xxMoveConstPass());
+}
+*/
 
 void T8xxPassConfig::addPostRegAlloc() {
   // TODO: Initially intended to do an allocation of the

@@ -1,4 +1,4 @@
-//===-- X86FloatingPoint.cpp - Floating point Reg -> Stack converter ------===//
+//===-- T8xxStackifyInf.cpp - Arranges the operands on the operand stack ------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -376,7 +376,7 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
 
   T8xxDebugValueManager DefDIs(Def);
   DefDIs.sink(Insert);
-  LIS.handleMove(*Def);
+  //  LIS.handleMove(*Def);
 
   if (MRI.hasOneDef(Reg) && MRI.hasOneNonDBGUse(Reg)) {
     // No one else is using this register for anything so we can just stackify
@@ -390,15 +390,17 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
     Op.setReg(NewReg);
     //    DefDIs.updateReg(NewReg);
 
+    /*
     // Tell LiveIntervals about the new register.
     LIS.createAndComputeVirtRegInterval(NewReg);
 
     // Tell LiveIntervals about the changes to the old register.
     LiveInterval &LI = LIS.getInterval(Reg);
     LI.removeSegment(LIS.getInstructionIndex(*Def).getRegSlot(),
-                     LIS.getInstructionIndex(*Op.getParent()).getRegSlot(),
-                     /*RemoveDeadValNo=*/true);
-
+    LIS.getInstructionIndex(*Op.getParent()).getRegSlot(), */
+                         /*RemoveDeadValNo=*/  /*true);
+*/
+  
     // TODO:
     //MFI.stackifyVReg(MRI, NewReg);
 
@@ -515,6 +517,17 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 		      if (SubE > DepthSubE)
 			DepthSubE = SubE;
 		    }
+		  else
+		    {
+		      printf ("Multiple definitions\n");
+		      // Try to find all definitions of the register.
+		      MachineRegisterInfo::def_instr_iterator def_reg = MRI.def_instr_begin(Reg);
+		      while (def_reg != MRI.def_instr_end())
+			{
+			  def_reg->dump();
+			  ++def_reg;
+			}
+		    }
 		}
 	    }
 
@@ -550,9 +563,6 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 /// register references into FP stack references.
 ///
 bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
-
-  printf ("runOnMachineFUnction\n");
-
   LLVM_DEBUG(dbgs() << "********** Register Stackifying **********\n"
                        "********** Function: "
                     << MF.getName() << '\n');
@@ -632,13 +642,48 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         // Identify the definition for this register at this point.
 	if (MRI.hasOneDef(Reg) && MRI.hasOneNonDBGUse(Reg)) {
 	  printf ("Has one def %i\n", Reg);
-	} else
-	  printf ("Has multiple def %i\n", Reg);
+	}
+	// Create temporary
+	else
+	  {
+	    // Introduce a workspace register
+	    if (VRM.isAssignedReg (Reg))
+	      VRM.assignVirt2StackSlot (Reg);
+	    VRM.dump ();
+	    
+	    /* The STLs are added in a second loop through the MBB
+	    // Try to find all definitions of the register.
+	    MachineRegisterInfo::def_instr_iterator def_reg = MRI.def_instr_begin(Reg);
+	    while (def_reg != MRI.def_instr_end())
+	      {
+		MachineBasicBlock::iterator MBBI = &*def_reg;
 
+		def_reg->dump();
+		BuildMI(*(def_reg->getParent()), ++MBBI, def_reg->getDebugLoc(),
+			TII->get(T8xx::STL)).addReg(T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);		
+		++def_reg;
+	      }
+	    */
 
+	    // Insert a "ldl" for the workspace register before the instruction
+	    DebugLoc DL = Insert->getDebugLoc();
+	    MachineBasicBlock::iterator MBBI = *Insert;
+	    // Note: The AREG is used later to identify this as a special code segment
+	    BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	    
+	    // Move iterator to "LDL"
+	    --MBBI;
+	    Insert = &(*MBBI);
+	    
+	    continue;
+	    
+	    printf ("Has multiple def %i\n", Reg);
+	  }
+
+	
 	MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
         if (!DefI)
-          continue;
+	  continue;
 
 	// Debug
 	printf ("Defined by \n");
@@ -673,6 +718,11 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         bool SameBlock = DefI->getParent() == &MBB;
         bool CanMove = SameBlock && isSafeToMove(Def, &Use, Insert, MFI, MRI) &&
                        !TreeWalker.isOnStack(Reg);
+
+	// Loading a constant does not depend on anything and can always be moved,
+	// even between blocks
+	if (DefI->getOpcode() == T8xx::LDC)
+	  CanMove = true;
 
 	printf ("Move for single use SameBlock %i   CanMove %i\n", SameBlock, CanMove);
 
