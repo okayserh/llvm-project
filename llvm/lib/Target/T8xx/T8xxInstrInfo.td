@@ -560,7 +560,9 @@ def JUMP  : T8InstImm<0x0,
 		   (outs),
 		   (ins brtarget:$imm),
                    "j $imm",
-                   [(br bb:$imm)]>;
+                   [(br bb:$imm)]> {
+		   let isBarrier = 1;
+		   }
 }
 
 

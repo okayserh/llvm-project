@@ -344,97 +344,10 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   //   bcc Copy1MBB
   //   fallthrough --> Copy0MBB
   MachineBasicBlock *ThisMBB = MBB;
-  MachineFunction *F = MBB->getParent();
+  MachineFunction *F = MBB->getParent();  // *MF on AVR side
 
-  // TODO: Temporary to have a definition for the return value.
-  //  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);
-
-  // This code lowers all pseudo-CMOV instructions. Generally it lowers these
-  // as described above, by inserting a MBB, and then making a PHI at the join
-  // point to select the true and false operands of the CMOV in the PHI.
-  //
-  // The code also handles two different cases of multiple CMOV opcodes
-  // in a row.
-  //
-  // Case 1:
-  // In this case, there are multiple CMOVs in a row, all which are based on
-  // the same condition setting (or the exact opposite condition setting).
-  // In this case we can lower all the CMOVs using a single inserted MBB, and
-  // then make a number of PHIs at the join point to model the CMOVs. The only
-  // trickiness here, is that in a case like:
-  //
-  // t2 = CMOV cond1 t1, f1
-  // t3 = CMOV cond1 t2, f2
-  //
-  // when rewriting this into PHIs, we have to perform some renaming on the
-  // temps since you cannot have a PHI operand refer to a PHI result earlier
-  // in the same block.  The "simple" but wrong lowering would be:
-  //
-  // t2 = PHI t1(BB1), f1(BB2)
-  // t3 = PHI t2(BB1), f2(BB2)
-  //
-  // but clearly t2 is not defined in BB1, so that is incorrect. The proper
-  // renaming is to note that on the path through BB1, t2 is really just a
-  // copy of t1, and do that renaming, properly generating:
-  //
-  // t2 = PHI t1(BB1), f1(BB2)
-  // t3 = PHI t1(BB1), f2(BB2)
-  //
-  // Case 2, we lower cascaded CMOVs such as
-  //
-  //   (CMOV (CMOV F, T, cc1), T, cc2)
-  //
-  // to two successives branches.
-  MachineInstr *CascadedCMOV = nullptr;
-  MachineInstr *LastCMOV = &MI;
-  //  T8xx::CondCode CC = T8xx::CondCode(MI.getOperand(3).getImm());   // M68k specific, Operand 3 of the CMOV8d Pseudo instructions
-  //  T8xx::CondCode OppCC = T8xx::GetOppositeBranchCondition(CC);     // M68k specific, finds opposite condition
-
-  // MachineBasicBlock::iterator NextMIIt =
-  //    std::next(MachineBasicBlock::iterator(MI));
-
-  // Check for case 1, where there are multiple CMOVs with the same condition
-  // first.  Of the two cases of multiple CMOV lowerings, case 1 reduces the
-  // number of jumps the most.
-
-  /* TODO: These optimizations will be left out for the moment
-
-  if (isCMOVPseudo(MI)) {
-    // See if we have a string of CMOVS with the same condition.
-    while (NextMIIt != MBB->end() && isCMOVPseudo(*NextMIIt) &&
-           (NextMIIt->getOperand(3).getImm() == CC ||
-            NextMIIt->getOperand(3).getImm() == OppCC)) {
-      LastCMOV = &*NextMIIt;
-      ++NextMIIt;
-    }
-  }
-
-  // This checks for case 2, but only do this if we didn't already find
-  // case 1, as indicated by LastCMOV == MI.
-  if (LastCMOV == &MI && NextMIIt != MBB->end() &&
-      NextMIIt->getOpcode() == MI.getOpcode() &&
-      NextMIIt->getOperand(2).getReg() == MI.getOperand(2).getReg() &&
-      NextMIIt->getOperand(1).getReg() == MI.getOperand(0).getReg() &&
-      NextMIIt->getOperand(1).isKill()) {
-    CascadedCMOV = &*NextMIIt;
-  }
-  */
-
-
-  MachineBasicBlock *Jcc1MBB = nullptr;
-
-  // If we have a cascaded CMOV, we lower it to two successive branches to
-  // the same block.  CCR is used by both, so mark it as live in the second.
-  /* TODO See above. Optimization left out for the moment
-  if (CascadedCMOV) {
-    Jcc1MBB = F->CreateMachineBasicBlock(BB);
-    F->insert(It, Jcc1MBB);
-    Jcc1MBB->addLiveIn(T8xx::CCR);
-  }
-  */
-
-  MachineBasicBlock *Copy0MBB = F->CreateMachineBasicBlock(BB);
-  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);
+  MachineBasicBlock *Copy0MBB = F->CreateMachineBasicBlock(BB);  // falseMBB on AVR
+  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);   // trueMBB on AVR
   F->insert(It, Copy0MBB);
   F->insert(It, SinkMBB);
 
@@ -444,24 +357,12 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   SinkMBB->setCallFrameSize(CallFrameSize);
 
   // Transfer the remainder of MBB and its successor edges to SinkMBB.
+  // SinkMBB = bb.2
   SinkMBB->splice(SinkMBB->begin(), MBB,
-                  std::next(MachineBasicBlock::iterator(LastCMOV)), MBB->end());
+                  std::next(MachineBasicBlock::iterator(MI)), MBB->end());
   SinkMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  // Add the true and fallthrough blocks as its successors.
-  if (CascadedCMOV) {
-    // The fallthrough block may be Jcc1MBB, if we have a cascaded CMOV.
-    MBB->addSuccessor(Jcc1MBB);
-
-    // In that case, Jcc1MBB will itself fallthrough the Copy0MBB, and
-    // jump to the SinkMBB.
-    Jcc1MBB->addSuccessor(Copy0MBB);
-    Jcc1MBB->addSuccessor(SinkMBB);
-  } else {
-    MBB->addSuccessor(Copy0MBB);
-  }
-
-  // The true block target of the first (or only) branch is always SinkMBB.
+  MBB->addSuccessor(Copy0MBB);
   MBB->addSuccessor(SinkMBB);
 
   // Note:
@@ -477,7 +378,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
 
   // Create the conditional branch instruction.
   BuildMI(MBB, DL, TII->get(T8xx::CJ)).addReg(MI.getOperand(1).getReg()).addMBB(SinkMBB);
-
+  
   //  Copy0MBB:
   //   %FalseValue = ...
   //   # fallthrough to SinkMBB
@@ -488,7 +389,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   //  ...
   MachineBasicBlock::iterator MIItBegin = MachineBasicBlock::iterator(MI);
   MachineBasicBlock::iterator MIItEnd =
-      std::next(MachineBasicBlock::iterator(LastCMOV));
+      std::next(MachineBasicBlock::iterator(MI));
   MachineBasicBlock::iterator SinkInsertionPoint = SinkMBB->begin();
   DenseMap<unsigned, std::pair<unsigned, unsigned>> RegRewriteTable;
   MachineInstrBuilder MIB;
