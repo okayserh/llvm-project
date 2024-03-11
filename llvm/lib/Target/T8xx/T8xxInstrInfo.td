@@ -292,6 +292,12 @@ def OR  : T8BinaryOp8<0x4B, "or", or>;  // #53
 def AND : T8BinaryOp8<0x46, "and", and>;  // #53
 
 
+
+def : Pat<(udiv (i32 OReg:$lhs), (i32 OReg:$rhs)),
+           (LDIV (LDC 0), $rhs, $lhs )>;
+
+
+
 // Dummy instruction to test the code generated
 def SRA : T8BinaryOp8<0x23, "sra", sra>;  // #53
 
