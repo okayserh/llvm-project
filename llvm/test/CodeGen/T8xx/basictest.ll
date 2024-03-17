@@ -74,3 +74,13 @@ define i32 @unsigned_divide(i32 %a, i32 %b) {
   ret i32 %r
 }
 
+
+; CHECK-LABEL: multiply_32x32:
+; CHECK: ldl 2
+; CHECK: ldl 1
+; CHECK: mul
+define i32 @multiply_32x32(i32 %a, i32 %b) {
+  %r = mul i32 %a, %b
+  ret i32 %r
+}
+

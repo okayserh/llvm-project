@@ -643,7 +643,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	if (MRI.hasOneDef(Reg) && MRI.hasOneNonDBGUse(Reg)) {
 	  printf ("Has one def %i\n", Reg);
 	}
-	// Create temporary
+	// Create temporary variable
 	else
 	  {
 	    // Introduce a workspace register
@@ -651,20 +651,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	      VRM.assignVirt2StackSlot (Reg);
 	    VRM.dump ();
 	    
-	    /* The STLs are added in a second loop through the MBB
-	    // Try to find all definitions of the register.
-	    MachineRegisterInfo::def_instr_iterator def_reg = MRI.def_instr_begin(Reg);
-	    while (def_reg != MRI.def_instr_end())
-	      {
-		MachineBasicBlock::iterator MBBI = &*def_reg;
-
-		def_reg->dump();
-		BuildMI(*(def_reg->getParent()), ++MBBI, def_reg->getDebugLoc(),
-			TII->get(T8xx::STL)).addReg(T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);		
-		++def_reg;
-	      }
-	    */
-
 	    // Insert a "ldl" for the workspace register before the instruction
 	    DebugLoc DL = Insert->getDebugLoc();
 	    MachineBasicBlock::iterator MBBI = *Insert;
@@ -674,12 +660,9 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	    // Move iterator to "LDL"
 	    --MBBI;
 	    Insert = &(*MBBI);
-	    
-	    continue;
-	    
-	    printf ("Has multiple def %i\n", Reg);
-	  }
 
+	    continue;
+	  }
 	
 	MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
         if (!DefI)
@@ -693,13 +676,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         // constraints for $pop outputs.
         if (DefI->isInlineAsm())
           continue;
-
-	/*
-        // Argument instructions represent live-in registers and not real
-        // instructions.
-        if (WebAssembly::isArgument(DefI->getOpcode()))
-          continue;
-	*/
 
         MachineOperand *Def = DefI->findRegisterDefOperand(Reg);
         assert(Def != nullptr);
@@ -775,14 +751,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
           continue;
         }
 #endif
-
-        // If the instruction we just stackified is an IMPLICIT_DEF, convert it
-        // to a constant 0 so that the def is explicit, and the push/pop
-        // correspondence is maintained.
-	/*
-        if (Insert->getOpcode() == TargetOpcode::IMPLICIT_DEF)
-          convertImplicitDefToConstZero(Insert, MRI, TII, MF, LIS);
-	*/
 
         // We stackified an operand. Add the defining instruction's operands to
         // the worklist stack now to continue to build an ever deeper tree.
