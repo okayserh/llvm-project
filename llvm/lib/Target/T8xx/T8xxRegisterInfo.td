@@ -59,7 +59,7 @@ def WptrRegs : RegisterClass<"T8xx", [i32], 32,
                             (add WPTR)>;
 
 def OReg : RegisterClass<"T8xx", [i32], 32,
-     	                  (add AREG, BREG)>;
+     	                  (add AREG, BREG, CREG)>;
 
 def LReg : RegisterClass<"T8xx", [i64], 32,
      	                  (add ABREG, BCREG)>;
