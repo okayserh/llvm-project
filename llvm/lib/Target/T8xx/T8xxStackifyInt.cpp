@@ -69,9 +69,10 @@ namespace llvm {
 			   const MachineRegisterInfo &MRI,
 			   const LiveIntervals &LIS);
 
-    unsigned int reorderRecursive (MachineInstr *MI,
-				   const MachineRegisterInfo &MRI,
-				   const LiveIntervals &LIS);
+    MachineInstr *reorderRecursive (MachineFunction &MF,
+				   MachineInstr *MI,
+				   MachineRegisterInfo &MRI,
+				   LiveIntervals &LIS);
 
   public:
     static char ID;
@@ -237,6 +238,8 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
   if (MachineInstr *Def = MRI.getUniqueVRegDef(Reg))
     return Def;
 
+  /*
+  
   // MRI doesn't know what the Def is. Try asking LIS.
   if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
           LIS.getInstructionIndex(*Insert)))
@@ -250,6 +253,8 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
 
     return LIS.getInstructionFromIndex(ValNo->def);
     }
+  */
+
 
   return nullptr;
 }
@@ -370,6 +375,7 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
                                       MachineInstr *Insert, LiveIntervals &LIS,
                                       T8xxMachineFunctionInfo &MFI,
                                       MachineRegisterInfo &MRI) {
+#if 0
   LLVM_DEBUG(dbgs() << "Move for single use: "; Def->dump());
 
   T8xxDebugValueManager DefDIs(Def);
@@ -380,7 +386,7 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
     // No one else is using this register for anything so we can just stackify
     // it in place.
     //    MFI.stackifyVReg(MRI, Reg);
-    printf ("Reg Stackified %u\n", Reg);
+    //    printf ("Reg Stackified %u\n", Reg);
   } else {
     // The register may have unrelated uses or defs; create a new register for
     // just our one def and use so that we can stackify it.
@@ -388,23 +394,22 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
     Op.setReg(NewReg);
     //    DefDIs.updateReg(NewReg);
 
-    /*
     // Tell LiveIntervals about the new register.
     LIS.createAndComputeVirtRegInterval(NewReg);
 
     // Tell LiveIntervals about the changes to the old register.
     LiveInterval &LI = LIS.getInterval(Reg);
     LI.removeSegment(LIS.getInstructionIndex(*Def).getRegSlot(),
-    LIS.getInstructionIndex(*Op.getParent()).getRegSlot(), */
-                         /*RemoveDeadValNo=*/  /*true);
-*/
-  
+    LIS.getInstructionIndex(*Op.getParent()).getRegSlot(),
+                         /*RemoveDeadValNo=*/  true);
+
     // TODO:
     //MFI.stackifyVReg(MRI, NewReg);
 
     LLVM_DEBUG(dbgs() << " - Replaced register: "; Def->dump());
   }
-
+#endif
+  
   //  imposeStackOrdering(Def);
   return Def;
 }
@@ -556,14 +561,13 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 }
 
 
-
-
-unsigned int T8xxStackPass::reorderRecursive (MachineFunction &MF,
+MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 					      MachineInstr *MI,
-					      const MachineRegisterInfo &MRI,
-					      const LiveIntervals &LIS)
+					      MachineRegisterInfo &MRI,
+					      LiveIntervals &LIS)
 {
   T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
+  MachineBasicBlock *MBB = MI->getParent ();
   const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
   const auto *TRI = MF.getSubtarget<T8xxSubtarget>().getRegisterInfo();
   auto &MDT = getAnalysis<MachineDominatorTree>();
@@ -575,14 +579,18 @@ unsigned int T8xxStackPass::reorderRecursive (MachineFunction &MF,
     RegUseCount = 0;
   unsigned int DepthE = 0,
     DepthSubE = 0;
+
+  MachineInstr *Insert = MI;
   
   // Vector to hold the depth / operand register usage of the
   // preceding operations
-  SmallVector<std::pair<int, MachineInstr *>, 4> OpDepth;
+  SmallVector<std::pair<int, MachineOperand *>, 4> OpDepth;
   
+  //  printf ("preOpDepth\n");
+
   // Find out how many registers are defined and how many are needed as input
   // When a variable has multiple definitions, put "-1" on the register stack
-  MI->dump ();
+  //  MI->dump ();
   for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
     {
       if (I->isReg () && !I->getReg().isPhysical())
@@ -592,56 +600,128 @@ unsigned int T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  if (DefI)
 	    {
 	      int SubE = getDepth (DefI, MRI, LIS);
-	      OpDepth.push_back (std::make_pair(SubE, DefI));
+	      OpDepth.push_back (std::make_pair(SubE, I));
 	    }
 	  else
 	    // Register with multiple definitions or those, where it is
 	    // not possible to move the respective instruction get
-	    // depth "-1"
-	    OpDepth.push_back (std::make_pair(-1, DefI));
+	    // depth "10000" (arbitrary value)
+	    OpDepth.push_back (std::make_pair(10000, I));
 
-	  printf ("Op Depth %i\n", OpDepth.back ());
+	  //	  printf ("Op Depth %i\n", OpDepth.back ());
 	}
     }
 
+  //  printf ("postOpDepth  %i\n", OpDepth.size());
+  
   if (OpDepth.size () == 1)
     {
-      printf ("Reorder Depth 1\n");
+      //      printf ("Reorder Depth 1\n");
       // Move instruction ahead of current instruction and then move on
       // to definition
-      for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
-	{
-	  if (I->isReg () && !I->getReg().isPhysical())
-	    {
-	      Register Reg = I->getReg();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      MachineInstr *Insert = moveForSingleUse(Reg, Use, DefI, MBB,
-						      MI, LIS, MFI, MRI);
-	      reorderRecursive (MF, DefI, MRI, LIS);
-	    }
-	}
+      MachineOperand &Use = *OpDepth[0].second;
+      Register Reg = Use.getReg ();
+      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
+				MI, LIS, MFI, MRI);
+      reorderRecursive (MF, DefI, MRI, LIS);
     }
 
   if (OpDepth.size () == 2)
     {
-      printf ("Reorder Depth 2\n");
+      //      printf ("Reorder Depth 2\n");
       // Move instruction ahead of current instruction and then move on
       // to definition
-      for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
+
+      if (OpDepth[1].first > OpDepth[0].first)
 	{
-	  if (I->isReg () && !I->getReg().isPhysical())
+	  if (OpDepth[0].first > 2)
 	    {
-	      Register Reg = I->getReg();
+	      printf ("Br A\n");
+	      MachineOperand &Use = *OpDepth[1].second;
+	      Register Reg = Use.getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      MachineInstr *Insert = moveForSingleUse(Reg, Use, DefI, MBB,
+	      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
 						      MI, LIS, MFI, MRI);
 	      reorderRecursive (MF, DefI, MRI, LIS);
+	      // Introduce temporary variable
+	      
+	      Use = *OpDepth[0].second;
+	      Reg = Use.getReg ();
+	      DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
+					MI, LIS, MFI, MRI);
+	      reorderRecursive (MF, DefI, MRI, LIS);
+
+	      // Insert "ldl" for temporary variable
+	    }
+	  else
+	    // TODO: Check for commuting operators
+	    {
+	      printf ("Br B\n");
+	      MachineOperand &Use = *OpDepth[1].second;
+	      Register Reg = Use.getReg ();
+	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
+						      MI, LIS, MFI, MRI);
+	      reorderRecursive (MF, DefI, MRI, LIS);
+
+	      Use = *OpDepth[0].second;
+	      Reg = Use.getReg ();
+	      DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
+					MI, LIS, MFI, MRI);
+	      reorderRecursive (MF, DefI, MRI, LIS);
+	    }
+	}
+      else
+	{
+	  if (OpDepth[1].first < 3)
+	    {
+	      printf ("Br C\n");
+	      //	      MI->dump();
+
+	      MachineOperand &Use = *OpDepth[0].second;
+	      Register Reg = Use.getReg ();
+	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      //	      DefI->dump();
+	      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
+						      MI, LIS, MFI, MRI);
+	      reorderRecursive (MF, DefI, MRI, LIS);
+
+	      Use = *OpDepth[1].second;
+	      Reg = Use.getReg ();
+	      DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      //	      DefI->dump();
+	      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
+					MI, LIS, MFI, MRI);
+	      reorderRecursive (MF, DefI, MRI, LIS);
+	    }
+	  else
+	    {
+	      printf ("Br D\n");
+	      MachineOperand &Use = *OpDepth[1].second;
+	      Register Reg = Use.getReg ();
+	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
+						      MI, LIS, MFI, MRI);
+	      reorderRecursive (MF, DefI, MRI, LIS);
+	      // Store in temporary variable
+
+	      Use = *OpDepth[0].second;
+	      Reg = Use.getReg ();
+	      DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      Insert = moveForSingleUse(Reg, Use, DefI, *MBB,
+					MI, LIS, MFI, MRI);
+	      reorderRecursive (MF, DefI, MRI, LIS);
+	      // Load temporary variable
 	    }
 	}
     }
 
+  MI->dump ();
   
-  return (0);
+  return (Insert);
 }
 
 
@@ -825,13 +905,17 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   // For test purposes let's leave with going through the first instruction
   //MachineBasicBlock &MBB = *MF.begin();
 
+    int count = 0;
+    
     // Don't use a range-based for loop, because we modify the list as we're
     // iterating over it and the end iterator may change.
   for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII) {
-      printf ("########\nNewInstruction\n");
+      printf ("######## NewInstruction");
 
       MachineInstr *Insert = &*MII;
 
+      Insert->dump ();
+      
       // Don't nest anything inside an inline asm, because we don't have
       // constraints for $push inputs.
       if (Insert->isInlineAsm())
@@ -843,11 +927,11 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
       // Calculate depth (according to Transputer compiler writing guide
       unsigned int MIDepth = getDepth (Insert, MRI, LIS);
-      printf ("--> Instruction Depth = %i\n", MIDepth);
+      //      printf ("--> Instruction Depth = %i\n", MIDepth);
 
       // Calculate depth (according to Transputer compiler writing guide
-      reorderRecursive (Insert, MRI, LIS);
-      
+      Insert = reorderRecursive (MF, Insert, MRI, LIS);
+
       // If we stackified any operands, skip over the tree to start looking for
       // the next instruction we can build a tree on.
       if (Insert != &*MII) {
@@ -856,12 +940,10 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	//        Changed = true;
       }	
 
-      /*
       // Terminate after 2 processed instructions
       count++;
-      if (count > 1)
+      if (count > 2)
 	break;
-      */
 
 	}  // MachineInstruction
   } // MachineBasicBlock
@@ -914,6 +996,8 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   for (auto MII = MBB.begin(); MII != MBB.end(); ++MII) {
       MachineInstr *Instr = &*MII;
 
+      Instr->dump ();
+
       // Don't nest anything inside an inline asm, because we don't have
       // constraints for $push inputs.
       if (Instr->isInlineAsm())
@@ -946,8 +1030,9 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  if (OP->isReg())
 	    {
 	      Register Reg = OP->getReg();
+	      //	      printf ("Num  %i  Reg %i\n", RegAdd, Reg);
 
-	      if (Reg.isVirtual())
+	      if ((MRI.reg_begin (Reg) != MRI.reg_end ()) && Reg.isVirtual())
 		{
 		  switch (RegAdd)
 		    {
