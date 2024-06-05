@@ -240,7 +240,7 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
     return Def;
 
   /*
-  
+
   // MRI doesn't know what the Def is. Try asking LIS.
   if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
           LIS.getInstructionIndex(*Insert)))
@@ -375,7 +375,7 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
                                       MachineInstr *Def, MachineBasicBlock &MBB,
                                       MachineInstr *Insert, LiveIntervals &LIS,
                                       T8xxMachineFunctionInfo &MFI,
-                                      MachineRegisterInfo &MRI) 
+                                      MachineRegisterInfo &MRI)
 
 {
   LLVM_DEBUG(dbgs() << "Move for single use: "; Def->dump());
@@ -415,7 +415,7 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
 
     LLVM_DEBUG(dbgs() << " - Replaced register: "; Def->dump());
   }
-  
+
   //  imposeStackOrdering(Def);
   return Def;
 }
@@ -613,11 +613,11 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
     DepthSubE = 0;
 
   MachineInstr *Insert = MI;
-  
+
   // Vector to hold the depth / operand register usage of the
   // preceding operations
   SmallVector<std::pair<int, MachineOperand *>, 4> OpDepth;
-  
+
   // Find out how many registers are defined and how many are needed as input
   // When a variable has multiple definitions, put "-1" on the register stack
   MI->dump ();
@@ -688,7 +688,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      MachineBasicBlock::iterator MBBI = *DefI;
 	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	      */
-	      
+
 	      // Now the second operand
 	      Use = OpDepth[0].second;
 	      Register Reg2 = Use->getReg ();
@@ -781,7 +781,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
   //  MI->dump ();
   output.push_back (MI);
-  
+
   return (Insert);
 }
 
@@ -823,20 +823,20 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	    if (VRM.isAssignedReg (Reg))
 	      VRM.assignVirt2StackSlot (Reg);
 	    VRM.dump ();
-	    
+
 	    // Insert a "ldl" for the workspace register before the instruction
 	    DebugLoc DL = Insert->getDebugLoc();
 	    MachineBasicBlock::iterator MBBI = *Insert;
 	    // Note: The AREG is used later to identify this as a special code segment
 	    BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	    
+
 	    // Move iterator to "LDL"
 	    --MBBI;
 	    Insert = &(*MBBI);
 
 	    continue;
 	  }
-	
+
 	MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
         if (!DefI)
 	  continue;
@@ -965,29 +965,29 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
     // For test purposes let's leave with going through the first instruction
     //MachineBasicBlock &MBB = *MF.begin();
-    
+
     int count = 0;
-    
+
     // Don't use a range-based for loop, because we modify the list as we're
     // iterating over it and the end iterator may change.
     std::vector<MachineInstr *> outvec;
     for (auto MII = MBB.begin(); MII != MBB.end(); ++MII)
       {
 	printf ("######## NewInstruction");
-      
+
 	MachineInstr *Insert = &*MII;
-	
+
 	//      Insert->dump ();
-	
+
 	// Don't nest anything inside an inline asm, because we don't have
 	// constraints for $push inputs.
 	if (Insert->isInlineAsm())
 	  continue;
-	
+
 	// Ignore debugging intrinsics.
 	if (Insert->isDebugValue())
 	  continue;
-	
+
 	// When the instruction does not define anything, it is a store
 	// instruction and should be recursed
 	const iterator_range<MachineInstr::mop_iterator> &Range_defs = Insert->defs();
@@ -996,11 +996,11 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
             // Calculate depth (according to Transputer compiler writing guide
 	    unsigned int MIDepth = getDepth (Insert, MRI, LIS);
 	    //      printf ("--> Instruction Depth = %i\n", MIDepth);
-	    
+
 	    // Reorder instructions (according to Transputer compiler writing guide)
 	    Insert = reorderRecursive (MF, Insert, MRI, LIS, outvec);
 	  }
-	
+
 	/*
 	// If we stackified any operands, skip over the tree to start looking for
 	// the next instruction we can build a tree on.
@@ -1018,17 +1018,17 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  break;
 	*/
       }  // MachineInstruction
-    
+
     printf ("Print sequence\n");
     std::map<Register, int> vreg_map;
-    
+
     for (auto O = outvec.begin (); O != outvec.end (); ++O)
       {
 	(*O)->dump ();
-	
+
 	// Try to analyse how often each virtual register is used
 	const iterator_range<MachineInstr::mop_iterator> &Range_defs = (*O)->defs();
-	
+
 	// Find out how many registers are defined and how many are needed as input
 	for (auto I = Range_defs.begin (); I != Range_defs.end (); ++I)
 	  {
@@ -1041,10 +1041,10 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 		  vreg_map[reg] = 1;
 	      }
 	  }
-	
+
       }
     printf ("End Print sequence\n\n");
-    
+
     printf ("Def usage\n");
     for (auto I = vreg_map.begin (); I != vreg_map.end (); ++I)
       printf ("ID %i  Count %i\n", I->first.id(), I->second);
@@ -1077,7 +1077,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 	prev = cur;
       }
-    
+
   } // MachineBasicBlock
 
   // Insert some code to save the virtual register in a stack slot
