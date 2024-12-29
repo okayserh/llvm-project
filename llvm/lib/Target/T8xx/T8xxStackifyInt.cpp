@@ -262,6 +262,88 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
 
 
 
+// Determine whether MI reads memory, writes memory, has side effects,
+// and/or uses the stack pointer value.
+static void query(const MachineInstr &MI, bool &Read, bool &Write,
+                  bool &Effects, bool &StackPointer) {
+  assert(!MI.isTerminator());
+
+  if (MI.isDebugInstr() || MI.isPosition())
+    return;
+
+  // Check for loads.
+  if (MI.mayLoad() && !MI.isDereferenceableInvariantLoad())
+    Read = true;
+
+  // Check for stores.
+  if (MI.mayStore()) {
+    Write = true;
+  } else if (MI.hasOrderedMemoryRef()) {
+    /*
+    switch (MI.getOpcode()) {
+    case WebAssembly::DIV_S_I32:
+    case WebAssembly::I64_TRUNC_U_F64:
+      // These instruction have hasUnmodeledSideEffects() returning true
+      // because they trap on overflow and invalid so they can't be arbitrarily
+      // moved, however hasOrderedMemoryRef() interprets this plus their lack
+      // of memoperands as having a potential unknown memory reference.
+      break;
+    default:
+      // Record volatile accesses, unless it's a call, as calls are handled
+      // specially below.
+      */
+      if (!MI.isCall()) {
+        Write = true;
+        Effects = true;
+      }
+      /*
+             break;
+    }
+      */
+  }
+
+  // Check for side effects.
+  if (MI.hasUnmodeledSideEffects()) {
+    /*
+    switch (MI.getOpcode()) {
+    case WebAssembly::I64_TRUNC_U_F64:
+      // These instructions have hasUnmodeledSideEffects() returning true
+      // because they trap on overflow and invalid so they can't be arbitrarily
+      // moved, however in the specific case of register stackifying, it is safe
+      // to move them because overflow and invalid are Undefined Behavior.
+      break;
+    default:
+    */
+      Effects = true;
+      /*
+      break;
+    }
+      */
+  }
+
+  // Check for writes to __stack_pointer global.
+/*
+  if ((MI.getOpcode() == WebAssembly::GLOBAL_SET_I32 ||
+       MI.getOpcode() == WebAssembly::GLOBAL_SET_I64) &&
+      strcmp(MI.getOperand(0).getSymbolName(), "__stack_pointer") == 0)
+    StackPointer = true;
+*/
+
+  // Analyze calls.
+  if (MI.isCall()) {
+    /*
+    queryCallee(MI, Read, Write, Effects, StackPointer);
+    */
+    // Assume the worst.
+    // TODO: Understand function and implement
+    Write = true;
+    Read = true;
+    Effects = true;
+  }
+}
+
+
+
 static bool isSafeToMove(const MachineOperand *Def, const MachineOperand *Use,
                          const MachineInstr *Insert,
                          const T8xxMachineFunctionInfo &MFI,
@@ -977,8 +1059,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 	MachineInstr *Insert = &*MII;
 
-	//      Insert->dump ();
-
 	// Don't nest anything inside an inline asm, because we don't have
 	// constraints for $push inputs.
 	if (Insert->isInlineAsm())
@@ -1001,22 +1081,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	    Insert = reorderRecursive (MF, Insert, MRI, LIS, outvec);
 	  }
 
-	/*
-	// If we stackified any operands, skip over the tree to start looking for
-	// the next instruction we can build a tree on.
-	if (Insert != &*MII) {
-	//        imposeStackOrdering(&*MII);
-        MII = MachineBasicBlock::iterator(Insert).getReverse();
-	//        Changed = true;
-	}
-	*/
-
-	// Terminate after 2 processed instructions
-	/*
-	  count++;
-	  if (count > 2)
-	  break;
-	*/
       }  // MachineInstruction
 
     printf ("Print sequence\n");
