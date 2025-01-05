@@ -73,7 +73,8 @@ namespace llvm {
 				   MachineInstr *MI,
 				   MachineRegisterInfo &MRI,
 				    LiveIntervals &LIS,
-				    std::vector<MachineInstr *> &output);
+				    std::vector<MachineInstr *> &output,
+				    std::map<Register, int> &reg_map);
 
   public:
     static char ID;
@@ -235,11 +236,13 @@ public:
 static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
                                 const MachineRegisterInfo &MRI,
                                 const LiveIntervals &LIS) {
+  printf ("getVRegDef P1\n");
+
   // Most registers are in SSA form here so we try a quick MRI query first.
   if (MachineInstr *Def = MRI.getUniqueVRegDef(Reg))
     return Def;
 
-  /*
+  printf ("getVRegDef P2\n");
 
   // MRI doesn't know what the Def is. Try asking LIS.
   if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
@@ -254,92 +257,10 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
 
     return LIS.getInstructionFromIndex(ValNo->def);
     }
-  */
 
+  printf ("getVRegDef P3\n");
 
   return nullptr;
-}
-
-
-
-// Determine whether MI reads memory, writes memory, has side effects,
-// and/or uses the stack pointer value.
-static void query(const MachineInstr &MI, bool &Read, bool &Write,
-                  bool &Effects, bool &StackPointer) {
-  assert(!MI.isTerminator());
-
-  if (MI.isDebugInstr() || MI.isPosition())
-    return;
-
-  // Check for loads.
-  if (MI.mayLoad() && !MI.isDereferenceableInvariantLoad())
-    Read = true;
-
-  // Check for stores.
-  if (MI.mayStore()) {
-    Write = true;
-  } else if (MI.hasOrderedMemoryRef()) {
-    /*
-    switch (MI.getOpcode()) {
-    case WebAssembly::DIV_S_I32:
-    case WebAssembly::I64_TRUNC_U_F64:
-      // These instruction have hasUnmodeledSideEffects() returning true
-      // because they trap on overflow and invalid so they can't be arbitrarily
-      // moved, however hasOrderedMemoryRef() interprets this plus their lack
-      // of memoperands as having a potential unknown memory reference.
-      break;
-    default:
-      // Record volatile accesses, unless it's a call, as calls are handled
-      // specially below.
-      */
-      if (!MI.isCall()) {
-        Write = true;
-        Effects = true;
-      }
-      /*
-             break;
-    }
-      */
-  }
-
-  // Check for side effects.
-  if (MI.hasUnmodeledSideEffects()) {
-    /*
-    switch (MI.getOpcode()) {
-    case WebAssembly::I64_TRUNC_U_F64:
-      // These instructions have hasUnmodeledSideEffects() returning true
-      // because they trap on overflow and invalid so they can't be arbitrarily
-      // moved, however in the specific case of register stackifying, it is safe
-      // to move them because overflow and invalid are Undefined Behavior.
-      break;
-    default:
-    */
-      Effects = true;
-      /*
-      break;
-    }
-      */
-  }
-
-  // Check for writes to __stack_pointer global.
-/*
-  if ((MI.getOpcode() == WebAssembly::GLOBAL_SET_I32 ||
-       MI.getOpcode() == WebAssembly::GLOBAL_SET_I64) &&
-      strcmp(MI.getOperand(0).getSymbolName(), "__stack_pointer") == 0)
-    StackPointer = true;
-*/
-
-  // Analyze calls.
-  if (MI.isCall()) {
-    /*
-    queryCallee(MI, Read, Write, Effects, StackPointer);
-    */
-    // Assume the worst.
-    // TODO: Understand function and implement
-    Write = true;
-    Read = true;
-    Effects = true;
-  }
 }
 
 
@@ -457,15 +378,8 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
                                       MachineInstr *Def, MachineBasicBlock &MBB,
                                       MachineInstr *Insert, LiveIntervals &LIS,
                                       T8xxMachineFunctionInfo &MFI,
-                                      MachineRegisterInfo &MRI)
-
-{
+                                      MachineRegisterInfo &MRI) {
   LLVM_DEBUG(dbgs() << "Move for single use: "; Def->dump());
-
-  // OKH: Note, the T8xxDebugValueManager is derived from WebAssemblyDVM and
-  // does the actual work of shifting instructions!
-  // I.e. the "sink" method already moves the Def instruction to the place
-  // before Insert.
 
   T8xxDebugValueManager DefDIs(Def);
   DefDIs.sink(Insert);
@@ -475,7 +389,7 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
     // No one else is using this register for anything so we can just stackify
     // it in place.
     //    MFI.stackifyVReg(MRI, Reg);
-    //    printf ("Reg Stackified %u\n", Reg);
+    printf ("Reg Stackified %u\n", Reg);
   } else {
     // The register may have unrelated uses or defs; create a new register for
     // just our one def and use so that we can stackify it.
@@ -483,14 +397,16 @@ static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
     Op.setReg(NewReg);
     //    DefDIs.updateReg(NewReg);
 
+    /*
     // Tell LiveIntervals about the new register.
     LIS.createAndComputeVirtRegInterval(NewReg);
 
     // Tell LiveIntervals about the changes to the old register.
     LiveInterval &LI = LIS.getInterval(Reg);
     LI.removeSegment(LIS.getInstructionIndex(*Def).getRegSlot(),
-		     LIS.getInstructionIndex(*Op.getParent()).getRegSlot(),
-                         /*RemoveDeadValNo=*/  true);
+    LIS.getInstructionIndex(*Op.getParent()).getRegSlot(), */
+                         /*RemoveDeadValNo=*/  /*true);
+*/
 
     // TODO:
     //MFI.stackifyVReg(MRI, NewReg);
@@ -567,6 +483,62 @@ static MachineInstr *rematerializeCheapDef(
 }
 
 
+/// A trivially cloneable instruction; clone it and nest the new copy with the
+/// current instruction.
+static MachineInstr *CloneDef(
+    unsigned Reg, MachineOperand &Op, MachineInstr &Def, MachineBasicBlock &MBB,
+    MachineBasicBlock::instr_iterator Insert, LiveIntervals &LIS,
+    T8xxMachineFunctionInfo &MFI, MachineRegisterInfo &MRI,
+    const T8xxInstrInfo *TII, const T8xxRegisterInfo *TRI) {
+  LLVM_DEBUG(dbgs() << "Rematerializing cheap def: "; Def.dump());
+  LLVM_DEBUG(dbgs() << " - for use in "; Op.getParent()->dump());
+
+  T8xxDebugValueManager DefDIs(&Def);
+
+  // Create new virtual register for SSA form
+  Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
+
+  // Actual cloning of instruction (is inserted before "Insert")
+  DefDIs.cloneSink(&*Insert, NewReg);
+
+  // Replaces the previous operand in the referring statement with the new register
+  Op.setReg(NewReg);
+
+  // Update some information, based on the new instruction
+  MachineInstr *Clone = getPrevNonDebugInst(&*Insert);
+  assert(Clone);
+  LIS.InsertMachineInstrInMaps(*Clone);
+  LIS.createAndComputeVirtRegInterval(NewReg);
+  MFI.stackifyVReg(MRI, NewReg);
+  //  imposeStackOrdering(Clone);
+
+  LLVM_DEBUG(dbgs() << " - Cloned to "; Clone->dump());
+
+  /*  TODO: 
+  // Shrink the interval.
+  bool IsDead = MRI.use_empty(Reg);
+  if (!IsDead) {
+    LiveInterval &LI = LIS.getInterval(Reg);
+    shrinkToUses(LI, LIS);
+    IsDead = !LI.liveAt(LIS.getInstructionIndex(Def).getDeadSlot());
+  }
+
+  // If that was the last use of the original, delete the original.
+  if (IsDead) {
+    LLVM_DEBUG(dbgs() << " - Deleting original\n");
+    //SlotIndex Idx = LIS.getInstructionIndex(Def).getRegSlot();
+    // ??
+    //    LIS.removePhysRegDefAt(MCRegister::from(WebAssembly::ARGUMENTS), Idx);
+    LIS.removeInterval(Reg);
+    LIS.RemoveMachineInstrFromMaps(Def);
+    // DefDIs.removeDef();
+  }
+  */
+
+  return Clone;
+}
+
+
 
 unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 				      const MachineRegisterInfo &MRI,
@@ -596,8 +568,6 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 	DepthE = RegDefCount;
       else
 	{
-	  SmallVector<int, 4> OpDepth;
-
 	  for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
 	    {
 	      if (I->isReg () && !I->getReg().isPhysical())
@@ -607,10 +577,12 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 		  if (DefI)
 		    {
 		      unsigned int SubE = getDepth (DefI, MRI, LIS);
-		      OpDepth.push_back(SubE);
+		      if (SubE > DepthSubE)
+			DepthSubE = SubE;
 		    }
 		  else
 		    {
+		      printf ("Multiple definitions\n");
 		      // Try to find all definitions of the register.
 		      MachineRegisterInfo::def_instr_iterator def_reg = MRI.def_instr_begin(Reg);
 		      while (def_reg != MRI.def_instr_end())
@@ -618,11 +590,6 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 			  def_reg->dump();
 			  ++def_reg;
 			}
-
-		      // TODO: Not entirely sure, if this is really the correct answer
-		      // If the definition is in the same block, it might still be possible
-		      // to shift the instruction
-		      OpDepth.push_back (10000);
 		    }
 		}
 	    }
@@ -632,28 +599,9 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 	    DepthE = DepthSubE;
 	  else
 	    {
-	      switch (OpDepth.size ())
-		{
-		case 0: DepthE = 1;
-		  break;
-		case 1: DepthE = OpDepth[0];
-		  break;
-		case 2:
-		  {
-		    if (OpDepth[0] > OpDepth[1])
-		      DepthE = OpDepth[0];
-		    else
-		      {
-			if (OpDepth[0] < OpDepth[1])
-			  DepthE = OpDepth[1];
-			else
-			  DepthE = OpDepth[0] + 1;
-		      }
-		  }
-		  break;
-		default:
-		  DepthE = 1;
-		}
+	      DepthE = DepthSubE + (RegUseCount - 1);
+	      if (RegDefCount > DepthE)
+		DepthE = RegDefCount;
 	    }
 	}
 
@@ -669,8 +617,39 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
       MI->dump ();
       printf ("RegUseCount %i  RegDefCount %i  DepthE %i  DepthSubE %i\n", RegUseCount, RegDefCount, DepthE, DepthSubE);
       */
+
       //      printf ("<--- Insert structure  Defs = %i   Uses = %i\n", RegDefCount, RegUseCount);
       return (DepthE);
+}
+
+#define MBB_SPLICE
+
+
+void SpliceOrCloneInstruction (MachineFunction &MF,
+			  MachineBasicBlock *MBB,
+			  MachineRegisterInfo &MRI,
+			  LiveIntervals &LIS,
+			  MachineInstr *MI,
+			  MachineOperand *Use,
+			  std::map<Register, int> &reg_map)
+{
+      Register Reg = Use->getReg ();
+      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+
+#ifdef MBB_SPLICE
+      if (reg_map.find (Reg) != reg_map.end ())
+	reg_map[Reg]++;
+      else
+	reg_map[Reg] = 1;
+
+      if (reg_map[Reg] == 1)
+	MBB->splice (MI, DefI->getParent (), DefI);
+      else
+	{
+	  MachineInstr *Clone = MF.CloneMachineInstr (DefI);
+	  MBB->insert(MI, Clone);
+	}
+#endif
 }
 
 
@@ -678,7 +657,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 					      MachineInstr *MI,
 					      MachineRegisterInfo &MRI,
 					       LiveIntervals &LIS,
-					       std::vector<MachineInstr *> &output)
+					       std::vector<MachineInstr *> &output,
+					       std::map<Register, int> &reg_map)
 {
   T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
   MachineBasicBlock *MBB = MI->getParent ();
@@ -702,7 +682,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
   // Find out how many registers are defined and how many are needed as input
   // When a variable has multiple definitions, put "-1" on the register stack
-  MI->dump ();
+  //  MI->dump ();
   for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
     {
       //      if (I->isReg () && !I->getReg().isPhysical())
@@ -733,11 +713,9 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
       MachineOperand *Use = OpDepth[0].second;
       Register Reg = Use->getReg ();
       MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-      /*
-      Insert = moveForSingleUse(Reg, *Use, DefI, *MBB,
-				MI, LIS, MFI, MRI);
-      */
-      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
     }
 
   if (OpDepth.size () == 2)
@@ -754,11 +732,9 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      MachineOperand *Use = OpDepth[1].second;
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      /*
-	      Insert = moveForSingleUse(Reg, *Use, DefI, *MBB,
-						      MI, LIS, MFI, MRI);
-	      */
-	      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+	      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
 
 	      // Introduce temporary variable
 	      // Simply introduce a workspace register
@@ -775,11 +751,9 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Use = OpDepth[0].second;
 	      Register Reg2 = Use->getReg ();
 	      DefI = getVRegDef(Reg2, MI, MRI, LIS);
-	      /*
-	      Insert = moveForSingleUse(Reg2, *Use, DefI, *MBB,
-					MI, LIS, MFI, MRI);
-	      */
-	      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+	      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
 
 	      // Insert "ldl" for temporary variable
 	      /*
@@ -796,20 +770,16 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      MachineOperand *Use = OpDepth[1].second;
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      /*
-	      Insert = moveForSingleUse(Reg, *Use, DefI, *MBB,
-						      MI, LIS, MFI, MRI);
-	      */
-	      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+	      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
 
 	      Use = OpDepth[0].second;
 	      Reg = Use->getReg ();
 	      DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      /*
-	      Insert = moveForSingleUse(Reg, *Use, DefI, *MBB,
-					MI, LIS, MFI, MRI);
-	      */
-	      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+	      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
 	    }
 	}
       else
@@ -820,20 +790,16 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      MachineOperand *Use = OpDepth[0].second;
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      /*
-	      Insert = moveForSingleUse(Reg, *Use, DefI, *MBB,
-						      MI, LIS, MFI, MRI);
-	      */
-	      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+	      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
 
 	      Use = OpDepth[1].second;
 	      Reg = Use->getReg ();
 	      DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      /*
-	      Insert = moveForSingleUse(Reg, *Use, DefI, *MBB,
-					MI, LIS, MFI, MRI);
-	      */
-	      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+	      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
 	    }
 	  else
 	    {
@@ -841,21 +807,17 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      MachineOperand *Use = OpDepth[1].second;
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      /*
-	      Insert = moveForSingleUse(Reg, *Use, DefI, *MBB,
-						      MI, LIS, MFI, MRI);
-	      */
-	      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+	      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
 	      // Store in temporary variable
 
 	      Use = OpDepth[0].second;
 	      Reg = Use->getReg ();
 	      DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      /*
-	      Insert = moveForSingleUse(Reg, *Use, DefI, *MBB,
-					MI, LIS, MFI, MRI);
-	      */
-	      reorderRecursive (MF, DefI, MRI, LIS, output);
+
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+	      reorderRecursive (MF, DefI, MRI, LIS, output, reg_map);
 	      // Load temporary variable
 	    }
 	}
@@ -868,7 +830,179 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 }
 
 
-/*
+/// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
+/// register references into FP stack references.
+///
+bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
+  LLVM_DEBUG(dbgs() << "********** Register Stackifying **********\n"
+                       "********** Function: "
+                    << MF.getName() << '\n');
+
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
+  const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
+  const auto *TRI = MF.getSubtarget<T8xxSubtarget>().getRegisterInfo();
+  auto &MDT = getAnalysis<MachineDominatorTree>();
+  auto &LIS = getAnalysis<LiveIntervals>();
+
+  // OKH: Try to use the virtual register map
+  auto &VRM = getAnalysis<VirtRegMap>();
+  printf ("############ Register Map\n");
+  VRM.dump ();
+
+  // LiveInterval dump
+  printf ("############ LiveInterval Map\n");
+  LIS.dump ();
+
+  // Some map to keep track of registers that have already been created as
+  // workspace registers
+  std::map<unsigned, unsigned> wp_reg_map;
+
+  // Walk the instructions from the bottom up. Currently we don't look past
+  // block boundaries, and the blocks aren't ordered so the block visitation
+  // order isn't significant, but we may want to change this in the future.
+  for (MachineBasicBlock &MBB : MF) {
+
+
+    // ################ Experimental code
+    
+    int count = 0;
+
+    // Don't use a range-based for loop, because we modify the list as we're
+    // iterating over it and the end iterator may change.
+    std::vector<MachineInstr *> outvec;
+
+    std::map<Register, int> vreg_map_rec;
+
+    for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII)
+      //    for (auto MII = MBB.begin(); MII != MBB.end(); ++MII)
+      {
+	printf ("######## NewInstruction");
+
+	MachineInstr *Insert = &*MII;
+
+	// Don't nest anything inside an inline asm, because we don't have
+	// constraints for $push inputs.
+	if (Insert->isInlineAsm())
+	  continue;
+
+	// Ignore debugging intrinsics.
+	if (Insert->isDebugValue())
+	  continue;
+
+	// When the instruction does not define anything, it is a store
+	// instruction and should be recursed
+	const iterator_range<MachineInstr::mop_iterator> &Range_defs = Insert->defs();
+	if (Range_defs.begin () == Range_defs.end ())
+	  {
+            // Calculate depth (according to Transputer compiler writing guide
+	    unsigned int MIDepth = getDepth (Insert, MRI, LIS);
+	    //      printf ("--> Instruction Depth = %i\n", MIDepth);
+
+	    // Reorder instructions (according to Transputer compiler writing guide)
+	    Insert = reorderRecursive (MF, Insert, MRI, LIS, outvec, vreg_map_rec);
+	  }
+
+      }  // MachineInstruction
+
+    printf ("Print sequence\n");
+    std::map<Register, int> vreg_map;
+
+    for (auto O = outvec.begin (); O != outvec.end (); ++O)
+      {
+	(*O)->dump ();
+
+	// Try to analyse how often each virtual register is used
+	const iterator_range<MachineInstr::mop_iterator> &Range_defs = (*O)->defs();
+
+	// Find out how many registers are defined and how many are needed as input
+	for (auto I = Range_defs.begin (); I != Range_defs.end (); ++I)
+	  {
+	    if (I->isReg())
+	      {
+		Register reg = I->getReg ();
+		if (vreg_map.find (reg) != vreg_map.end ())
+		  vreg_map[reg]++;
+		else
+		  vreg_map[reg] = 1;
+	      }
+	  }
+
+      }
+    printf ("End Print sequence\n\n");
+
+    // Debug output about register usage
+    printf ("Def usage\n");
+    for (auto I = vreg_map.begin (); I != vreg_map.end (); ++I)
+      {
+	printf ("ID %i  Count %i  # ", I->first.id(), I->second);
+	if (MRI.hasOneNonDBGUse(I->first))
+	  printf ("One Non DBG Use\n");
+	else
+	  printf ("Multiple Non DBG Use\n");
+      }
+    printf ("End Def usage\n");
+
+    // Attempt to clone the first instruction in the list above
+
+    // Reg -> ???
+    // Use -> MachineOperand ??
+    // DefI -> Instruction that needs to be cloned
+    // Insert-> Place before which the cloned instruction is inserted
+    MachineInstr *ins = outvec[3];  // Should be an ADD instruction
+    
+    /*
+    const iterator_range<MachineInstr::mop_iterator> &Range = ins->explicit_uses();
+    MachineInstr::mop_iterator mop_it = Range.begin ();
+    while ((mop_it != Range.end ()) &&
+	   !mop_it->isReg ())
+      ++mop_it;
+
+    MachineOperand &usei = *(mop_it);
+    Register regc = usei.getReg();
+    MachineInstr *defi = getVRegDef(regc, ins, MRI, LIS);
+    
+    ins = CloneDef (regc, usei, *defi, MBB, ins->getIterator(),
+		    LIS, MFI, MRI, TII, TRI);
+    */
+
+    // Clones an instruction (exact replica with same registers)
+    //  MachineInstr *Clone = MF.CloneMachineInstr (ins);
+    //  MBB.insert(ins, Clone);
+
+    // Move cloned instruction to some place
+    // MBB.splice (outvec[4], Clone->getParent (), Clone);
+
+    // More debug output
+    for (auto MII = MBB.begin(); MII != MBB.end(); ++MII)
+      {
+	MII->dump ();
+      }
+    
+    // ################ End experimental code
+
+    // For test purposes let's leave with going through the first instruction
+  //MachineBasicBlock &MBB = *MF.begin();
+
+    // Don't use a range-based for loop, because we modify the list as we're
+    // iterating over it and the end iterator may change.
+  for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII) {
+      printf ("########\nNewInstruction\n");
+
+      MachineInstr *Insert = &*MII;
+      //      MachineInstr &MI = *MII;
+      // Don't nest anything inside an inline asm, because we don't have
+      // constraints for $push inputs.
+      if (Insert->isInlineAsm())
+        continue;
+
+      // Ignore debugging intrinsics.
+      if (Insert->isDebugValue())
+        continue;
+
+      // Calculate depth (according to Transputer compiler writing guide
+      unsigned int MIDepth = getDepth (Insert, MRI, LIS);
+      printf ("--> Instruction Depth = %i\n", MIDepth);
 
       //  Insert iterator to the used operands (may be registers)
       TreeWalkerState TreeWalker(Insert);
@@ -937,7 +1071,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	printf ("Operand\n");
 	Def->dump ();
-	// OKH: DefI is the instruction that defines the register, Def is the defined operand
+	/* OKH: DefI is the instruction that defines the register, Def is the defined operand */
 
 
 	// Decide which strategy to take. Prefer to move a single-use value
@@ -992,12 +1126,16 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
         } else if (CanMove && oneUseDominatesOtherUses(Reg, Use, MBB, MRI, MDT,
                                                        LIS, MFI)) {
 	  printf ("MoveAndTeeForMultiUse\n");
-	  //          Insert = moveAndTeeForMultiUse(Reg, Use, DefI, MBB, Insert, LIS, MFI,
-	//	      MRI, TII);
+	  /*          Insert = moveAndTeeForMultiUse(Reg, Use, DefI, MBB, Insert, LIS, MFI,
+		      MRI, TII);*/
 	    Insert = DefI;
         } else {
           // We failed to stackify the operand. If the problem was ordering
           // constraints, Commuting may be able to help.
+	  /*
+          if (!CanMove && SameBlock)
+            Commuting.maybeCommute(Insert, TreeWalker, TII);
+	  */
           // Proceed to the next operand.
           continue;
         }
@@ -1008,140 +1146,23 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	//        Commuting.reset();
         TreeWalker.pushOperands(Insert);
       }
-*/
 
-
-
-/// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
-/// register references into FP stack references.
-///
-bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
-  LLVM_DEBUG(dbgs() << "********** Register Stackifying **********\n"
-                       "********** Function: "
-                    << MF.getName() << '\n');
-
-  MachineRegisterInfo &MRI = MF.getRegInfo();
-  T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
-  const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
-  const auto *TRI = MF.getSubtarget<T8xxSubtarget>().getRegisterInfo();
-  auto &MDT = getAnalysis<MachineDominatorTree>();
-  auto &LIS = getAnalysis<LiveIntervals>();
-
-  // OKH: Try to use the virtual register map
-  auto &VRM = getAnalysis<VirtRegMap>();
-  printf ("############ Register Map\n");
-  VRM.dump ();
-
-  // LiveInterval dump
-  printf ("############ LiveInterval Map\n");
-  LIS.dump ();
-
-  // Some map to keep track of registers that have already been created as
-  // workspace registers
-  std::map<unsigned, unsigned> wp_reg_map;
-
-  // Walk the instructions from the top down. Currently we don't look past
-  // block boundaries, and the blocks aren't ordered so the block visitation
-  // order isn't significant, but we may want to change this in the future.
-  for (MachineBasicBlock &MBB : MF) {
-
-    // For test purposes let's leave with going through the first instruction
-    //MachineBasicBlock &MBB = *MF.begin();
-
-    int count = 0;
-
-    // Don't use a range-based for loop, because we modify the list as we're
-    // iterating over it and the end iterator may change.
-    std::vector<MachineInstr *> outvec;
-    for (auto MII = MBB.begin(); MII != MBB.end(); ++MII)
-      {
-	printf ("######## NewInstruction");
-
-	MachineInstr *Insert = &*MII;
-
-	// Don't nest anything inside an inline asm, because we don't have
-	// constraints for $push inputs.
-	if (Insert->isInlineAsm())
-	  continue;
-
-	// Ignore debugging intrinsics.
-	if (Insert->isDebugValue())
-	  continue;
-
-	// When the instruction does not define anything, it is a store
-	// instruction and should be recursed
-	const iterator_range<MachineInstr::mop_iterator> &Range_defs = Insert->defs();
-	if (Range_defs.begin () == Range_defs.end ())
-	  {
-            // Calculate depth (according to Transputer compiler writing guide
-	    unsigned int MIDepth = getDepth (Insert, MRI, LIS);
-	    //      printf ("--> Instruction Depth = %i\n", MIDepth);
-
-	    // Reorder instructions (according to Transputer compiler writing guide)
-	    Insert = reorderRecursive (MF, Insert, MRI, LIS, outvec);
-	  }
-
-      }  // MachineInstruction
-
-    printf ("Print sequence\n");
-    std::map<Register, int> vreg_map;
-
-    for (auto O = outvec.begin (); O != outvec.end (); ++O)
-      {
-	(*O)->dump ();
-
-	// Try to analyse how often each virtual register is used
-	const iterator_range<MachineInstr::mop_iterator> &Range_defs = (*O)->defs();
-
-	// Find out how many registers are defined and how many are needed as input
-	for (auto I = Range_defs.begin (); I != Range_defs.end (); ++I)
-	  {
-	    if (I->isReg())
-	      {
-		Register reg = I->getReg ();
-		if (vreg_map.find (reg) != vreg_map.end ())
-		  vreg_map[reg]++;
-		else
-		  vreg_map[reg] = 1;
-	      }
-	  }
-
-      }
-    printf ("End Print sequence\n\n");
-
-    printf ("Def usage\n");
-    for (auto I = vreg_map.begin (); I != vreg_map.end (); ++I)
-      printf ("ID %i  Count %i\n", I->first.id(), I->second);
-    printf ("End Def usage\n");
-
-
-    // Now the processing depends on how the definitions are
-    // used.
-    // Intermittend writes -> copy to temp
-    // Expensive operation -> copy to temp
-    // Cheap instruction -> duplicate
-    // Single use -> move
-
-    printf ("Rearranging instructions\n");
-    MachineInstr *cur = NULL, *prev = NULL;
-
-    for (auto O = outvec.begin (); O != outvec.end (); ++O)
-      {
-	(*O)->dump ();
-	// Try to analyse how often each virtual register is used
-	const iterator_range<MachineInstr::mop_iterator> &Range_defs = (*O)->defs();
-
-	cur = *O;
-
-	if (cur && prev)
-	  {
-	    T8xxDebugValueManager DefDIs(prev);
-	    DefDIs.sink(cur);
-	  }
-
-	prev = cur;
+      // If we stackified any operands, skip over the tree to start looking for
+      // the next instruction we can build a tree on.
+      if (Insert != &*MII) {
+	//        imposeStackOrdering(&*MII);
+        MII = MachineBasicBlock::iterator(Insert).getReverse();
+	//        Changed = true;
       }
 
+      /*
+      // Terminate after 2 processed instructions
+      count++;
+      if (count > 1)
+	break;
+      */
+
+	}  // MachineInstruction
   } // MachineBasicBlock
 
   // Insert some code to save the virtual register in a stack slot
@@ -1192,8 +1213,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   for (auto MII = MBB.begin(); MII != MBB.end(); ++MII) {
       MachineInstr *Instr = &*MII;
 
-      Instr->dump ();
-
       // Don't nest anything inside an inline asm, because we don't have
       // constraints for $push inputs.
       if (Instr->isInlineAsm())
@@ -1226,9 +1245,8 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  if (OP->isReg())
 	    {
 	      Register Reg = OP->getReg();
-	      //	      printf ("Num  %i  Reg %i\n", RegAdd, Reg);
 
-	      if ((MRI.reg_begin (Reg) != MRI.reg_end ()) && Reg.isVirtual())
+	      if (Reg.isVirtual())
 		{
 		  switch (RegAdd)
 		    {
