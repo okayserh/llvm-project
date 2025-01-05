@@ -745,30 +745,29 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
 	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
 
+	      Register RegClone = MRI.cloneVirtualRegister (Reg);
+	      Use->setReg (RegClone);
+
 	      // Introduce temporary variable
 	      // Simply introduce a workspace register
 	      if (VRM.isAssignedReg (Reg))
 		VRM.assignVirt2StackSlot (Reg);
-
 	      DebugLoc DL = MI->getDebugLoc();
+
 	      MachineBasicBlock::iterator MBBI = *DefI;
 	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 
 	      // Now the second operand
 	      Use = OpDepth[0].second;
 	      Register Reg2 = Use->getReg ();
-	      DefI = getVRegDef(Reg2, MI, MRI, LIS);
+	      MachineInstr *DefI2 = getVRegDef(Reg2, MI, MRI, LIS);
 
 	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
+	      reorderRecursive (MF, DefI2, MRI, LIS, VRM, output, reg_map);
 
-	      /*
-	      // Insert "ldl" for temporary variable
-	      DebugLoc DL = DefI->getDebugLoc();
-	      MachineBasicBlock::iterator MBBI = *MI;
-	      // Note: The AREG is used later to identify this as a special code segment
-	      BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	      */
+	      // Load temporary variable before using instruction
+	      MBBI = *MI;
+	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);	      
 	    }
 	  else
 	    // TODO: Check for commuting operators
@@ -825,6 +824,14 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register RegClone = MRI.cloneVirtualRegister (Reg);
 	      Use->setReg (RegClone);
 
+	      // Store temporary variable after defining instruction
+	      if (VRM.isAssignedReg (Reg))
+		VRM.assignVirt2StackSlot (Reg);
+	      DebugLoc DL = MI->getDebugLoc();
+
+	      MachineBasicBlock::iterator MBBI = *DefI;
+	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	      
 	      // Now handle second operand
 	      Use = OpDepth[0].second;
 	      Register Reg2 = Use->getReg ();
@@ -832,16 +839,6 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
 	      reorderRecursive (MF, DefI2, MRI, LIS, VRM, output, reg_map);
-
-	      // Store temporary variable after defining instruction
-	      if (VRM.isAssignedReg (Reg))
-		VRM.assignVirt2StackSlot (Reg);
-	      DebugLoc DL = MI->getDebugLoc();
-
-	      // Maybe update position?
-	      DefI = getVRegDef(Reg, MI, MRI, LIS);
-	      MachineBasicBlock::iterator MBBI = *DefI;
-	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 
 	      // Load temporary variable before using instruction
 	      MBBI = *MI;
