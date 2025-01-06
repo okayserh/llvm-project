@@ -516,7 +516,7 @@ static MachineInstr *CloneDef(
 
   LLVM_DEBUG(dbgs() << " - Cloned to "; Clone->dump());
 
-  /*  TODO: 
+  /*  TODO:
   // Shrink the interval.
   bool IsDead = MRI.use_empty(Reg);
   if (!IsDead) {
@@ -624,8 +624,6 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
       return (DepthE);
 }
 
-#define MBB_SPLICE
-
 
 /*
  * Either inserts the instruction that defines "Use"
@@ -633,7 +631,7 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
  * and inserts the clone before instruction "MI".
  */
 
-void SpliceOrCloneInstruction (MachineFunction &MF,
+MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 			  MachineBasicBlock *MBB,
 			  MachineRegisterInfo &MRI,
 			  LiveIntervals &LIS,
@@ -641,23 +639,33 @@ void SpliceOrCloneInstruction (MachineFunction &MF,
 			  MachineOperand *Use,
 			  std::map<Register, int> &reg_map)
 {
-      Register Reg = Use->getReg ();
-      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+  Register Reg = Use->getReg ();
+  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+  
+  if (reg_map.find (Reg) != reg_map.end ())
+    reg_map[Reg]++;
+  else
+    reg_map[Reg] = 1;
+  
+  if (reg_map[Reg] == 1)
+    MBB->splice (MI, DefI->getParent (), DefI);
+  else
+    {
+      MachineInstr *Clone = MF.CloneMachineInstr (DefI);
 
-#ifdef MBB_SPLICE
-      if (reg_map.find (Reg) != reg_map.end ())
-	reg_map[Reg]++;
-      else
-	reg_map[Reg] = 1;
+      // Create new virtual register for clone
+      Register RegClone = MRI.cloneVirtualRegister (Reg);
+      Use->setReg (RegClone);
+      
+      const iterator_range<MachineInstr::mop_iterator> &Range_defs = Clone->defs();
+      MachineOperand *Def = Range_defs.begin ();
+      Def->setReg (RegClone);
+      
+      MBB->insert(MI, Clone);
+      DefI = Clone;
+    }
 
-      if (reg_map[Reg] == 1)
-	MBB->splice (MI, DefI->getParent (), DefI);
-      else
-	{
-	  MachineInstr *Clone = MF.CloneMachineInstr (DefI);
-	  MBB->insert(MI, Clone);
-	}
-#endif
+  return (DefI);
 }
 
 
@@ -674,7 +682,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
   const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
   const auto *TRI = MF.getSubtarget<T8xxSubtarget>().getRegisterInfo();
   auto &MDT = getAnalysis<MachineDominatorTree>();
-  
+
   // Debugging Write out all definitions and operators
   const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI->defs();
   const iterator_range<MachineInstr::mop_iterator> &Range_uses = MI->explicit_uses();
@@ -723,7 +731,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
       Register Reg = Use->getReg ();
       MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
+      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, MI, Use, reg_map);
       reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
     }
 
@@ -767,7 +775,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	      // Load temporary variable before using instruction
 	      MBBI = *MI;
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);	      
+	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
 	  else
 	    // TODO: Check for commuting operators
@@ -831,7 +839,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	      MachineBasicBlock::iterator MBBI = *DefI;
 	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	      
+
 	      // Now handle second operand
 	      Use = OpDepth[0].second;
 	      Register Reg2 = Use->getReg ();
@@ -842,7 +850,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	      // Load temporary variable before using instruction
 	      MBBI = *MI;
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);	      
+	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
 	}
     }
@@ -887,10 +895,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   // order isn't significant, but we may want to change this in the future.
   for (MachineBasicBlock &MBB : MF) {
 
-
     // ################ Experimental code
-    
-    int count = 0;
 
     // Don't use a range-based for loop, because we modify the list as we're
     // iterating over it and the end iterator may change.
@@ -901,7 +906,75 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     // need "stackification".
     std::vector<MachineInstr *> proc_instr;
 
+    // First go through instructions and find those, which are used multiple times
+    for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII)
+      {
+	MachineInstr *Insert = &*MII;
 
+	// Don't nest anything inside an inline asm, because we don't have
+	// constraints for $push inputs.
+	if (Insert->isInlineAsm())
+	  continue;
+
+	// Ignore debugging intrinsics.
+	if (Insert->isDebugValue())
+	  continue;
+
+	// Decide what to do with instructions
+	// Single Use -> always move (needed for register stack)
+	// Multiple Use:
+	//    Trivial -> Clone
+	//    Non Trivial -> Create temporary variable on stack and use that variable
+
+	const iterator_range<MachineInstr::mop_iterator> &Range_defs = Insert->defs();
+
+	// Analyse how often a definition is used
+	if (Range_defs.begin () != Range_defs.end ())
+	  {
+	    int count = 0;
+	    for (auto DI = Range_defs.begin (); DI != Range_defs.end (); ++DI)
+	      ++count;
+
+	    if ((count < 2) && (Range_defs.begin ()->isReg()))
+	      {
+		MachineOperand *Def = Range_defs.begin();
+		Register Reg = Range_defs.begin ()->getReg();
+		if (!MRI.hasOneNonDBGUse(Reg))
+		  {
+		    // Define new virtual register for the temporary storage
+		    // (i.e. the result is stored on the stack location and
+		    // the loaded into that stack location before the actual
+		    // usage)
+		    Register RegClone = MRI.cloneVirtualRegister (Reg);
+		    Def->setReg (RegClone);
+
+		    // TODO: Just to see if this works. Might be rather inefficient to have this
+		    // after each newly created virtual register
+		    VRM.grow ();
+		    
+		    // Store temporary variable after defining instruction
+		    if (VRM.isAssignedReg (RegClone))
+		      VRM.assignVirt2StackSlot (RegClone);
+		    DebugLoc DL = Insert->getDebugLoc();
+		   
+		    MachineBasicBlock::iterator MBBI = Insert;
+		    ++MBBI;
+		    BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(RegClone)).addImm(0);
+		    
+		    BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),Reg).addFrameIndex(VRM.getStackSlot(RegClone)).addImm(0);		    
+		  }
+	      }
+	    // TODO: Find a way to treat multiple definitions (Should only be rare
+	    // special cases)
+	  }
+      }
+
+    MBB.dump ();
+
+
+    // Now do the recursive repositioning of the instructions to
+    // have the proper stack ordering before the actual instructions
+    // are executed
     for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII)
       //    for (auto MII = MBB.begin(); MII != MBB.end(); ++MII)
       {
@@ -918,9 +991,10 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	if (Insert->isDebugValue())
 	  continue;
 
+	const iterator_range<MachineInstr::mop_iterator> &Range_defs = Insert->defs();
+
 	// When the instruction does not define anything, it is a store
 	// instruction and should be recursed
-	const iterator_range<MachineInstr::mop_iterator> &Range_defs = Insert->defs();
 	if (Range_defs.begin () == Range_defs.end ())
 	  {
             // Calculate depth (according to Transputer compiler writing guide
@@ -936,10 +1010,15 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     // Now reorder relevant instructions
     for (auto PI = proc_instr.begin (); PI != proc_instr.end (); ++PI)
       {
+	MBB.dump ();
+	printf ("Reorder\n");
+	(*PI)->dump ();
 	reorderRecursive (MF, *PI, MRI, LIS, VRM, outvec, vreg_map_rec);
+	printf ("Reorder End\n");
       }
+    MBB.dump ();
 
-    
+
     printf ("Print sequence\n");
     std::map<Register, int> vreg_map;
 
@@ -984,14 +1063,14 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       {
 	MII->dump ();
       }
-    
+
   }
 
     // ################ End experimental code
 
     // Temporary disable the WebAssembly code fragment
 #if 0
-    
+
     // For test purposes let's leave with going through the first instruction
   //MachineBasicBlock &MBB = *MF.begin();
 
