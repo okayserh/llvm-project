@@ -90,7 +90,7 @@ def MxSDT_Cmov : SDTypeProfile<1, 3, [
 def MxCmov    : SDNode<"T8xxISD::CMOV",        MxSDT_Cmov>;
 
 
-/* Example for an operation that yields to results. Might be used for
+/* Example for an operation that yields two results. Might be used for
 the long arithmetic operations of the Transputer (i.e. ldiff etc.) */
 def MxLongArithmetic : SDTypeProfile<2, 3, [
   /* RES 1 */ SDTCisInt<0>,
