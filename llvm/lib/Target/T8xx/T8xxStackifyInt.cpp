@@ -75,8 +75,7 @@ namespace llvm {
 				   MachineRegisterInfo &MRI,
 				    LiveIntervals &LIS,
 				    VirtRegMap &VRM,
-				    std::vector<MachineInstr *> &output,
-				    std::map<Register, int> &reg_map);
+				    std::vector<MachineInstr *> &output);
 
   public:
     static char ID;
@@ -637,44 +636,18 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 			  LiveIntervals &LIS,
 			  VirtRegMap &VRM,
 			  MachineInstr *MI,
-			  MachineOperand *Use,
-			  std::map<Register, int> &reg_map)
+			  MachineOperand *Use)
 {
   Register Reg = Use->getReg ();
   MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
   const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
 
-  /*
-  if (reg_map.find (Reg) != reg_map.end ())
-    reg_map[Reg]++;
-  else
-    reg_map[Reg] = 1;
-  */
-
-  //  if (reg_map[Reg] == 1)
   if (!Reg.isPhysical())
     {
       if (VRM.isAssignedReg (Reg))
 	MBB->splice (MI, DefI->getParent (), DefI);
       else
 	{
-	  // Register was assigned and stored onto stack
-	  // Hence, just pull from stack
-	  //	  MachineInstr *Clone = MF.CloneMachineInstr (DefI);
-
-	  // Create new virtual register for clone
-	  /*
-	  Register RegClone = MRI.cloneVirtualRegister (Reg);
-	  Use->setReg (RegClone);
-
-	  const iterator_range<MachineInstr::mop_iterator> &Range_defs = Clone->defs();
-	  MachineOperand *Def = Range_defs.begin ();
-	  Def->setReg (RegClone);
-
-	  MBB->insert(MI, Clone);
-	  DefI = Clone;
-	  */
-
 	  DebugLoc DL = MI->getDebugLoc();
 
 	  // Create new virtual register for clone
@@ -683,7 +656,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 
 	  VRM.grow ();
 
-	  BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	  DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	}
     }
 
@@ -696,8 +669,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 					       MachineRegisterInfo &MRI,
 					       LiveIntervals &LIS,
 					       VirtRegMap &VRM,
-					       std::vector<MachineInstr *> &output,
-					       std::map<Register, int> &reg_map)
+					       std::vector<MachineInstr *> &output)
 {
   T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
   MachineBasicBlock *MBB = MI->getParent ();
@@ -724,8 +696,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
   //  MI->dump ();
   for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
     {
-      //      if (I->isReg () && !I->getReg().isPhysical())
-      if (I->isReg ())
+      if (I->isReg () && !I->getReg().isPhysical())
 	{
 	  Register Reg = I->getReg();
 	  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
@@ -742,6 +713,10 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	  //	  printf ("Op Depth %i\n", OpDepth.back ());
 	}
+
+      // TODO: Ignore phyiscal registers for the moment.
+      // Those should only appear in COPY intstructions after
+      // a function returns.
     }
 
   if (OpDepth.size () == 1)
@@ -753,8 +728,11 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
       Register Reg = Use->getReg ();
       MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
+      if (DefI == nullptr)
+	printf ("Instruction not found!!!\n");
+
+      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
     }
 
   if (OpDepth.size () == 2)
@@ -772,8 +750,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
 
 	      Register RegClone = MRI.cloneVirtualRegister (Reg);
 	      Use->setReg (RegClone);
@@ -792,8 +770,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg2 = Use->getReg ();
 	      MachineInstr *DefI2 = getVRegDef(Reg2, MI, MRI, LIS);
 
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI2, MRI, LIS, VRM, output, reg_map);
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI2, MRI, LIS, VRM, output);
 
 	      // Load temporary variable before using instruction
 	      MBBI = *MI;
@@ -807,15 +785,15 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
 
 	      Use = OpDepth[0].second;
 	      Reg = Use->getReg ();
 	      DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
 	    }
 	}
       else
@@ -827,15 +805,15 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
 
 	      Use = OpDepth[1].second;
 	      Reg = Use->getReg ();
 	      DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
 	    }
 	  else
 	    {
@@ -844,8 +822,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output, reg_map);
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
 
 	      // Define new virtual register for the temporary storage
 	      // (i.e. the result is stored on the stack location and
@@ -867,14 +845,28 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg2 = Use->getReg ();
 	      MachineInstr *DefI2 = getVRegDef(Reg2, MI, MRI, LIS);
 
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use, reg_map);
-	      reorderRecursive (MF, DefI2, MRI, LIS, VRM, output, reg_map);
+	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI2, MRI, LIS, VRM, output);
 
 	      // Load temporary variable before using instruction
 	      MBBI = *MI;
 	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
 	}
+    }
+
+
+  if (OpDepth.size () == 3)
+    {
+      printf ("Reorder Depth 3,  %i %i %i\n", OpDepth[0].first, OpDepth[1].first, OpDepth[2].first);
+
+      // Note: An Algorithm is written down in section 5.3.1 of the transputer compiler writer
+      // guide. However, it might be feasible to have an algorithm to determine the correct order.
+      // There may be one operand with >2 Depth, one operand with 2 Depth and one with 1 Depth.
+      // In this case, or when the Depths are lower, the usage of temporary variables
+      // is not needed!.
+      // Otherwise, up to two temporary variables are needed for the operands which
+      // have depth >2.
     }
 
   //  MI->dump ();
@@ -924,7 +916,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     // Don't use a range-based for loop, because we modify the list as we're
     // iterating over it and the end iterator may change.
     std::vector<MachineInstr *> outvec;
-    std::map<Register, int> vreg_map_rec;
 
     // Vector to keep a list of all "initial instructions" that
     // need "stackification".
@@ -964,59 +955,54 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 		MachineOperand *Def = Range_defs.begin();
 		Register Reg = Range_defs.begin ()->getReg();
 
-		// Deal with the case of more than one definition (result of PHI replacement)
-		if (!MRI.hasOneDef (Reg) || (map_mult_def.find (Reg) != map_mult_def.end ()))
+		if (!Reg.isPhysical())
 		  {
-
-
-		    // Store temporary variable after defining instruction
-		    if (VRM.isAssignedReg (Reg))
-		      VRM.assignVirt2StackSlot (Reg);
-		    DebugLoc DL = Insert->getDebugLoc();
-
-		    Register RegClone = MRI.cloneVirtualRegister (Reg);
-		    Def->setReg (RegClone);
-
-		    VRM.grow ();
-
-		    MachineBasicBlock::iterator MBBI = Insert;
-		    ++MBBI;
-		    BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-		    // Make a note for later usage
-		    if (map_mult_def.find (Reg) == map_mult_def.end ())
+		
+		    // Deal with the case of more than one definition (result of PHI replacement)
+		    if (!MRI.hasOneDef (Reg) || (map_mult_def.find (Reg) != map_mult_def.end ()))
 		      {
-			map_mult_def[Reg] = 1;
-			// If this is the first of multiple defs, add a LDL instruction with the original register
-			// to have a definition at hand.
-			BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL), Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+			// Store temporary variable after defining instruction
+			if (VRM.isAssignedReg (Reg))
+			  VRM.assignVirt2StackSlot (Reg);
+			DebugLoc DL = Insert->getDebugLoc();
+			
+			Register RegClone = MRI.cloneVirtualRegister (Reg);
+			Def->setReg (RegClone);
+			
+			VRM.grow ();
+			
+			MachineBasicBlock::iterator MBBI = Insert;
+			++MBBI;
+			BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+			
+			// Make a note for later usage
+			if (map_mult_def.find (Reg) == map_mult_def.end ())
+			  map_mult_def[Reg] = 1;
 		      }
-		  }
-
-
-		if (!MRI.hasOneNonDBGUse(Reg))
-		  {
-		    // Define new virtual register for the temporary storage
-		    // (i.e. the result is stored on the stack location and
-		    // the loaded into that stack location before the actual
-		    // usage)
-		    Register RegClone = MRI.cloneVirtualRegister (Reg);
-		    Def->setReg (RegClone);
-
-		    // TODO: Just to see if this works. Might be rather inefficient to have this
-		    // after each newly created virtual register
-		    VRM.grow ();
-
-		    // Store temporary variable after defining instruction
-		    if (VRM.isAssignedReg (Reg))
-		      VRM.assignVirt2StackSlot (Reg);
-		    DebugLoc DL = Insert->getDebugLoc();
-
-		    MachineBasicBlock::iterator MBBI = Insert;
-		    ++MBBI;
-		    BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-		    //		    BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		    
+		    
+		    if (!MRI.hasOneNonDBGUse(Reg))
+		      {
+			// Define new virtual register for the temporary storage
+			// (i.e. the result is stored on the stack location and
+			// the loaded into that stack location before the actual
+			// usage)
+			Register RegClone = MRI.cloneVirtualRegister (Reg);
+			Def->setReg (RegClone);
+			
+			// TODO: Just to see if this works. Might be rather inefficient to have this
+			// after each newly created virtual register
+			VRM.grow ();
+			
+			// Store temporary variable after defining instruction
+			if (VRM.isAssignedReg (Reg))
+			  VRM.assignVirt2StackSlot (Reg);
+			DebugLoc DL = Insert->getDebugLoc();
+			
+			MachineBasicBlock::iterator MBBI = Insert;
+			++MBBI;
+			BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		      }
 		  }
 	      }
 	    // TODO: Find a way to treat multiple definitions (Should only be rare
@@ -1061,7 +1047,14 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	    // Reorder instructions (according to Transputer compiler writing guide)
 	    proc_instr.push_back (Insert);
 	  }
-
+	else
+	  {
+	    // Special treatment for the "COPY" instruction before RET
+	    MachineOperand *Def = Range_defs.begin();
+	    Register Reg = Def->getReg();
+	    if (Reg == T8xx::AREG)
+	      proc_instr.push_back (Insert);
+	  }
       }  // MachineInstruction
 
     // Now reorder relevant instructions
@@ -1070,7 +1063,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	MBB.dump ();
 	printf ("Reorder\n");
 	(*PI)->dump ();
-	reorderRecursive (MF, *PI, MRI, LIS, VRM, outvec, vreg_map_rec);
+	reorderRecursive (MF, *PI, MRI, LIS, VRM, outvec);
 	printf ("Reorder End\n");
       }
     MBB.dump ();

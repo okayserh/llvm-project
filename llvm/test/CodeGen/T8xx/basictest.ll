@@ -66,8 +66,8 @@ define i32 @signed_divide(i32 %a, i32 %b) {
 
 ; CHECK-LABEL: unsigned_divide:
 ; CHECK: ldc 0
-; CHECK: ldl 1
 ; CHECK: ldl 2
+; CHECK: ldl 1
 ; CHECK: ldiv
 define i32 @unsigned_divide(i32 %a, i32 %b) {
   %r = udiv i32 %a, %b

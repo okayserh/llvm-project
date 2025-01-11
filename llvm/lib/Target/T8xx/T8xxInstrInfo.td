@@ -284,6 +284,10 @@ def MUL : T8BinaryOp8<0x53, "mul", mul>;
 def SHL : T8BinaryOp8<0x41, "shl", shl>;
 def SHR : T8BinaryOp8<0x40, "shr", srl>;
 
+// TODO: DIV and REM may need to have switched operands!!!
+// Transputer: BREG / AREG
+// LLVM:  OP1 / OP2
+
 def DIV : T8BinaryOp8<0x2C, "div", sdiv>;
 def REM : T8BinaryOp8<0x1F, "rem", srem>;
 
@@ -294,8 +298,7 @@ def AND : T8BinaryOp8<0x46, "and", and>;  // #53
 
 
 def : Pat<(udiv (i32 OReg:$lhs), (i32 OReg:$rhs)),
-           (LDIV (LDC 0), $rhs, $lhs )>;
-
+           (LDIV $rhs, $lhs, (LDC 0) )>;
 
 
 // Dummy instruction to test the code generated
