@@ -82,7 +82,7 @@ std::string resolve(std::string Path) {
     log("Failed to resolve possible symlink {0}", Path);
     return Path;
   }
-  return std::string(Resolved.str());
+  return std::string(Resolved);
 }
 
 // Get a plausible full `clang` path.
@@ -114,7 +114,7 @@ std::string detectClangPath() {
   SmallString<128> ClangPath;
   ClangPath = llvm::sys::path::parent_path(ClangdExecutable);
   llvm::sys::path::append(ClangPath, "clang");
-  return std::string(ClangPath.str());
+  return std::string(ClangPath);
 }
 
 // On mac, /usr/bin/clang sets SDKROOT and then invokes the real clang.
@@ -458,19 +458,6 @@ llvm::ArrayRef<ArgStripper::Rule> ArgStripper::rulesFor(llvm::StringRef Arg) {
       PrevAlias[Self] = T;
       NextAlias[T] = Self;
     };
-    // Also grab prefixes for each option, these are not fully exposed.
-    llvm::ArrayRef<llvm::StringLiteral> Prefixes[DriverID::LastOption];
-
-#define PREFIX(NAME, VALUE)                                                    \
-  static constexpr llvm::StringLiteral NAME##_init[] = VALUE;                  \
-  static constexpr llvm::ArrayRef<llvm::StringLiteral> NAME(                   \
-      NAME##_init, std::size(NAME##_init) - 1);
-#define OPTION(PREFIX, PREFIXED_NAME, ID, KIND, GROUP, ALIAS, ALIASARGS,       \
-               FLAGS, VISIBILITY, PARAM, HELP, METAVAR, VALUES)                \
-  Prefixes[DriverID::OPT_##ID] = PREFIX;
-#include "clang/Driver/Options.inc"
-#undef OPTION
-#undef PREFIX
 
     struct {
       DriverID ID;
@@ -478,7 +465,8 @@ llvm::ArrayRef<ArgStripper::Rule> ArgStripper::rulesFor(llvm::StringRef Arg) {
       const void *AliasArgs;
     } AliasTable[] = {
 #define OPTION(PREFIX, PREFIXED_NAME, ID, KIND, GROUP, ALIAS, ALIASARGS,       \
-               FLAGS, VISIBILITY, PARAM, HELP, METAVAR, VALUES)                \
+               FLAGS, VISIBILITY, PARAM, HELPTEXT, HELPTEXTSFORVARIANTS,       \
+               METAVAR, VALUES)                                                \
   {DriverID::OPT_##ID, DriverID::OPT_##ALIAS, ALIASARGS},
 #include "clang/Driver/Options.inc"
 #undef OPTION
@@ -496,7 +484,9 @@ llvm::ArrayRef<ArgStripper::Rule> ArgStripper::rulesFor(llvm::StringRef Arg) {
       llvm::SmallVector<Rule> Rules;
       // Iterate over each alias, to add rules for parsing it.
       for (unsigned A = ID; A != DriverID::OPT_INVALID; A = NextAlias[A]) {
-        if (!Prefixes[A].size()) // option groups.
+        llvm::SmallVector<llvm::StringRef, 4> Prefixes;
+        DriverTable.appendOptionPrefixes(A, Prefixes);
+        if (Prefixes.empty()) // option groups.
           continue;
         auto Opt = DriverTable.getOption(A);
         // Exclude - and -foo pseudo-options.
@@ -505,7 +495,7 @@ llvm::ArrayRef<ArgStripper::Rule> ArgStripper::rulesFor(llvm::StringRef Arg) {
         auto Modes = getModes(Opt);
         std::pair<unsigned, unsigned> ArgCount = getArgCount(Opt);
         // Iterate over each spelling of the alias, e.g. -foo vs --foo.
-        for (StringRef Prefix : Prefixes[A]) {
+        for (StringRef Prefix : Prefixes) {
           llvm::SmallString<64> Buf(Prefix);
           Buf.append(Opt.getName());
           llvm::StringRef Spelling = Result->try_emplace(Buf).first->getKey();

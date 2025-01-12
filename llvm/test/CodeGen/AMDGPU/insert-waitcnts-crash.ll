@@ -7,7 +7,7 @@ define fastcc i32 @foo() {
   ; CHECK-LABEL: name: foo
   ; CHECK: bb.0 (%ir-block.0):
   ; CHECK-NEXT:   successors: %bb.1(0x80000000)
-  ; CHECK-NEXT:   liveins: $sgpr12, $sgpr13, $sgpr14, $sgpr15, $sgpr30, $sgpr31, $vgpr31, $vgpr40, $sgpr4_sgpr5, $sgpr6_sgpr7, $sgpr8_sgpr9, $sgpr10_sgpr11
+  ; CHECK-NEXT:   liveins: $sgpr12, $sgpr13, $sgpr14, $sgpr15, $sgpr30, $sgpr31, $vgpr31, $sgpr4_sgpr5, $sgpr6_sgpr7, $sgpr8_sgpr9, $sgpr10_sgpr11
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   S_WAITCNT 0
   ; CHECK-NEXT:   $sgpr16 = S_MOV_B32 $sgpr33
@@ -23,8 +23,8 @@ define fastcc i32 @foo() {
   ; CHECK-NEXT:     $sgpr17 = S_ADDC_U32 internal $sgpr17, target-flags(amdgpu-gotprel32-hi) @bar + 12, implicit-def $scc, implicit internal $scc
   ; CHECK-NEXT:   }
   ; CHECK-NEXT:   S_WAITCNT_VSCNT undef $sgpr_null, 0
-  ; CHECK-NEXT:   BUFFER_GL0_INV implicit $exec
   ; CHECK-NEXT:   BUFFER_GL1_INV implicit $exec
+  ; CHECK-NEXT:   BUFFER_GL0_INV implicit $exec
   ; CHECK-NEXT:   renamable $sgpr16_sgpr17 = S_LOAD_DWORDX2_IMM killed renamable $sgpr16_sgpr17, 0, 0 :: (dereferenceable invariant load (s64) from got, addrspace 4)
   ; CHECK-NEXT:   $vgpr40 = V_WRITELANE_B32 killed $sgpr30, 0, $vgpr40
   ; CHECK-NEXT:   $vgpr40 = V_WRITELANE_B32 killed $sgpr31, 1, $vgpr40
@@ -34,13 +34,11 @@ define fastcc i32 @foo() {
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1 (%ir-block.1):
   ; CHECK-NEXT:   successors: %bb.2(0x04000000), %bb.1(0x7c000000)
-  ; CHECK-NEXT:   liveins: $vcc_lo, $vgpr40
+  ; CHECK-NEXT:   liveins: $vcc_lo
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   S_CBRANCH_VCCNZ %bb.1, implicit $vcc_lo
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.2.DummyReturnBlock:
-  ; CHECK-NEXT:   liveins: $vgpr40
-  ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   $sgpr31 = V_READLANE_B32 $vgpr40, 1
   ; CHECK-NEXT:   $sgpr30 = V_READLANE_B32 $vgpr40, 0
   ; CHECK-NEXT:   $sgpr4 = V_READLANE_B32 $vgpr40, 2

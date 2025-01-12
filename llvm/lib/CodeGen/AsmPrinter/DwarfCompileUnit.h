@@ -152,6 +152,8 @@ public:
 
   bool includeMinimalInlineScopes() const;
 
+  bool emitFuncLineTableOffsets() const;
+
   void initStmtList();
 
   /// Apply the DW_AT_stmt_list from this compile unit to the specified DIE.
@@ -207,10 +209,10 @@ public:
   void attachLowHighPC(DIE &D, const MCSymbol *Begin, const MCSymbol *End);
 
   /// Find DIE for the given subprogram and attach appropriate
-  /// DW_AT_low_pc and DW_AT_high_pc attributes. If there are global
-  /// variables in this scope then create and insert DIEs for these
-  /// variables.
-  DIE &updateSubprogramScopeDIE(const DISubprogram *SP);
+  /// DW_AT_low_pc, DW_AT_high_pc and DW_AT_LLVM_stmt_sequence attributes.
+  /// If there are global variables in this scope then create and insert DIEs
+  /// for these variables.
+  DIE &updateSubprogramScopeDIE(const DISubprogram *SP, MCSymbol *LineTableSym);
 
   void constructScopeDIE(LexicalScope *Scope, DIE &ParentScopeDIE);
 
@@ -227,9 +229,14 @@ public:
   /// DIE to represent this concrete inlined copy of the function.
   DIE *constructInlinedScopeDIE(LexicalScope *Scope, DIE &ParentScopeDIE);
 
-  /// Get if available or create a new DW_TAG_lexical_block for the given
-  /// LexicalScope and attach DW_AT_low_pc/DW_AT_high_pc labels.
-  DIE *getOrCreateLexicalBlockDIE(LexicalScope *Scope, DIE &ParentDIE);
+  /// Construct new DW_TAG_lexical_block for this scope and
+  /// attach DW_AT_low_pc/DW_AT_high_pc labels.
+  DIE *constructLexicalScopeDIE(LexicalScope *Scope);
+
+  /// Get a DIE for the given DILexicalBlock.
+  /// Note that this function assumes that the DIE has been already created
+  /// and it's an error, if it hasn't.
+  DIE *getLexicalBlockDIE(const DILexicalBlock *LB);
 
   /// Construct a DIE for the given DbgVariable.
   DIE *constructVariableDIE(DbgVariable &DV, bool Abstract = false);
@@ -248,14 +255,9 @@ public:
   /// This instance of 'getOrCreateContextDIE()' can handle DILocalScope.
   DIE *getOrCreateContextDIE(const DIScope *Ty) override;
 
-  /// Get DW_TAG_lexical_block for the given DILexicalBlock if available,
-  /// or the most close parent DIE, if no correspoding DW_TAG_lexical_block
-  /// exists.
-  DIE *getLocalContextDIE(const DILexicalBlock *LB);
-
   /// Construct a DIE for this subprogram scope.
-  DIE &constructSubprogramScopeDIE(const DISubprogram *Sub,
-                                   LexicalScope *Scope);
+  DIE &constructSubprogramScopeDIE(const DISubprogram *Sub, LexicalScope *Scope,
+                                   MCSymbol *LineTableSym);
 
   DIE *createAndAddScopeChildren(LexicalScope *Scope, DIE &ScopeDIE);
 
@@ -335,8 +337,8 @@ public:
   void addGlobalNameForTypeUnit(StringRef Name, const DIScope *Context);
 
   /// Add a new global type to the compile unit.
-  void addGlobalType(const DIType *Ty, const DIE &Die,
-                     const DIScope *Context) override;
+  void addGlobalTypeImpl(const DIType *Ty, const DIE &Die,
+                         const DIScope *Context) override;
 
   /// Add a new global type present in a type unit to this compile unit.
   void addGlobalTypeUnitType(const DIType *Ty, const DIScope *Context);

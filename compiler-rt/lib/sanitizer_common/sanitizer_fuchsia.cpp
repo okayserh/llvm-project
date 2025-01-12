@@ -94,7 +94,6 @@ void DisableCoreDumperIfNecessary() {}
 void InstallDeadlySignalHandlers(SignalHandlerType handler) {}
 void SetAlternateSignalStack() {}
 void UnsetAlternateSignalStack() {}
-void InitTlsSize() {}
 
 bool SignalContext::IsStackOverflow() const { return false; }
 void SignalContext::DumpAllRegisters(void *context) { UNIMPLEMENTED(); }
@@ -160,7 +159,8 @@ static zx_status_t GetSanitizerHeapVmar(zx_handle_t *vmar) {
 
 static zx_status_t TryVmoMapSanitizerVmar(zx_vm_option_t options,
                                           size_t vmar_offset, zx_handle_t vmo,
-                                          size_t size, uintptr_t *addr) {
+                                          size_t size, uintptr_t *addr,
+                                          zx_handle_t *vmar_used = nullptr) {
   zx_handle_t vmar;
   zx_status_t status = GetSanitizerHeapVmar(&vmar);
   if (status != ZX_OK)
@@ -168,11 +168,15 @@ static zx_status_t TryVmoMapSanitizerVmar(zx_vm_option_t options,
 
   status = _zx_vmar_map(gSanitizerHeapVmar, options, vmar_offset, vmo,
                         /*vmo_offset=*/0, size, addr);
-  if (status == ZX_ERR_NO_RESOURCES) {
+  if (vmar_used)
+    *vmar_used = gSanitizerHeapVmar;
+  if (status == ZX_ERR_NO_RESOURCES || status == ZX_ERR_INVALID_ARGS) {
     // This means there's no space in the heap VMAR, so fallback to the root
     // VMAR.
     status = _zx_vmar_map(_zx_vmar_root_self(), options, vmar_offset, vmo,
                           /*vmo_offset=*/0, size, addr);
+    if (vmar_used)
+      *vmar_used = _zx_vmar_root_self();
   }
 
   return status;
@@ -283,7 +287,8 @@ uptr ReservedAddressRange::MapOrDie(uptr fixed_addr, uptr map_size,
                           name ? name : name_, true);
 }
 
-void UnmapOrDieVmar(void *addr, uptr size, zx_handle_t target_vmar) {
+void UnmapOrDieVmar(void *addr, uptr size, zx_handle_t target_vmar,
+                    bool raw_report) {
   if (!addr || !size)
     return;
   size = RoundUpTo(size, GetPageSize());
@@ -296,11 +301,8 @@ void UnmapOrDieVmar(void *addr, uptr size, zx_handle_t target_vmar) {
     status = _zx_vmar_unmap(_zx_vmar_root_self(),
                             reinterpret_cast<uintptr_t>(addr), size);
   }
-  if (status != ZX_OK) {
-    Report("ERROR: %s failed to deallocate 0x%zx (%zd) bytes at address %p\n",
-           SanitizerToolName, size, size, addr);
-    CHECK("unable to unmap" && 0);
-  }
+  if (status != ZX_OK)
+    ReportMunmapFailureAndDie(addr, size, status, raw_report);
 
   DecreaseTotalMmap(size);
 }
@@ -322,7 +324,8 @@ void ReservedAddressRange::Unmap(uptr addr, uptr size) {
   }
   // Partial unmapping does not affect the fact that the initial range is still
   // reserved, and the resulting unmapped memory can't be reused.
-  UnmapOrDieVmar(reinterpret_cast<void *>(addr), size, vmar);
+  UnmapOrDieVmar(reinterpret_cast<void *>(addr), size, vmar,
+                 /*raw_report=*/false);
 }
 
 // This should never be called.
@@ -367,8 +370,10 @@ void *MmapAlignedOrDieOnFatalError(uptr size, uptr alignment,
   // beginning of the VMO, and unmap the excess before and after.
   size_t map_size = size + alignment;
   uintptr_t addr;
+  zx_handle_t vmar_used;
   status = TryVmoMapSanitizerVmar(ZX_VM_PERM_READ | ZX_VM_PERM_WRITE,
-                                  /*vmar_offset=*/0, vmo, map_size, &addr);
+                                  /*vmar_offset=*/0, vmo, map_size, &addr,
+                                  &vmar_used);
   if (status == ZX_OK) {
     uintptr_t map_addr = addr;
     uintptr_t map_end = map_addr + map_size;
@@ -376,21 +381,22 @@ void *MmapAlignedOrDieOnFatalError(uptr size, uptr alignment,
     uintptr_t end = addr + size;
     if (addr != map_addr) {
       zx_info_vmar_t info;
-      status = _zx_object_get_info(gSanitizerHeapVmar, ZX_INFO_VMAR, &info,
-                                   sizeof(info), NULL, NULL);
+      status = _zx_object_get_info(vmar_used, ZX_INFO_VMAR, &info, sizeof(info),
+                                   NULL, NULL);
       if (status == ZX_OK) {
         uintptr_t new_addr;
-        status = TryVmoMapSanitizerVmar(
+        status = _zx_vmar_map(
+            vmar_used,
             ZX_VM_PERM_READ | ZX_VM_PERM_WRITE | ZX_VM_SPECIFIC_OVERWRITE,
-            addr - info.base, vmo, size, &new_addr);
+            addr - info.base, vmo, 0, size, &new_addr);
         if (status == ZX_OK)
           CHECK_EQ(new_addr, addr);
       }
     }
     if (status == ZX_OK && addr != map_addr)
-      status = _zx_vmar_unmap(_zx_vmar_root_self(), map_addr, addr - map_addr);
+      status = _zx_vmar_unmap(vmar_used, map_addr, addr - map_addr);
     if (status == ZX_OK && end != map_end)
-      status = _zx_vmar_unmap(_zx_vmar_root_self(), end, map_end - end);
+      status = _zx_vmar_unmap(vmar_used, end, map_end - end);
   }
   _zx_handle_close(vmo);
 
@@ -405,8 +411,8 @@ void *MmapAlignedOrDieOnFatalError(uptr size, uptr alignment,
   return reinterpret_cast<void *>(addr);
 }
 
-void UnmapOrDie(void *addr, uptr size) {
-  UnmapOrDieVmar(addr, size, gSanitizerHeapVmar);
+void UnmapOrDie(void *addr, uptr size, bool raw_report) {
+  UnmapOrDieVmar(addr, size, gSanitizerHeapVmar, raw_report);
 }
 
 void ReleaseMemoryPagesToOS(uptr beg, uptr end) {
@@ -436,6 +442,11 @@ bool IsAccessibleMemoryRange(uptr beg, uptr size) {
     _zx_handle_close(vmo);
   }
   return status == ZX_OK;
+}
+
+bool TryMemCpy(void *dest, const void *src, uptr n) {
+  // TODO: implement.
+  return false;
 }
 
 // FIXME implement on this platform.
@@ -512,7 +523,6 @@ uptr ReadLongProcessName(/*out*/ char *buf, uptr buf_len) {
 uptr MainThreadStackBase, MainThreadStackSize;
 
 bool GetRandom(void *buffer, uptr length, bool blocking) {
-  CHECK_LE(length, ZX_CPRNG_DRAW_MAX_LEN);
   _zx_cprng_draw(buffer, length);
   return true;
 }
