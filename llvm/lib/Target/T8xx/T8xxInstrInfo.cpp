@@ -42,7 +42,7 @@ T8xxInstrInfo::T8xxInstrInfo(T8xxSubtarget &ST)
 /// the destination along with the FrameIndex of the loaded stack slot.  If
 /// not, return 0.  This predicate must return 0 if the instruction has
 /// any side effects other than loading from the stack slot.
-unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
+Register T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
   if (MI.getOpcode() == T8xx::LDL) {
     if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
@@ -59,7 +59,7 @@ unsigned T8xxInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 /// the source reg along with the FrameIndex of the loaded stack slot.  If
 /// not, return 0.  This predicate must return 0 if the instruction has
 /// any side effects other than storing to the stack slot.
-unsigned T8xxInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
+Register T8xxInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                             int &FrameIndex) const {
   if (MI.getOpcode() == T8xx::STL) {
     if (MI.getOperand(0).isFI() && MI.getOperand(1).isImm() &&
@@ -345,7 +345,8 @@ unsigned T8xxInstrInfo::insertBranch(MachineBasicBlock &MBB,
 void T8xxInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator I,
                                  const DebugLoc &DL, MCRegister DestReg,
-                                 MCRegister SrcReg, bool KillSrc) const {
+                                 MCRegister SrcReg, bool KillSrc,
+                                 bool RenamableDest, bool RenamableSrc) const {
   /*
   const MachineFunction *MF = MBB.getParent();
   const MachineRegisterInfo &MRI = MF->getRegInfo();
@@ -438,6 +439,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 	  BuildMI (MBB, MI, DL, get(T8xx::ADC), T8xx::AREG).addReg(T8xx::AREG).addImm(rem);
 	}
       MBB.erase(MI);
+      return true;
     }
     break;
 
@@ -446,6 +448,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       BuildMI (MBB, MI, DL, get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
       BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
       MBB.erase(MI);
+      return true;
     }
     break;
 
@@ -480,9 +483,9 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
       MBB.erase(MI);
       */
+      return true;
     }
     break;
-
-
   }
+  return false;
 }

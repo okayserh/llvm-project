@@ -33,7 +33,7 @@ T8xxDebugValueManager::T8xxDebugValueManager(MachineInstr *Def)
                                    ME = Def->getParent()->end();
        MI != ME; ++MI) {
     // If another definition appears, stop
-    if (MI->definesRegister(CurrentReg))
+    if (MI->definesRegister(CurrentReg, /*TRI=*/nullptr))
       break;
     if (MI->isDebugValue() && MI->hasDebugOperandForReg(CurrentReg))
       DbgValues.push_back(&*MI);

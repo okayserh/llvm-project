@@ -54,14 +54,14 @@ class T8xxAsmParser : public MCTargetAsmParser {
   /// }
 
   // public interface of the MCTargetAsmParser.
-  bool MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
+  bool matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                OperandVector &Operands, MCStreamer &Out,
                                uint64_t &ErrorInfo,
                                bool MatchingInlineAsm) override;
   bool parseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) override;
   ParseStatus tryParseRegister(MCRegister &RegNo, SMLoc &StartLoc,
 			       SMLoc &EndLoc) override;
-  bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
+  bool parseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
   ParseStatus parseDirective(AsmToken DirectiveID) override;
 
@@ -195,7 +195,7 @@ public:
     return StringRef(Tok.Data, Tok.Length);
   }
 
-  unsigned getReg() const override {
+  MCRegister getReg() const override {
     assert((Kind == k_Register) && "Invalid access!");
     return Reg.RegNum;
   }
@@ -317,7 +317,7 @@ public:
 } // end anonymous namespace
 
 
-bool T8xxAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
+bool T8xxAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                              OperandVector &Operands,
                                              MCStreamer &Out,
                                              uint64_t &ErrorInfo,
@@ -404,11 +404,11 @@ static void applyMnemonicAliases(StringRef &Mnemonic,
                                  const FeatureBitset &Features,
                                  unsigned VariantID);
 
-bool T8xxAsmParser::ParseInstruction(ParseInstructionInfo &Info,
+bool T8xxAsmParser::parseInstruction(ParseInstructionInfo &Info,
                                       StringRef Name, SMLoc NameLoc,
                                       OperandVector &Operands) {
 
-  printf ("ParseInstruction\n");
+  printf ("parseInstruction\n");
   
   // First operand in MCInst is instruction mnemonic.
   Operands.push_back(T8xxOperand::CreateToken(Name, NameLoc));
@@ -643,25 +643,25 @@ bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, MCRegister &RegNo,
     StringRef name = Tok.getString();
 
     // AREG
-    if (name.equals("AREG")) {
+    if (name == "AREG") {
       RegNo = T8xx::AREG;
       RegKind = T8xxOperand::rk_Int;
       return true;
     }
     // AREG
-    if (name.equals("BREG")) {
+    if (name == "BREG") {
       RegNo = T8xx::BREG;
       RegKind = T8xxOperand::rk_Int;
       return true;
     }
     // CREG
-    if (name.equals("CREG")) {
+    if (name == "CREG") {
       RegNo = T8xx::CREG;
       RegKind = T8xxOperand::rk_Int;
       return true;
     }
     // WPTR
-    if (name.equals("WPTR")) {
+    if (name == "WPTR") {
       RegNo = T8xx::WPTR;
       RegKind = T8xxOperand::rk_Special;
       return true;

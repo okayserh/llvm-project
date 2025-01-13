@@ -54,28 +54,18 @@ using namespace llvm;
 
 #define DEBUG_TYPE "t8xx-codegen"
 
-STATISTIC(NumFXCH, "Number of fxch instructions inserted");
-STATISTIC(NumFP  , "Number of floating point instructions");
-
 namespace llvm {
 
-  struct T8xxMoveConstPass : public MachineFunctionPass {
-
-  protected:
-
-  public:
-    static char ID;
-
-    T8xxMoveConstPass() : MachineFunctionPass(ID) {
-    }
+  class T8xxMoveConstPass : public MachineFunctionPass {
+    StringRef getPassName() const override { return "T8xx Const Arranger"; }
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.setPreservesCFG();
-      AU.addRequired<MachineDominatorTree>();
-      AU.addPreserved<MachineDominatorTree>();
+      AU.addRequired<MachineDominatorTreeWrapperPass>();
+      AU.addPreserved<MachineDominatorTreeWrapperPass>();
 
-      AU.addRequired<VirtRegMap>();
-      AU.addPreserved<VirtRegMap>();
+      AU.addRequired<VirtRegMapWrapperLegacy>();
+      AU.addPreserved<VirtRegMapWrapperLegacy>();
 
       MachineFunctionPass::getAnalysisUsage(AU);
     }
@@ -91,10 +81,9 @@ namespace llvm {
       return MachineFunctionProperties();
     }
 
-    StringRef getPassName() const override { return "T8xx Const Arranger"; }
-
-  private:
-
+  public:
+    static char ID;
+    T8xxMoveConstPass() : MachineFunctionPass(ID) {}
 };
 
 } // end anonymous namespace
@@ -106,13 +95,8 @@ char T8xxMoveConstPass::ID = 0;
 
 INITIALIZE_PASS_BEGIN(T8xxMoveConstPass, "t8xxstackifier", "T8xx Const Arranger",
                       false, false)
-INITIALIZE_PASS_DEPENDENCY(EdgeBundles)
 INITIALIZE_PASS_END(T8xxMoveConstPass, "t8xxstackifier", "T8xx Const Arranger",
                     false, false)
-/*
-INITIALIZE_PASS(T8xxStackPass, "t8xxstackifier", "T8xx INT Stackifier",
-                      false, false)
-*/
 
 FunctionPass *llvm::createT8xxMoveConstPass() {
   return new T8xxMoveConstPass();

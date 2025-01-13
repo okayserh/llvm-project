@@ -25,7 +25,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
   RegisterTargetMachine<T8xxTargetMachine> X(getTheT8xxTarget());
 
   PassRegistry &PR = *PassRegistry::getPassRegistry();
-  initializeT8xxDAGToDAGISelPass(PR);
+  initializeT8xxDAGToDAGISelLegacyPass(PR);
   initializeT8xxStackPassPass(PR);
   initializeT8xxMoveConstPassPass(PR);
 }
@@ -89,7 +89,7 @@ T8xxTargetMachine::T8xxTargetMachine(const Target &T, const Triple &TT,
                                        std::optional<Reloc::Model> RM,
                                        std::optional<CodeModel::Model> CM,
                                        CodeGenOptLevel OL, bool JIT)
-    : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options,
+    : CodeGenTargetMachineImpl(T, computeDataLayout(TT), TT, CPU, FS, Options,
                         getEffectiveRelocModel(RM),
                         getEffectiveT8xxCodeModel(
                             CM, getEffectiveRelocModel(RM), JIT),
@@ -171,7 +171,7 @@ FunctionPass *T8xxPassConfig::createTargetRegisterAllocator(bool) {
 }
 
 void T8xxPassConfig::addIRPasses() {
-  addPass(createAtomicExpandPass());
+  addPass(createAtomicExpandLegacyPass());
 
   TargetPassConfig::addIRPasses();
 }
