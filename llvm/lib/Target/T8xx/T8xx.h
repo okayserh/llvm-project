@@ -37,7 +37,7 @@ namespace llvm {
 
   void initializeT8xxStackPassPass(PassRegistry &);
   void initializeT8xxMoveConstPassPass(PassRegistry &);
-  void initializeT8xxDAGToDAGISelPass(PassRegistry &);
+  void initializeT8xxDAGToDAGISelLegacyPass(PassRegistry &);
   
 } // end namespace llvm;
 

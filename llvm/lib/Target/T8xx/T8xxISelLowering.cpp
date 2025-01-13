@@ -560,7 +560,8 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
     assert (VA.getLocMemOffset() % 4 == 0 &&
 	    "Only 4 byte aligned offset allowed");
-    SDValue PtrOff = DAG.getIntPtrConstant(-(VA.getLocMemOffset() + 4), Loc);
+    SDValue PtrOff = DAG.getSignedConstant(-(VA.getLocMemOffset() + 4), Loc,
+					   getPointerTy(DAG.getDataLayout()));
     PtrOff = DAG.getNode(T8xxISD::ADD_WPTR, Loc, MVT::i32, StackPtr, PtrOff);
 
     MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,

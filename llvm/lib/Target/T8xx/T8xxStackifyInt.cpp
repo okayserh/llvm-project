@@ -85,16 +85,16 @@ namespace llvm {
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.setPreservesCFG();
-      AU.addRequired<MachineDominatorTree>();
-      AU.addRequired<EdgeBundles>();
-      AU.addRequired<LiveIntervals>();
+      AU.addRequired<MachineDominatorTreeWrapperPass>();
+      AU.addRequired<EdgeBundlesWrapperLegacy>();
+      AU.addRequired<LiveIntervalsWrapperPass>();
       AU.addPreservedID(MachineLoopInfoID);
       AU.addPreservedID(LiveVariablesID);
       AU.addPreservedID(MachineDominatorsID);
-      AU.addPreserved<MachineDominatorTree>();
+      AU.addPreserved<MachineDominatorTreeWrapperPass>();
 
-      AU.addRequired<VirtRegMap>();
-      AU.addPreserved<VirtRegMap>();
+      AU.addRequired<VirtRegMapWrapperLegacy>();
+      AU.addPreserved<VirtRegMapWrapperLegacy>();
 
       MachineFunctionPass::getAnalysisUsage(AU);
     }
@@ -129,7 +129,6 @@ char T8xxStackPass::ID = 0;
 
 INITIALIZE_PASS_BEGIN(T8xxStackPass, "t8xxstackifier", "T8xx INT Stackifier",
                       false, false)
-INITIALIZE_PASS_DEPENDENCY(EdgeBundles)
 INITIALIZE_PASS_END(T8xxStackPass, "t8xxstackifier", "T8xx INT Stackifier",
                     false, false)
 /*
@@ -675,7 +674,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
   MachineBasicBlock *MBB = MI->getParent ();
   const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
   const auto *TRI = MF.getSubtarget<T8xxSubtarget>().getRegisterInfo();
-  auto &MDT = getAnalysis<MachineDominatorTree>();
+  auto &MDT = getAnalysis<MachineDominatorTreeWrapperPass>();
 
   // Debugging Write out all definitions and operators
   const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI->defs();
@@ -888,11 +887,12 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
   const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
   const auto *TRI = MF.getSubtarget<T8xxSubtarget>().getRegisterInfo();
-  auto &MDT = getAnalysis<MachineDominatorTree>();
-  auto &LIS = getAnalysis<LiveIntervals>();
+  auto &MDT = getAnalysis<MachineDominatorTreeWrapperPass>();
+  auto &LIS = getAnalysis<LiveIntervalsWrapperPass>().getLIS();
 
   // OKH: Try to use the virtual register map
-  auto &VRM = getAnalysis<VirtRegMap>();
+  auto &VRM_Leg = getAnalysis<VirtRegMapWrapperLegacy>();
+  VirtRegMap &VRM = VRM_Leg.getVRM ();
   printf ("############ Register Map\n");
   VRM.dump ();
 

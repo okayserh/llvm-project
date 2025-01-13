@@ -29,7 +29,7 @@ using namespace llvm;
 #define PRINT_ALIAS_INSTR
 #include "T8xxGenAsmWriter.inc"
 
-void T8xxInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const
+void T8xxInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg)
 {
   OS << '%' << StringRef(getRegisterName(Reg)).lower();
 }

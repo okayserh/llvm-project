@@ -120,6 +120,7 @@ namespace {
       }
     }
 
+    /*
     /// fixupNeedsRelaxation - Target specific predicate for whether a given
     /// fixup requires the associated instruction to be relaxed.
     bool fixupNeedsRelaxation(const MCFixup &Fixup,
@@ -135,7 +136,8 @@ namespace {
       // FIXME.
       llvm_unreachable("relaxInstruction() unimplemented");
     }
-
+    */
+    
     bool writeNopData(raw_ostream &OS, uint64_t Count,
                       const MCSubtargetInfo *STI) const override {
       // Note: Transputer instruction set does not explicity provide

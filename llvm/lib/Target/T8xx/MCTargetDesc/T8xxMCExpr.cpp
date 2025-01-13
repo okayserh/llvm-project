@@ -73,9 +73,9 @@ T8xx::Fixups T8xxMCExpr::getFixupKind(T8xxMCExpr::VariantKind Kind) {
 
 bool
 T8xxMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
-                                       const MCAsmLayout *Layout,
+                                       const MCAssembler *Asm,
                                        const MCFixup *Fixup) const {
-  return getSubExpr()->evaluateAsRelocatable(Res, Layout, Fixup);
+  return getSubExpr()->evaluateAsRelocatable(Res, Asm, Fixup);
 }
 
 

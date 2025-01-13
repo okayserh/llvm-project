@@ -15,12 +15,13 @@
 
 #include "T8xxInstrInfo.h"
 #include "T8xxSubtarget.h"
-#include "llvm/Target/TargetMachine.h"
+#include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
+#include "llvm/Support/CodeGen.h"
 #include <optional>
 
 namespace llvm {
 
-class T8xxTargetMachine : public LLVMTargetMachine {
+class T8xxTargetMachine : public CodeGenTargetMachineImpl {
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
   T8xxSubtarget Subtarget;
   mutable StringMap<std::unique_ptr<T8xxSubtarget>> SubtargetMap;
