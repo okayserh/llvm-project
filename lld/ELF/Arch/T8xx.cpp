@@ -9,7 +9,7 @@
 // T8xx is a very old processor, which has a rather unconventional
 // representation of immediates. Any negative immediates or those larger than
 // 0xF need to be constructed from prefix instructions.
-// 
+//
 // Since it is a baremetal programming, there's usually no loader to load
 // ELF files on AVRs. You are expected to link your program against address
 // 0 and pull out a .text section from the result using objcopy, so that you
@@ -43,7 +43,7 @@ using namespace lld::elf;
 namespace {
 class T8xx final : public TargetInfo {
 public:
-  T8xx() { needsThunks = true; }
+  T8xx(Ctx &);
   uint32_t calcEFlags() const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
@@ -58,6 +58,12 @@ public:
 };
 } // namespace
 
+T8xx::T8xx(Ctx &ctx) : TargetInfo(ctx)
+{
+  needsThunks = true;
+}
+
+
 RelExpr T8xx::getRelExpr(RelType type, const Symbol &s,
                         const uint8_t *loc) const {
   switch (type) {
@@ -68,8 +74,8 @@ RelExpr T8xx::getRelExpr(RelType type, const Symbol &s,
   case R_T8XX_JUMP:
     return R_PC;
   default:
-    error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
-          ") against symbol " + toString(s));
+    Err(ctx) << getErrorLoc(ctx, loc) << "unknown relocation (" << type.v
+	     << ") against symbol " << &s;
     return R_NONE;
   }
 }
@@ -118,7 +124,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     // actual jump instruction. Needs to be adapted when the
     // relaxation is operational
     val -= 8;
-    
+
     // Fill in the prefixes
     for (int i = 0; i < 8; ++i)
       loc[i] = (loc[i] & 0xF0) | ((val >> (7-i)*4) & 0xF);
@@ -144,18 +150,17 @@ void T8xx::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
     secAddr += s->outSecOff;
 
   printf ("relocateAlloc\n");
-  
+
   for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     const uint64_t val = SignExtend64(
-        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
-                             secAddr + rel.offset, *rel.sym, rel.expr),
+        sec.getRelocTargetVA(ctx, rel, secAddr + rel.offset),
         32);
 
     printf ("secAddr %li  Offset %li  relalloc %li\n", secAddr, rel.offset, val);
-    
+
     relocate(loc, rel, val);
-    
+
     /*
     switch (rel.expr) {
     case R_RELAX_TLS_GD_TO_IE_GOT_OFF:
@@ -179,10 +184,12 @@ void T8xx::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
 }
 
 
+/*
 TargetInfo *elf::getT8xxTargetInfo() {
   static T8xx target;
   return &target;
 }
+*/
 
 static uint32_t getEFlags(InputFile *file) {
   return cast<ObjFile<ELF32LE>>(file)->getObj().getHeader().e_flags;
@@ -208,6 +215,10 @@ uint32_t T8xx::calcEFlags() const {
   if (!hasLinkRelaxFlag)
     flags &= ~EF_T8xx_LINKRELAX_PREPARED;
   */
-  
+
   return target;
+}
+
+void elf::setT8xxTargetInfo(Ctx &ctx) {
+  ctx.target.reset(new T8xx(ctx));
 }
