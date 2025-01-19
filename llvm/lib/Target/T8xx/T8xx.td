@@ -48,7 +48,7 @@ def T8xxAsmParser : AsmParser {
 class Proc<string Name, list<SubtargetFeature> Features>
  : Processor<Name, NoItineraries, Features>;
 
-def : Proc<"t8xx",              []>;
+def : Proc<"t8xx",              [FeatureFPU]>;
 
 def : Processor<"generic", NoItineraries, []>;
 

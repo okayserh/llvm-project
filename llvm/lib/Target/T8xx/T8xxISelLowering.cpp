@@ -83,13 +83,19 @@ static bool isCMOVPseudo(MachineInstr &MI) {
 
 T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
                                          const T8xxSubtarget &STI)
-    : TargetLowering(TM), Subtarget(STI) {
+    : TargetLowering(TM), Subtarget(&STI) {
   //  MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
 
   // Set up the register classes.
   addRegisterClass(MVT::i32, &T8xx::ORegRegClass);
 
-  computeRegisterProperties(Subtarget.getRegisterInfo());
+  if (Subtarget->useFPU ())
+    {
+      addRegisterClass(MVT::f32, &T8xx::FPRegRegClass);
+      addRegisterClass(MVT::f64, &T8xx::DFPRegRegClass);
+    }
+  
+  computeRegisterProperties(Subtarget->getRegisterInfo());
 
   // Was used in LEG architecture. Unclear what it does ...
   //  setSchedulingPreference (Sched::Source);
@@ -153,7 +159,17 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 }
 
 bool T8xxTargetLowering::useSoftFloat() const {
-  return Subtarget.useSoftFloat();
+  if (Subtarget->useSoftFloat ())
+    printf ("use Softfloat : true\n");
+  else
+    printf ("use Softfloat : false\n");
+
+  if (Subtarget->useFPU ())
+    printf ("use FPU : true\n");
+  else
+    printf ("use FPU : false\n");
+
+  return Subtarget->useSoftFloat();
 }
 
 
@@ -324,7 +340,7 @@ SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) co
 MachineBasicBlock *
 T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
                                       MachineBasicBlock *MBB) const {
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  const TargetInstrInfo *TII = Subtarget->getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   printf ("EmitLoweredSelect\n");

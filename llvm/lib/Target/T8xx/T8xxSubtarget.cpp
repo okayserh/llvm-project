@@ -27,14 +27,8 @@ void T8xxSubtarget::anchor() { }
 
 T8xxSubtarget &T8xxSubtarget::initializeSubtargetDependencies(StringRef CPU,
                                                                 StringRef FS) {
-  UseSoftMulDiv = false;
-  V8DeprecatedInsts = false;
-  HasHardQuad = false;
-  UsePopc = false;
   UseFPU = false;
   UseSoftFloat = false;
-  HasNoFSMULD = false;
-  HasNoFMULS = false;
 
   // Determine default and user specified characteristics
   std::string CPUName = std::string(CPU);
@@ -43,9 +37,6 @@ T8xxSubtarget &T8xxSubtarget::initializeSubtargetDependencies(StringRef CPU,
 
   // Parse features string.
   ParseSubtargetFeatures(CPUName, /*TuneCPU*/ CPUName, FS);
-
-  // Popc is a v9-only instruction.
-  UsePopc = false;
 
   return *this;
 }

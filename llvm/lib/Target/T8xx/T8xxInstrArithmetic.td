@@ -13,12 +13,44 @@
 
 /*
 Floating point instructions
+*/
+
+
+class T8BinaryFPOp8<bits<8> opval, string opstr, SDNode opnode> :
+      T8InstOp8<opval,
+                (outs FPReg:$dst),
+       	 	(ins FPReg:$src1, FPReg:$src2),
+		opstr,
+		[(set f32:$dst, (opnode f32:$src1, f32:$src2))]>
+{
+}
 
 // Arithmethic
-def FPADD :      T8InstOp8<0x87, "fpadd">;
-def FPSUB :      T8InstOp8<0x89, "fpsub">;
-def FPMUL :      T8InstOp8<0x8B, "fpmul">;
-def FPDIV :      T8InstOp8<0x8C, "fpdiv">;
+def FPADD :      T8BinaryFPOp8<0x87, "fpadd", fadd>;
+def FPSUB :      T8BinaryFPOp8<0x89, "fpsub", fsub>;
+def FPMUL :      T8BinaryFPOp8<0x8B, "fpmul", fmul>;
+def FPDIV :      T8BinaryFPOp8<0x8C, "fpdiv", fdiv>;
+
+
+
+// Store f32 to global address
+def FPSTNLSN : T8InstOp8<0x88,
+		(outs),
+       	 	(ins FPReg:$val, (RPtrSrc $rs, $imm):$addr),
+		"fpstnlsn $addr",
+		[(store f32:$val, ADDRrr:$addr)]> {
+		}
+
+// Load f32 from global address
+def FPLDNLSN : T8InstOp8<0x8E,
+		(outs FPReg:$val),
+       	 	(ins (RPtrSrc $rs, $imm):$addr),
+		"fpldnlsn $addr",
+		[(set f32:$val, (load ADDRrr:$addr))]>
+{
+}
+
+/*
 
 def FPREMFIRST : T8InstOp8<0x8F, "fpremfirst">;
 def FPREMSTEP :   T8InstOp8<0x90, "fpremstep">;
