@@ -40,7 +40,7 @@ namespace llvm {
   }
 
   class T8xxTargetLowering : public TargetLowering {
-    const T8xxSubtarget &Subtarget;
+    const T8xxSubtarget *Subtarget;
   public:
     T8xxTargetLowering(const TargetMachine &TM, const T8xxSubtarget &STI);
 

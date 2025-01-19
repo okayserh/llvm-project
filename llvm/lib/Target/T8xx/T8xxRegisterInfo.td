@@ -65,7 +65,7 @@ def LReg : RegisterClass<"T8xx", [i64], 32,
      	                  (add ABREG, BCREG)>;
 
 def FPReg:  RegisterClass<"T8xx", [f32], 32,
-     	                  (add FAREG, FBREG)>;
+     	                  (add FAREG, FBREG, FCREG)>;
 
 def DFPReg:  RegisterClass<"T8xx", [f64], 32,
      	                  (add FPReg)>;
