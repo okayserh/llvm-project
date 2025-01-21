@@ -19,14 +19,18 @@ def CC_T8xx32 : CallingConv<[
 //  CCIfType<[i32], CCAssignToReg<[R1, R2, R3]>>,
 
   // Alternatively, they are assigned to the stack in 4-byte aligned units.
-  CCIfType<[i32], CCAssignToStack<4, 4>>
+  CCIfType<[i32], CCAssignToStack<4, 4>>,
+
+  CCIfType<[f32], CCAssignToStack<4, 4>>
 ]>;
 
 def RetCC_T8xx32 : CallingConv<[
   // i32 are returned in registers R1, R2
   CCIfType<[i32], CCAssignToReg<[AREG]>>,
 
-  // Integer values get stored in stack slots that are 4 bytes in
+  CCIfType<[f32], CCAssignToReg<[FAREG]>>,
+
+// Integer values get stored in stack slots that are 4 bytes in
   // size and 4-byte aligned.
 //  CCIfType<[i32], CCAssignToStack<4, 4>>
 ]>;

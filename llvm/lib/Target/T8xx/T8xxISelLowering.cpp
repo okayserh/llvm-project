@@ -758,8 +758,10 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
     EVT PtrTy = getPointerTy(DAG.getDataLayout());
     SDValue FIPtr = DAG.getFrameIndex(FI, PtrTy);
 
+    /*
     assert(VA.getValVT() == MVT::i32 &&
            "Only support passing arguments as i32");
+    */
     SDValue Load = DAG.getLoad(VA.getValVT(), DL, Chain, FIPtr,
                                MachinePointerInfo());
 
