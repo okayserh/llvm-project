@@ -32,23 +32,26 @@ def FPMUL :      T8BinaryFPOp8<0x8B, "fpmul", fmul>;
 def FPDIV :      T8BinaryFPOp8<0x8C, "fpdiv", fdiv>;
 
 
-
 // Store f32 to global address
 def FPSTNLSN : T8InstOp8<0x88,
 		(outs),
-       	 	(ins FPReg:$val, (RPtrSrc $rs, $imm):$addr),
-		"fpstnlsn $addr",
-		[(store f32:$val, ADDRrr:$addr)]> {
+       	 	(ins FPReg:$val, MemSrc:$addr),
+		"fpstnlsn",
+		[(store f32:$val, ADDRr:$addr)]> {
 		}
 
 // Load f32 from global address
 def FPLDNLSN : T8InstOp8<0x8E,
 		(outs FPReg:$val),
-       	 	(ins (RPtrSrc $rs, $imm):$addr),
-		"fpldnlsn $addr",
-		[(set f32:$val, (load ADDRrr:$addr))]>
+       	 	(ins MemSrc:$addr),
+		"fpldnlsn",
+		[(set f32:$val, (load ADDRr:$addr))]>
 {
 }
+
+// Pattern for FP loads from WPtr stack
+def : Pat<(load ADDRri:$addr),
+          (FPLDNLSN (LDLP ADDRri:$addr) )>;
 
 /*
 

@@ -1055,29 +1055,30 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 			if (map_mult_def.find (Reg) == map_mult_def.end ())
 			  map_mult_def[Reg] = 1;
 		      }
-
-
-		    if (!MRI.hasOneNonDBGUse(Reg))
+		    else
 		      {
-			// Define new virtual register for the temporary storage
-			// (i.e. the result is stored on the stack location and
-			// the loaded into that stack location before the actual
-			// usage)
-			Register RegClone = MRI.cloneVirtualRegister (Reg);
-			Def->setReg (RegClone);
-
-			// TODO: Just to see if this works. Might be rather inefficient to have this
-			// after each newly created virtual register
-			VRM.grow ();
-
-			// Store temporary variable after defining instruction
-			if (VRM.isAssignedReg (Reg))
-			  VRM.assignVirt2StackSlot (Reg);
-			DebugLoc DL = Insert->getDebugLoc();
-
-			MachineBasicBlock::iterator MBBI = Insert;
-			++MBBI;
-			BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+			if (!MRI.hasOneNonDBGUse(Reg))
+			  {
+			    // Define new virtual register for the temporary storage
+			    // (i.e. the result is stored on the stack location and
+			    // the loaded into that stack location before the actual
+			    // usage)
+			    Register RegClone = MRI.cloneVirtualRegister (Reg);
+			    Def->setReg (RegClone);
+			    
+			    // TODO: Just to see if this works. Might be rather inefficient to have this
+			    // after each newly created virtual register
+			    VRM.grow ();
+			    
+			    // Store temporary variable after defining instruction
+			    if (VRM.isAssignedReg (Reg))
+			      VRM.assignVirt2StackSlot (Reg);
+			    DebugLoc DL = Insert->getDebugLoc();
+			    
+			    MachineBasicBlock::iterator MBBI = Insert;
+			    ++MBBI;
+			    BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+			  }
 		      }
 		  }
 	      }
