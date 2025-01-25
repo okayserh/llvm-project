@@ -40,6 +40,10 @@ def FPSTNLSN : T8InstOp8<0x88,
 		[(store f32:$val, ADDRr:$addr)]> {
 		}
 
+// Pattern for FP stores to WPtr stack
+def : Pat<(store f32:$val, ADDRri:$addr),
+          (FPSTNLSN f32:$val, (LDLP ADDRri:$addr) )>;
+
 // Load f32 from global address
 def FPLDNLSN : T8InstOp8<0x8E,
 		(outs FPReg:$val),
