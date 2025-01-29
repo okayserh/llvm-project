@@ -68,7 +68,8 @@ namespace llvm {
     // guide.
     unsigned int getDepth (MachineInstr *MI,
 			   const MachineRegisterInfo &MRI,
-			   const LiveIntervals &LIS);
+			   const LiveIntervals &LIS,
+			   unsigned RegClassID);
 
     MachineInstr *reorderRecursive (MachineFunction &MF,
 				   MachineInstr *MI,
@@ -542,7 +543,8 @@ static MachineInstr *CloneDef(
 
 unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 				      const MachineRegisterInfo &MRI,
-				      const LiveIntervals &LIS)
+				      const LiveIntervals &LIS,
+				      unsigned RegClassID)
 {
       // Debugging Write out all definitions and operators
       const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI->defs();
@@ -555,13 +557,28 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
       // Find out how many registers are defined and how many are needed as input
       for (auto I = Range_defs.begin (); I != Range_defs.end (); ++I)
 	{
-	  if (I->isReg())
-	    ++RegDefCount;
+	  // Count only definitions and uses that are in the relevant register class
+	  if (I->isReg() && (MRI.getRegClassOrNull (I->getReg ())->getID () == RegClassID))
+	    {
+	      ++RegDefCount;
+	      /*
+	      // Determine register class
+	      const TargetRegisterClass *TRC = MRI.getRegClassOrNull (I->getReg ());
+	      printf ("Register def class %i\n", TRC->getID ());
+	      */
+	    }
 	}
       for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
 	{
-	  if (I->isReg())
-	    ++RegUseCount;
+	  if (I->isReg() && (MRI.getRegClassOrNull (I->getReg ())->getID () == RegClassID))
+	    {
+	      ++RegUseCount;
+	      /*
+	      // Determine register class
+	      const TargetRegisterClass *TRC = MRI.getRegClassOrNull (I->getReg ());
+	      printf ("Register use class %i\n", TRC->getID ());
+	      */
+	    }
 	}
 
       if (RegUseCount == 0)
@@ -570,13 +587,15 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 	{
 	  for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
 	    {
-	      if (I->isReg () && !I->getReg().isPhysical())
+	      if (I->isReg () &&
+		  !I->getReg().isPhysical() &&
+		  (MRI.getRegClassOrNull (I->getReg ())->getID () == RegClassID))
 		{
 		  Register Reg = I->getReg();
 		  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 		  if (DefI)
 		    {
-		      unsigned int SubE = getDepth (DefI, MRI, LIS);
+		      unsigned int SubE = getDepth (DefI, MRI, LIS, RegClassID);
 		      if (SubE > DepthSubE)
 			DepthSubE = SubE;
 		    }
@@ -714,13 +733,16 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
   //  MI->dump ();
   for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
     {
-      if (I->isReg () && !I->getReg().isPhysical())
+      if (I->isReg () &&
+	  !I->getReg().isPhysical() &&
+	  (MRI.getRegClassOrNull (I->getReg ())->getID () == T8xx::ORegRegClassID))
 	{
 	  Register Reg = I->getReg();
 	  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 	  if (DefI)
 	    {
-	      int SubE = getDepth (DefI, MRI, LIS);
+	      // TODO: Parametrize ORegRegClassID
+	      int SubE = getDepth (DefI, MRI, LIS, T8xx::ORegRegClassID);
 	      OpDepth.push_back (std::make_pair(SubE, I));
 	    }
 	  else
@@ -987,15 +1009,14 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
   for (MachineBasicBlock &MBB : MF) {
 
-    // ################ Experimental code
-
     // Don't use a range-based for loop, because we modify the list as we're
     // iterating over it and the end iterator may change.
     std::vector<MachineInstr *> outvec;
 
     // Vector to keep a list of all "initial instructions" that
     // need "stackification".
-    std::vector<MachineInstr *> proc_instr;
+    std::vector<MachineInstr *> proc_instr,
+      proc_fp_instr;
 
     // First go through instructions and find those, which are used multiple times
     for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII)
@@ -1065,16 +1086,16 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 			    // usage)
 			    Register RegClone = MRI.cloneVirtualRegister (Reg);
 			    Def->setReg (RegClone);
-			    
+
 			    // TODO: Just to see if this works. Might be rather inefficient to have this
 			    // after each newly created virtual register
 			    VRM.grow ();
-			    
+
 			    // Store temporary variable after defining instruction
 			    if (VRM.isAssignedReg (Reg))
 			      VRM.assignVirt2StackSlot (Reg);
 			    DebugLoc DL = Insert->getDebugLoc();
-			    
+
 			    MachineBasicBlock::iterator MBBI = Insert;
 			    ++MBBI;
 			    BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
@@ -1090,7 +1111,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
     MBB.dump ();
     VRM.dump ();
-
 
     // Now do the recursive repositioning of the instructions to
     // have the proper stack ordering before the actual instructions
@@ -1131,6 +1151,12 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	    Register Reg = Def->getReg();
 	    if (Reg == T8xx::AREG)
 	      proc_instr.push_back (Insert);
+
+	    // Deal with floating point instructions separately as they
+	    // have a separate stack.
+	    // TODO: Think about mixed instructions, which consume FP and produce INT
+	    if (Reg == T8xx::FAREG)
+	      proc_fp_instr.push_back (Insert);
 	  }
       }  // MachineInstruction
 
@@ -1192,213 +1218,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       }
 
   }
-
-    // ################ End experimental code
-
-    // Temporary disable the WebAssembly code fragment
-#if 0
-
-    // For test purposes let's leave with going through the first instruction
-  //MachineBasicBlock &MBB = *MF.begin();
-
-    // Don't use a range-based for loop, because we modify the list as we're
-    // iterating over it and the end iterator may change.
-  for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII) {
-      printf ("########\nNewInstruction\n");
-
-      MachineInstr *Insert = &*MII;
-      //      MachineInstr &MI = *MII;
-      // Don't nest anything inside an inline asm, because we don't have
-      // constraints for $push inputs.
-      if (Insert->isInlineAsm())
-        continue;
-
-      // Ignore debugging intrinsics.
-      if (Insert->isDebugValue())
-        continue;
-
-      // Calculate depth (according to Transputer compiler writing guide
-      unsigned int MIDepth = getDepth (Insert, MRI, LIS);
-      printf ("--> Instruction Depth = %i\n", MIDepth);
-
-      //  Insert iterator to the used operands (may be registers)
-      TreeWalkerState TreeWalker(Insert);
-      while (!TreeWalker.done()) {
-	printf ("---------------------\nTreewalker dump\n");
-	TreeWalker.dump ();
-	printf ("Treewalker dump end\n");
-
-        MachineOperand &Use = TreeWalker.pop();
-
-	// Debug
-	printf ("MO dump\n");
-	Insert->dump ();
-
-	// We're only interested in explicit virtual register operands.
-        if (!Use.isReg())
-          continue;
-
-        Register Reg = Use.getReg();
-        assert(Use.isUse() && "explicit_uses() should only iterate over uses");
-        assert(!Use.isImplicit() &&
-               "explicit_uses() should only iterate over explicit operands");
-        if (Reg.isPhysical())
-          continue;
-
-        // Identify the definition for this register at this point.
-	if (MRI.hasOneDef(Reg) && MRI.hasOneNonDBGUse(Reg)) {
-	  printf ("Has one def %i\n", Reg);
-	}
-	// Create temporary variable
-	else
-	  {
-	    // Introduce a workspace register
-	    if (VRM.isAssignedReg (Reg))
-	      VRM.assignVirt2StackSlot (Reg);
-	    VRM.dump ();
-
-	    // Insert a "ldl" for the workspace register before the instruction
-	    DebugLoc DL = Insert->getDebugLoc();
-	    MachineBasicBlock::iterator MBBI = *Insert;
-	    // Note: The AREG is used later to identify this as a special code segment
-	    BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-	    // Move iterator to "LDL"
-	    --MBBI;
-	    Insert = &(*MBBI);
-
-	    continue;
-	  }
-
-	MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
-        if (!DefI)
-	  continue;
-
-	// Debug
-	printf ("Defined by \n");
-	DefI->dump ();
-
-	// Don't nest an INLINE_ASM def into anything, because we don't have
-        // constraints for $pop outputs.
-        if (DefI->isInlineAsm())
-          continue;
-
-        MachineOperand *Def = DefI->findRegisterDefOperand(Reg);
-        assert(Def != nullptr);
-
-	printf ("Operand\n");
-	Def->dump ();
-	/* OKH: DefI is the instruction that defines the register, Def is the defined operand */
-
-
-	// Decide which strategy to take. Prefer to move a single-use value
-        // over cloning it, and prefer cloning over introducing a tee.
-        // For moving, we require the def to be in the same block as the use;
-        // this makes things simpler (LiveIntervals' handleMove function only
-        // supports intra-block moves) and it's MachineSink's job to catch all
-        // the sinking opportunities anyway.
-        bool SameBlock = DefI->getParent() == &MBB;
-        bool CanMove = SameBlock && isSafeToMove(Def, &Use, Insert, MFI, MRI) &&
-                       !TreeWalker.isOnStack(Reg);
-
-	// Loading a constant does not depend on anything and can always be moved,
-	// even between blocks
-	if (DefI->getOpcode() == T8xx::LDC)
-	  CanMove = true;
-
-	printf ("Move for single use SameBlock %i   CanMove %i\n", SameBlock, CanMove);
-
-	// Note: Problems occur with instructions that don't consume
-	// any registers. In that case, the instruction should be skipped.
-
-	if (CanMove && hasOneNonDBGUse(Reg, DefI, MRI, MDT, LIS)) {
-          Insert = moveForSingleUse(Reg, Use, DefI, MBB, Insert, LIS, MFI, MRI);
-	}
-	else {
-	  // Simply introduce a workspace register
-	  if (VRM.isAssignedReg (Reg))
-	    VRM.assignVirt2StackSlot (Reg);
-
-	  VRM.dump ();
-
-	  // Insert a "ldl" for the workspace register before the instruction
-	  DebugLoc DL = Insert->getDebugLoc();
-	  MachineBasicBlock::iterator MBBI = *Insert;
-	  // Note: The AREG is used later to identify this as a special code segment
-	  BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDL),T8xx::AREG).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-	  // Move iterator to "LDL"
-	  --MBBI;
-	  Insert = &(*MBBI);
-
-	  continue;
-	}
-
-        // We stackified an operand. Add the defining instruction's operands to
-        // the worklist stack now to continue to build an ever deeper tree.
-	//        Commuting.reset();
-        TreeWalker.pushOperands(Insert);
-      }
-
-      // If we stackified any operands, skip over the tree to start looking for
-      // the next instruction we can build a tree on.
-      if (Insert != &*MII) {
-	//        imposeStackOrdering(&*MII);
-        MII = MachineBasicBlock::iterator(Insert).getReverse();
-	//        Changed = true;
-      }
-
-      /*
-      // Terminate after 2 processed instructions
-      count++;
-      if (count > 1)
-	break;
-      */
-
-	}  // MachineInstruction
-  } // MachineBasicBlock
-
-
-  // Insert some code to save the virtual register in a stack slot
-  // after the definition
-  printf ("############ Convert to stack registers\n");
-
-  for (MachineBasicBlock &MBB : MF) {
-
-  for (auto MII = MBB.begin(); MII != MBB.end(); ++MII) {
-      MachineInstr *Instr = &*MII;
-
-      // Don't nest anything inside an inline asm, because we don't have
-      // constraints for $push inputs.
-      if (Instr->isInlineAsm())
-        continue;
-
-      // Ignore debugging intrinsics.
-      if (Instr->isDebugValue())
-        continue;
-
-      if (Instr->getNumExplicitDefs () > 0)
-	{
-	  const iterator_range<MachineInstr::mop_iterator> &Range(Instr->defs());
-	  if (Range.begin()->isReg())
-	    {
-	      Register Reg = Range.begin()->getReg();
-
-	      if (Reg.isVirtual() && !VRM.isAssignedReg(Reg))
-		{
-		  dbgs() << printReg(Reg, TRI) << "\n";
-		  Instr->dump ();
-
-		  DebugLoc DL = Instr->getDebugLoc();
-		  MachineBasicBlock::iterator MBBI = *Instr;
-		  BuildMI(MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-		}
-	    }
-	}
-  } // MachineInstr
-
-  } // MachineBasicBlock
-#endif
 
 
   // ######### Replace virtual registers with the stack registers
