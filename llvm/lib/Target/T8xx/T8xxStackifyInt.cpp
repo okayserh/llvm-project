@@ -730,7 +730,6 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
   // Find out how many registers are defined and how many are needed as input
   // When a variable has multiple definitions, put "-1" on the register stack
-  //  MI->dump ();
   for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
     {
       if (I->isReg () &&
@@ -966,7 +965,6 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	}
     }
 
-  //  MI->dump ();
   output.push_back (MI);
 
   return (Insert);
