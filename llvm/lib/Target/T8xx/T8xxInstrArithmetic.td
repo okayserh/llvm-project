@@ -58,16 +58,37 @@ def : Pat<(load ADDRri:$addr),
           (FPLDNLSN (LDLP ADDRri:$addr) )>;
 
 /*
-
 def FPREMFIRST : T8InstOp8<0x8F, "fpremfirst">;
 def FPREMSTEP :   T8InstOp8<0x90, "fpremstep">;
-
 def FPUABS :  	   T8InstFPU4<0xB, "fpuabs">;
+*/
+
 
 // Comparison
-def FPGT :        T8InstOp8<0x94, "fpgt">;
-def FPEQ :        T8InstOp8<0x95, "fpeq">;
+def FPEQ :        T8InstOp8<0x95,
+    	 	  (outs OReg:$cc),
+		  (ins FPReg:$lhs, FPReg:$rhs),
+		  "fpeq",
+		  [(set i32:$cc,
+		  (i32 (setcc f32:$lhs, f32:$rhs, SETOEQ)))]>;
 
+
+def FPGT :        T8InstOp8<0x94,
+    	 	  (outs OReg:$cc),
+		  (ins FPReg:$lhs, FPReg:$rhs),
+		  "fpgt",
+		  [(set i32:$cc,
+		  (i32 (setcc f32:$lhs, f32:$rhs, SETOGT)))]>;
+
+/* Other comparisons will be created by patterns */
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETONE),
+           (EQC (FPEQ $rhs, $lhs), 0)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOGE),
+           (EQC (FPGT $rhs, $lhs), 0)>;
+
+
+/*
 // Load/Store
 def FPLDNLDB :   T8InstOp8<0x8A, "fpldnldb">;
 def FPLDNLSN :   T8InstOp8<0x8E, "fpldnlsn">;

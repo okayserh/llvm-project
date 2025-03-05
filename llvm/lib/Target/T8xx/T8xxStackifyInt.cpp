@@ -772,7 +772,10 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
     }
 
   if (OpDepth.size () == 1)
-    str2code = "A";
+    {
+      str2code = "A";
+      printf ("One Operand\n");
+    }
 
   if (OpDepth.size () == 2)
     {
@@ -785,7 +788,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  if (OpDepth[0].first > 2)
 	    {
 	      str2code = "BsABl";
-
+	      /*
 	      printf ("Br A\n");
 	      MachineOperand *Use = OpDepth[1].second;
 	      Register Reg = Use->getReg ();
@@ -817,6 +820,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      // Load temporary variable before using instruction
 	      MBBI = *MI;
 	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	      */
 	    }
 	  else
 	    // TODO: Check for commuting operators
@@ -935,6 +939,12 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
     {
       while (*str2code != 0)
 	{
+	  // The "load instruction" must be preceded by the operand register
+	  // Hence check for a load instruction at next position and fast forward
+	  // to that position, if it is a load
+	  if ((*(str2code+1) != 0) && (*(str2code+1) == 'l'))
+	    ++str2code;
+
 	  switch (*str2code)
 	    {
 	    case 'A':
@@ -944,14 +954,48 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      MachineOperand *Use = OpDepth[(*str2code) - 'A'].second;
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+
+	      if (DefI == nullptr)
+		printf ("Instruction not found!!!\n");
 	      
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
 	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
 	    }
 	      break;
 
 	    case 's': {
+	      // Note Character denotes operand position!
+	      MachineOperand *Use = OpDepth[(*(str2code-1)) - 'A'].second;
+	      Register Reg = Use->getReg ();
+	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
+	      Register RegClone = MRI.cloneVirtualRegister (Reg);
+	      Use->setReg (RegClone);
+
+	      // Introduce temporary variable
+	      // Simply introduce a workspace register
+	      if (VRM.isAssignedReg (Reg))
+		VRM.assignVirt2StackSlot (Reg);
+	      DebugLoc DL = MI->getDebugLoc();
+
+	      MachineBasicBlock::iterator MBBI = *DefI;
+	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	    }
+	      break;
+
+	    case 'l': {
+	      MachineOperand *Use = OpDepth[(*(str2code-1)) - 'A'].second;
+	      Register Reg = Use->getReg ();
+	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+
+	      // When the temporary register is introduced, the use
+	      // is set to RegClone. Hence, we can retrieve the right clone from there
+	      Register RegClone = Use->getReg ();
+	      
+	      // Load temporary variable before using instruction
+	      DebugLoc DL = MI->getDebugLoc();
+	      MachineBasicBlock::iterator MBBI = *MI;
+	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
 	      break;
 	      
@@ -1347,6 +1391,11 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 	// When the instruction does not define anything, it is a store
 	// instruction and should be recursed
+
+	// TODO: The FPLDNLSN instruction does define a floating point register
+	// but consumes an integer register. Hence those instruction are currently
+	// not properly treated within this code.
+	
 	if (Range_defs.begin () == Range_defs.end ())
 	  {
 	    unsigned int reg_u_fp = 0,
@@ -1396,7 +1445,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     for (auto PI = proc_fp_instr.begin (); PI != proc_fp_instr.end (); ++PI)
       {
 	MBB.dump ();
-	printf ("Reorder\n");
+	printf ("Reorder FP\n");
 	(*PI)->dump ();
 	reorderRecursiveFP (MF, *PI, MRI, LIS, VRM, outvec);
 	printf ("Reorder End\n");
@@ -1407,7 +1456,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     for (auto PI = proc_instr.begin (); PI != proc_instr.end (); ++PI)
       {
 	MBB.dump ();
-	printf ("Reorder\n");
+	printf ("Reorder INT\n");
 	(*PI)->dump ();
 	reorderRecursive (MF, *PI, MRI, LIS, VRM, outvec);
 	printf ("Reorder End\n");

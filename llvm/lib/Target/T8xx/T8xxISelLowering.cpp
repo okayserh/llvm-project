@@ -214,11 +214,6 @@ SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
 
 SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
 {
-  /*
-  MVT VT = Op.getSimpleValueType();
-  assert(VT == MVT::i8 && "SetCC type must be 8-bit integer");
-  */
-
   SDValue Op0 = Op.getOperand(0);
   SDValue Op1 = Op.getOperand(1);
   SDLoc DL(Op);
