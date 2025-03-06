@@ -443,111 +443,6 @@ static void shrinkToUses(LiveInterval &LI, LiveIntervals &LIS) {
 }
 
 
-
-/// A trivially cloneable instruction; clone it and nest the new copy with the
-/// current instruction.
-static MachineInstr *rematerializeCheapDef(
-    unsigned Reg, MachineOperand &Op, MachineInstr &Def, MachineBasicBlock &MBB,
-    MachineBasicBlock::instr_iterator Insert, LiveIntervals &LIS,
-    T8xxMachineFunctionInfo &MFI, MachineRegisterInfo &MRI,
-    const T8xxInstrInfo *TII, const T8xxRegisterInfo *TRI) {
-  LLVM_DEBUG(dbgs() << "Rematerializing cheap def: "; Def.dump());
-  LLVM_DEBUG(dbgs() << " - for use in "; Op.getParent()->dump());
-
-  //  WebAssemblyDebugValueManager DefDIs(&Def);
-
-  Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
-  //  DefDIs.cloneSink(&*Insert, NewReg);
-  Op.setReg(NewReg);
-  MachineInstr *Clone = getPrevNonDebugInst(&*Insert);
-  assert(Clone);
-  LIS.InsertMachineInstrInMaps(*Clone);
-  LIS.createAndComputeVirtRegInterval(NewReg);
-  MFI.stackifyVReg(MRI, NewReg);
-  //  imposeStackOrdering(Clone);
-
-  LLVM_DEBUG(dbgs() << " - Cloned to "; Clone->dump());
-
-  // Shrink the interval.
-  bool IsDead = MRI.use_empty(Reg);
-  if (!IsDead) {
-    LiveInterval &LI = LIS.getInterval(Reg);
-    shrinkToUses(LI, LIS);
-    IsDead = !LI.liveAt(LIS.getInstructionIndex(Def).getDeadSlot());
-  }
-
-  // If that was the last use of the original, delete the original.
-  if (IsDead) {
-    LLVM_DEBUG(dbgs() << " - Deleting original\n");
-    //SlotIndex Idx = LIS.getInstructionIndex(Def).getRegSlot();
-    // ??
-    //    LIS.removePhysRegDefAt(MCRegister::from(WebAssembly::ARGUMENTS), Idx);
-    LIS.removeInterval(Reg);
-    LIS.RemoveMachineInstrFromMaps(Def);
-    // DefDIs.removeDef();
-  }
-
-  return Clone;
-}
-
-
-/// A trivially cloneable instruction; clone it and nest the new copy with the
-/// current instruction.
-static MachineInstr *CloneDef(
-    unsigned Reg, MachineOperand &Op, MachineInstr &Def, MachineBasicBlock &MBB,
-    MachineBasicBlock::instr_iterator Insert, LiveIntervals &LIS,
-    T8xxMachineFunctionInfo &MFI, MachineRegisterInfo &MRI,
-    const T8xxInstrInfo *TII, const T8xxRegisterInfo *TRI) {
-  LLVM_DEBUG(dbgs() << "Rematerializing cheap def: "; Def.dump());
-  LLVM_DEBUG(dbgs() << " - for use in "; Op.getParent()->dump());
-
-  T8xxDebugValueManager DefDIs(&Def);
-
-  // Create new virtual register for SSA form
-  Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
-
-  // Actual cloning of instruction (is inserted before "Insert")
-  DefDIs.cloneSink(&*Insert, NewReg);
-
-  // Replaces the previous operand in the referring statement with the new register
-  Op.setReg(NewReg);
-
-  // Update some information, based on the new instruction
-  MachineInstr *Clone = getPrevNonDebugInst(&*Insert);
-  assert(Clone);
-  LIS.InsertMachineInstrInMaps(*Clone);
-  LIS.createAndComputeVirtRegInterval(NewReg);
-  MFI.stackifyVReg(MRI, NewReg);
-  //  imposeStackOrdering(Clone);
-
-  LLVM_DEBUG(dbgs() << " - Cloned to "; Clone->dump());
-
-  /*  TODO:
-  // Shrink the interval.
-  bool IsDead = MRI.use_empty(Reg);
-  if (!IsDead) {
-    LiveInterval &LI = LIS.getInterval(Reg);
-    shrinkToUses(LI, LIS);
-    IsDead = !LI.liveAt(LIS.getInstructionIndex(Def).getDeadSlot());
-  }
-
-  // If that was the last use of the original, delete the original.
-  if (IsDead) {
-    LLVM_DEBUG(dbgs() << " - Deleting original\n");
-    //SlotIndex Idx = LIS.getInstructionIndex(Def).getRegSlot();
-    // ??
-    //    LIS.removePhysRegDefAt(MCRegister::from(WebAssembly::ARGUMENTS), Idx);
-    LIS.removeInterval(Reg);
-    LIS.RemoveMachineInstrFromMaps(Def);
-    // DefDIs.removeDef();
-  }
-  */
-
-  return Clone;
-}
-
-
-
 unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 				      const MachineRegisterInfo &MRI,
 				      const LiveIntervals &LIS,
@@ -735,6 +630,9 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
   // preceding operations
   SmallVector<std::pair<int, MachineOperand *>, 4> OpDepth;
 
+  // Buffer to save registers that have been introduced during stackification
+  Register reg_mem[3];
+  
   // String to describe the required instruction sequence
   const char *str2code = NULL;
   
@@ -772,10 +670,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
     }
 
   if (OpDepth.size () == 1)
-    {
-      str2code = "A";
-      printf ("One Operand\n");
-    }
+    str2code = "A";
+
 
   if (OpDepth.size () == 2)
     {
@@ -786,117 +682,17 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
       if (OpDepth[1].first > OpDepth[0].first)
 	{
 	  if (OpDepth[0].first > 2)
-	    {
-	      str2code = "BsABl";
-	      /*
-	      printf ("Br A\n");
-	      MachineOperand *Use = OpDepth[1].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
-
-	      Register RegClone = MRI.cloneVirtualRegister (Reg);
-	      Use->setReg (RegClone);
-
-	      // Introduce temporary variable
-	      // Simply introduce a workspace register
-	      if (VRM.isAssignedReg (Reg))
-		VRM.assignVirt2StackSlot (Reg);
-	      DebugLoc DL = MI->getDebugLoc();
-
-	      MachineBasicBlock::iterator MBBI = *DefI;
-	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-	      // Now the second operand
-	      Use = OpDepth[0].second;
-	      Register Reg2 = Use->getReg ();
-	      MachineInstr *DefI2 = getVRegDef(Reg2, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursive (MF, DefI2, MRI, LIS, VRM, output);
-
-	      // Load temporary variable before using instruction
-	      MBBI = *MI;
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	      */
-	    }
+	    str2code = "BsABl";
 	  else
 	    // TODO: Check for commuting operators
-	    {
-	      printf ("Br B\n");
-	      MachineOperand *Use = OpDepth[1].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
-
-	      Use = OpDepth[0].second;
-	      Reg = Use->getReg ();
-	      DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
-	    }
+	    str2code = "BA";
 	}
       else
 	{
 	  if (OpDepth[1].first < 3)
-	    {
-	      printf ("Br C\n");
-	      MachineOperand *Use = OpDepth[0].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
-
-	      Use = OpDepth[1].second;
-	      Reg = Use->getReg ();
-	      DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
-	    }
+	    str2code = "AB";
 	  else
-	    {
-	      printf ("Br D\n");
-	      MachineOperand *Use = OpDepth[1].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
-
-	      // Define new virtual register for the temporary storage
-	      // (i.e. the result is stored on the stack location and
-	      // the loaded into that stack location before the actual
-	      // usage)
-	      Register RegClone = MRI.cloneVirtualRegister (Reg);
-	      Use->setReg (RegClone);
-
-	      // Store temporary variable after defining instruction
-	      if (VRM.isAssignedReg (Reg))
-		VRM.assignVirt2StackSlot (Reg);
-	      DebugLoc DL = MI->getDebugLoc();
-
-	      MachineBasicBlock::iterator MBBI = *DefI;
-	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-	      // Now handle second operand
-	      Use = OpDepth[0].second;
-	      Register Reg2 = Use->getReg ();
-	      MachineInstr *DefI2 = getVRegDef(Reg2, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursive (MF, DefI2, MRI, LIS, VRM, output);
-
-	      // Load temporary variable before using instruction
-	      MBBI = *MI;
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	    }
+	    str2code = "BsABl";
 	}
     }
 
@@ -937,6 +733,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
   if (str2code != NULL)
     {
+      printf ("Str2Code %s\n", str2code);
+
       while (*str2code != 0)
 	{
 	  // The "load instruction" must be preceded by the operand register
@@ -960,6 +758,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      
 	      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
 	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
+	      printf ("-------------------------\n");
 	    }
 	      break;
 
@@ -969,8 +768,12 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
+	      // Save register for later
+	      reg_mem[(*(str2code-1)) - 'A'] = Reg;
+
 	      Register RegClone = MRI.cloneVirtualRegister (Reg);
 	      Use->setReg (RegClone);
+	      VRM.grow ();
 
 	      // Introduce temporary variable
 	      // Simply introduce a workspace register
@@ -979,23 +782,26 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      DebugLoc DL = MI->getDebugLoc();
 
 	      MachineBasicBlock::iterator MBBI = *DefI;
-	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
+		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
 	      break;
 
 	    case 'l': {
 	      MachineOperand *Use = OpDepth[(*(str2code-1)) - 'A'].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
 	      // When the temporary register is introduced, the use
 	      // is set to RegClone. Hence, we can retrieve the right clone from there
 	      Register RegClone = Use->getReg ();
+
+	      // Retrieve register that has been placed in temporary register
+	      Register Reg = reg_mem[(*(str2code-1)) - 'A'];
 	      
 	      // Load temporary variable before using instruction
 	      DebugLoc DL = MI->getDebugLoc();
 	      MachineBasicBlock::iterator MBBI = *MI;
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).
+		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
 	      break;
 	      
