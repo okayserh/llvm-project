@@ -78,13 +78,6 @@ namespace llvm {
 				    VirtRegMap &VRM,
 				    std::vector<MachineInstr *> &output);
 
-    MachineInstr *reorderRecursiveFP (MachineFunction &MF,
-				   MachineInstr *MI,
-				   MachineRegisterInfo &MRI,
-				    LiveIntervals &LIS,
-				    VirtRegMap &VRM,
-				    std::vector<MachineInstr *> &output);
-
   public:
     static char ID;
 
@@ -572,7 +565,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 
 
 	  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::ORegRegClassID)
-	    {	  
+	    {
 	      DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).
 		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
@@ -629,13 +622,14 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
   // Vector to hold the depth / operand register usage of the
   // preceding operations
   SmallVector<std::pair<int, MachineOperand *>, 4> OpDepth;
+  SmallVector<std::pair<int, MachineOperand *>, 4> OpDepthFP;
 
   // Buffer to save registers that have been introduced during stackification
-  Register reg_mem[3];
-  
+  Register reg_mem[5];
+
   // String to describe the required instruction sequence
   const char *str2code = NULL;
-  
+
   // Find out how many registers are defined and how many are needed as input
   // When a variable has multiple definitions, put "-1" on the register stack
   for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
@@ -643,24 +637,32 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
       const TargetRegisterClass *RC = NULL;
       if (I->isReg () && !I->getReg().isPhysical ())
 	RC = MRI.getRegClassOrNull (I->getReg ());
-      
+
       if (I->isReg () &&
 	  !I->getReg().isPhysical() &&
-	  (RC->getID () == T8xx::ORegRegClassID))
+	  ((RC->getID () == T8xx::ORegRegClassID) ||
+	   (RC->getID () == T8xx::FPRegRegClassID)))
 	{
 	  Register Reg = I->getReg();
 	  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 	  if (DefI)
 	    {
 	      int SubE = getDepth (DefI, MRI, LIS, RC->getID ());
-	      OpDepth.push_back (std::make_pair(SubE, I));
+	      if (RC->getID () == T8xx::ORegRegClassID)
+		OpDepth.push_back (std::make_pair(SubE, I));
+	      if (RC->getID () == T8xx::FPRegRegClassID)
+		OpDepthFP.push_back (std::make_pair(SubE, I));
 	    }
 	  else
-	    // Register with multiple definitions or those, where it is
-	    // not possible to move the respective instruction get
-	    // depth "10000" (arbitrary value)
-	    OpDepth.push_back (std::make_pair(10000, I));
-
+	    {
+	      // Register with multiple definitions or those, where it is
+	      // not possible to move the respective instruction get
+	      // depth "10000" (arbitrary value)
+	      if (RC->getID () == T8xx::ORegRegClassID)
+		OpDepth.push_back (std::make_pair(10000, I));
+	      if (RC->getID () == T8xx::FPRegRegClassID)
+		OpDepthFP.push_back (std::make_pair(10000, I));
+	    }
 	  //	  printf ("Op Depth %i\n", OpDepth.back ());
 	}
 
@@ -669,67 +671,98 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
       // a function returns.
     }
 
-  if (OpDepth.size () == 1)
-    str2code = "A";
 
-
-  if (OpDepth.size () == 2)
+  // Most common case, regular instruction without usage of FP registers
+  if (OpDepthFP.size () == 0)
     {
-      printf ("Reorder Depth 2,  %i %i\n", OpDepth[0].first, OpDepth[1].first);
-      // Move instruction ahead of current instruction and then move on
-      // to definition
+      if (OpDepth.size () == 1)
+	str2code = "A";
 
-      if (OpDepth[1].first > OpDepth[0].first)
+      if (OpDepth.size () == 2)
 	{
-	  if (OpDepth[0].first > 2)
-	    str2code = "BsABl";
+	  printf ("Reorder Depth 2,  %i %i\n", OpDepth[0].first, OpDepth[1].first);
+	  // Move instruction ahead of current instruction and then move on
+	  // to definition
+
+	  if (OpDepth[1].first > OpDepth[0].first)
+	    {
+	      if (OpDepth[0].first > 2)
+		str2code = "BsABl";
+	      else
+		// TODO: Check for commuting operators
+		str2code = "BA";
+	    }
+	  else
+	    {
+	      if (OpDepth[1].first < 3)
+		str2code = "AB";
+	      else
+		str2code = "BsABl";
+	    }
+	}
+
+      if (OpDepth.size () == 3)
+	{
+	  // Note: An Algorithm is written down in section 5.3.1 of the transputer compiler writer
+	  // guide. However, it might be feasible to have an algorithm to determine the correct order.
+	  // There may be one operand with >2 Depth, one operand with 2 Depth and one with 1 Depth.
+	  // In this case, or when the Depths are lower, the usage of temporary variables
+	  // is not needed!.
+	  // Otherwise, up to two temporary variables are needed for the operands which
+	  // have depth >2.
+	  printf ("Reorder Depth 3,  %i %i %i\n", OpDepth[0].first, OpDepth[1].first, OpDepth[2].first);
+	  int indx = 0,
+	    indx_fac = 1;
+	  for (int i = 0; i < 3; ++i)
+	    {
+	      // OpDepth[2-1] == 1 -> Add 0 to indx, i.e. do nothing
+	      if (OpDepth[2-i].first == 2)
+		indx += indx_fac;
+	      if (OpDepth[2-i].first > 2)
+		indx += indx_fac * 2;
+	      indx_fac *= 3;
+	    }
+	  if (indx > 9) // No differentiation between case for C == 1 and C <= 2
+	    indx -= 9;
+
+	  if ((indx >= 0) && (indx < 18))
+	    printf ("Operations %s\n", tcwg_tab5[indx]);
+	  else
+	    printf ("3 Operand Index error!\n");
+
+	  // Now transform the string into actual instructions
+	  str2code = tcwg_tab5[indx];
+	}
+    }
+
+  // One FP register is used. These cases could be mixed (i.e. one FP / one INT)
+  if (OpDepthFP.size () == 1)
+    {
+      if (OpDepth.size () == 0)
+	str2code = "D";
+      else
+	str2code = "DA";
+    }
+
+  // Two FP registers are used. These cases are "pure". I.e. only FP registers are used
+  if (OpDepthFP.size () == 2)
+    {
+      if (OpDepthFP[1].first > OpDepthFP[0].first)
+	{
+	  if (OpDepthFP[0].first > 2)
+	    str2code = "EsDEl";
 	  else
 	    // TODO: Check for commuting operators
-	    str2code = "BA";
+	    str2code = "ED";
 	}
       else
 	{
-	  if (OpDepth[1].first < 3)
-	    str2code = "AB";
+	  if (OpDepthFP[1].first < 3)
+	    str2code = "DE";
 	  else
-	    str2code = "BsABl";
+	    str2code = "EsDEl";
 	}
     }
-
-
-  if (OpDepth.size () == 3)
-    {
-      // Note: An Algorithm is written down in section 5.3.1 of the transputer compiler writer
-      // guide. However, it might be feasible to have an algorithm to determine the correct order.
-      // There may be one operand with >2 Depth, one operand with 2 Depth and one with 1 Depth.
-      // In this case, or when the Depths are lower, the usage of temporary variables
-      // is not needed!.
-      // Otherwise, up to two temporary variables are needed for the operands which
-      // have depth >2.
-      printf ("Reorder Depth 3,  %i %i %i\n", OpDepth[0].first, OpDepth[1].first, OpDepth[2].first);
-      int indx = 0,
-	indx_fac = 1;
-      for (int i = 0; i < 3; ++i)
-	{
-	  // OpDepth[2-1] == 1 -> Add 0 to indx, i.e. do nothing
-	  if (OpDepth[2-i].first == 2)
-	    indx += indx_fac;
-	  if (OpDepth[2-i].first > 2)
-	    indx += indx_fac * 2;
-	  indx_fac *= 3;
-	}
-      if (indx > 9) // No differentiation between case for C == 1 and C <= 2
-	indx -= 9;
-
-      if ((indx >= 0) && (indx < 18))
-	printf ("Operations %s\n", tcwg_tab5[indx]);
-      else
-	printf ("3 Operand Index error!\n");
-
-      // Now transform the string into actual instructions
-      str2code = tcwg_tab5[indx];
-    }
-
 
   if (str2code != NULL)
     {
@@ -745,6 +778,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	  switch (*str2code)
 	    {
+	      // Integer cases
 	    case 'A':
 	    case 'B':
 	    case 'C': {
@@ -755,16 +789,35 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	      if (DefI == nullptr)
 		printf ("Instruction not found!!!\n");
-	      
+
 	      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
 	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
-	      printf ("-------------------------\n");
+	    }
+	      break;
+
+	      // Floating point cases
+	    case 'D':
+	    case 'E': {
+	      // Note Character denotes operand position!
+	      MachineOperand *Use = OpDepthFP[(*str2code) - 'D'].second;
+	      Register Reg = Use->getReg ();
+	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+
+	      if (DefI == nullptr)
+		printf ("Instruction not found!!!\n");
+
+	      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
+	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
 	    }
 	      break;
 
 	    case 's': {
+	      bool bIntCase = (*(str2code-1) <= 'C');
+	      int opno = bIntCase ? (*(str2code-1)) - 'A' :
+		(*(str2code-1)) - 'D';
+
 	      // Note Character denotes operand position!
-	      MachineOperand *Use = OpDepth[(*(str2code-1)) - 'A'].second;
+	      MachineOperand *Use = OpDepth[opno].second;
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
@@ -782,13 +835,32 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      DebugLoc DL = MI->getDebugLoc();
 
 	      MachineBasicBlock::iterator MBBI = *DefI;
-	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
-		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+
+	      if (bIntCase)
+		{
+		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
+		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		}
+	      else
+		{
+		  Register RegFPStack;
+		  RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
+
+		  // TODO: Evaluate whether something needs to be done regarding the newly introduced
+		  // integer variable?
+		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
+		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		  DefI = BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPSTNLSN)).
+		    addReg(Reg).addReg(RegFPStack);
+		}
 	    }
 	      break;
 
 	    case 'l': {
-	      MachineOperand *Use = OpDepth[(*(str2code-1)) - 'A'].second;
+	      bool bIntCase = (*(str2code-1) <= 'C');
+	      int opno = bIntCase ? (*(str2code-1)) - 'A' :
+		(*(str2code-1)) - 'D';
+	      MachineOperand *Use = OpDepth[opno].second;
 
 	      // When the temporary register is introduced, the use
 	      // is set to RegClone. Hence, we can retrieve the right clone from there
@@ -796,217 +868,34 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	      // Retrieve register that has been placed in temporary register
 	      Register Reg = reg_mem[(*(str2code-1)) - 'A'];
-	      
+
 	      // Load temporary variable before using instruction
 	      DebugLoc DL = MI->getDebugLoc();
 	      MachineBasicBlock::iterator MBBI = *MI;
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).
-		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+
+	      if (bIntCase)
+		{
+		  BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).
+		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		}
+	      else
+		{
+		  Register RegFPStack;
+		  RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
+
+		  // TODO: Evaluate whether something needs to be done regarding the newly introduced
+		  // integer variable?
+		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
+		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
+		    addReg(RegFPStack);
+		}
 	    }
 	      break;
-	      
+
 	    }
-      
+
 	  ++str2code;
-	}
-    }
-  
-  output.push_back (MI);
-  return (MI);
-}
-
-
-/*
- * Reordering for floating point instructions
- */
-
-MachineInstr *T8xxStackPass::reorderRecursiveFP (MachineFunction &MF,
-					       MachineInstr *MI,
-					       MachineRegisterInfo &MRI,
-					       LiveIntervals &LIS,
-					       VirtRegMap &VRM,
-					       std::vector<MachineInstr *> &output)
-{
-  // T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
-  MachineBasicBlock *MBB = MI->getParent ();
-  const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
-  // const auto *TRI = MF.getSubtarget<T8xxSubtarget>().getRegisterInfo();
-  // auto &MDT = getAnalysis<MachineDominatorTreeWrapperPass>();
-
-  // Debugging Write out all definitions and operators
-  const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI->defs();
-  const iterator_range<MachineInstr::mop_iterator> &Range_uses = MI->explicit_uses();
-
-  // Vector to hold the depth / operand register usage of the
-  // preceding operations
-  SmallVector<std::pair<int, MachineOperand *>, 4> OpDepth;
-  
-  // Find out how many registers are defined and how many are needed as input
-  // When a variable has multiple definitions, put "-1" on the register stack
-  for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
-    {
-      const TargetRegisterClass *RC = NULL;
-      if (I->isReg () && !I->getReg().isPhysical ())
-	RC = MRI.getRegClassOrNull (I->getReg ());
-      
-      if (I->isReg () &&
-	  !I->getReg().isPhysical() &&
-	  (RC->getID () == T8xx::FPRegRegClassID))
-	{
-	  Register Reg = I->getReg();
-	  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-	  if (DefI)
-	    {
-	      int SubE = getDepth (DefI, MRI, LIS, RC->getID ());
-	      OpDepth.push_back (std::make_pair(SubE, I));
-	    }
-	  else
-	    // Register with multiple definitions or those, where it is
-	    // not possible to move the respective instruction get
-	    // depth "10000" (arbitrary value)
-	    OpDepth.push_back (std::make_pair(10000, I));
-
-	  //	  printf ("Op Depth %i\n", OpDepth.back ());
-	}
-
-      // TODO: Ignore phyiscal registers for the moment.
-      // Those should only appear in COPY intstructions after
-      // a function returns.
-    }
-
-  if (OpDepth.size () == 1)
-    {
-      printf ("FP Reorder Depth 1  %i\n", OpDepth[0].first);
-      // Move instruction ahead of current instruction and then move on
-      // to definition
-      MachineOperand *Use = OpDepth[0].second;
-      Register Reg = Use->getReg ();
-      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-      if (DefI == nullptr)
-	printf ("Instruction not found!!!\n");
-
-      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-      reorderRecursiveFP (MF, DefI, MRI, LIS, VRM, output);
-    }
-
-  if (OpDepth.size () == 2)
-    {
-      printf ("FP Reorder Depth 2,  %i %i\n", OpDepth[0].first, OpDepth[1].first);
-      // Move instruction ahead of current instruction and then move on
-      // to definition
-
-      if (OpDepth[1].first > OpDepth[0].first)
-	{
-	  if (OpDepth[0].first > 2)
-	    {
-	      printf ("Br A\n");
-	      MachineOperand *Use = OpDepth[1].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursiveFP (MF, DefI, MRI, LIS, VRM, output);
-
-	      Register RegClone = MRI.cloneVirtualRegister (Reg);
-	      Use->setReg (RegClone);
-
-	      // Introduce temporary variable
-	      // Simply introduce a workspace register
-	      if (VRM.isAssignedReg (Reg))
-		VRM.assignVirt2StackSlot (Reg);
-	      DebugLoc DL = MI->getDebugLoc();
-
-	      MachineBasicBlock::iterator MBBI = *DefI;
-	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-	      // Now the second operand
-	      Use = OpDepth[0].second;
-	      Register Reg2 = Use->getReg ();
-	      MachineInstr *DefI2 = getVRegDef(Reg2, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursiveFP (MF, DefI2, MRI, LIS, VRM, output);
-
-	      // Load temporary variable before using instruction
-	      MBBI = *MI;
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	    }
-	  else
-	    // TODO: Check for commuting operators
-	    {
-	      printf ("Br B\n");
-	      MachineOperand *Use = OpDepth[1].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursiveFP (MF, DefI, MRI, LIS, VRM, output);
-
-	      Use = OpDepth[0].second;
-	      Reg = Use->getReg ();
-	      DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursiveFP (MF, DefI, MRI, LIS, VRM, output);
-	    }
-	}
-      else
-	{
-	  if (OpDepth[1].first < 3)
-	    {
-	      printf ("Br C\n");
-	      MachineOperand *Use = OpDepth[0].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursiveFP (MF, DefI, MRI, LIS, VRM, output);
-
-	      Use = OpDepth[1].second;
-	      Reg = Use->getReg ();
-	      DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursiveFP (MF, DefI, MRI, LIS, VRM, output);
-	    }
-	  else
-	    {
-	      printf ("Br D\n");
-	      MachineOperand *Use = OpDepth[1].second;
-	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursiveFP (MF, DefI, MRI, LIS, VRM, output);
-
-	      // Define new virtual register for the temporary storage
-	      // (i.e. the result is stored on the stack location and
-	      // the loaded into that stack location before the actual
-	      // usage)
-	      Register RegClone = MRI.cloneVirtualRegister (Reg);
-	      Use->setReg (RegClone);
-
-	      // Store temporary variable after defining instruction
-	      if (VRM.isAssignedReg (Reg))
-		VRM.assignVirt2StackSlot (Reg);
-	      DebugLoc DL = MI->getDebugLoc();
-
-	      MachineBasicBlock::iterator MBBI = *DefI;
-	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-	      // Now handle second operand
-	      Use = OpDepth[0].second;
-	      Register Reg2 = Use->getReg ();
-	      MachineInstr *DefI2 = getVRegDef(Reg2, MI, MRI, LIS);
-
-	      SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
-	      reorderRecursiveFP (MF, DefI2, MRI, LIS, VRM, output);
-
-	      // Load temporary variable before using instruction
-	      MBBI = *MI;
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDL),RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	    }
 	}
     }
 
@@ -1148,7 +1037,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 			    MachineBasicBlock::iterator MBBI = Insert;
 			    ++MBBI;
-			    
+
 			    if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::ORegRegClassID)
 			      {
 				BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).
@@ -1201,12 +1090,12 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	// TODO: The FPLDNLSN instruction does define a floating point register
 	// but consumes an integer register. Hence those instruction are currently
 	// not properly treated within this code.
-	
+
 	if (Range_defs.begin () == Range_defs.end ())
 	  {
 	    unsigned int reg_u_fp = 0,
 	      reg_u_i = 0;
-	    
+
 	    for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
 	      {
 		const TargetRegisterClass *RC = NULL;
@@ -1217,13 +1106,13 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 		    !I->getReg().isPhysical () &&
 		    (RC->getID () == T8xx::ORegRegClassID))
 		  ++reg_u_i;
-		
+
 		if (I->isReg () &&
 		    !I->getReg().isPhysical () &&
 		    (RC->getID () == T8xx::FPRegRegClassID))
 		  ++reg_u_fp;
 	      }
-		
+
 	    // Reorder instructions (according to Transputer compiler writing guide)
 	    if (reg_u_i > 0)
 	      proc_instr.push_back (Insert);
@@ -1247,18 +1136,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       }  // MachineInstruction
 
 
-    // Now reorder floating point instructions
-    for (auto PI = proc_fp_instr.begin (); PI != proc_fp_instr.end (); ++PI)
-      {
-	MBB.dump ();
-	printf ("Reorder FP\n");
-	(*PI)->dump ();
-	reorderRecursiveFP (MF, *PI, MRI, LIS, VRM, outvec);
-	printf ("Reorder End\n");
-      }
-    MBB.dump ();
-
-    // Now reorder regular instructions
+    // Now reorder instructions
     for (auto PI = proc_instr.begin (); PI != proc_instr.end (); ++PI)
       {
 	MBB.dump ();
