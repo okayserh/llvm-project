@@ -15,21 +15,118 @@
 Floating point instructions
 */
 
+/* https://discourse.llvm.org/t/how-to-resolve-decoding-conflict/32818 */
 
-class T8BinaryFPOp8<bits<8> opval, string opstr, SDNode opnode> :
+// The Transputer floating point unit maintains a flag with the floating
+// point register stack, which indicates whether the content is single
+// or double precision. Thus, fmul, fdiv, fadd, fsub can cope with
+// mixed precision and include the respective rounding or extension
+// The LLVM standard FP binary op assumes that both operands and
+// the result are the same. Therefore, the two type patterns are
+// defined to enable a description of the aforementioned transputer
+// instructions.
+
+// Result and second operand are F64, first operand is F32
+def SDTFP_DS_BinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
+  SDTCisVT<0, f32>, SDTCisVT<1, f64>, SDTCisVT<2, f32>
+]>;
+
+// Result and second operand are F32, first operand is F64
+def SDTFP_SD_BinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
+  SDTCisVT<0, f64>, SDTCisVT<1, f32>, SDTCisVT<2, f64>
+]>;
+
+
+def T8xxDS_FMUL : SDNode<"T8xxISD::DS_FMUL", SDTFP_DS_BinOp, []>;
+def T8xxSD_FMUL : SDNode<"T8xxISD::SD_FMUL", SDTFP_SD_BinOp, []>;
+
+class T8BinaryDBOp8<bits<8> opval, string opstr, SDNode opnode> :
+      T8InstOp8<opval,
+                (outs DFPReg:$dst),
+       	 	(ins DFPReg:$src1, DFPReg:$src2),
+		opstr,
+		[(set f64:$dst, (opnode f64:$src1, f64:$src2))]>
+{
+}
+
+class T8BinarySNOp8<bits<8> opval, string opstr, SDNode opnode> :
       T8InstOp8<opval,
                 (outs FPReg:$dst),
        	 	(ins FPReg:$src1, FPReg:$src2),
 		opstr,
 		[(set f32:$dst, (opnode f32:$src1, f32:$src2))]>
 {
+	 	 let DecoderNamespace = "FPSN";
+}
+
+class T8BinaryDSOp8<bits<8> opval, string opstr, SDNode opnode> :
+      T8InstOp8<opval,
+                (outs FPReg:$dst),
+       	 	(ins DFPReg:$src1, FPReg:$src2),
+		opstr,
+		[(set f32:$dst, (T8xxDS_FMUL f64:$src1, f32:$src2))]>
+{
+	 	 let DecoderNamespace = "FPDS";
+}
+
+class T8BinarySDOp8<bits<8> opval, string opstr, SDNode opnode> :
+      T8InstOp8<opval,
+                (outs DFPReg:$dst),
+       	 	(ins FPReg:$src1, DFPReg:$src2),
+		opstr,
+		[(set f64:$dst, (T8xxSD_FMUL f32:$src1, f64:$src2))]>
+{
+	 	 let DecoderNamespace = "FPSD";
 }
 
 // Arithmethic
-def FPADD :      T8BinaryFPOp8<0x87, "fpadd", fadd>;
-def FPSUB :      T8BinaryFPOp8<0x89, "fpsub", fsub>;
-def FPMUL :      T8BinaryFPOp8<0x8B, "fpmul", fmul>;
-def FPDIV :      T8BinaryFPOp8<0x8C, "fpdiv", fdiv>;
+def FPADD :      T8BinarySNOp8<0x87, "fpadd", fadd>;
+def FPSUB :      T8BinarySNOp8<0x89, "fpsub", fsub>;
+def FPMULSN :      T8BinarySNOp8<0x8B, "fpmul", fmul>;
+def FPMULDB :      T8BinaryDBOp8<0x8B, "fpmul", fmul>;
+// Note: The default fmul does not allow for mixed inputs!
+//def SDTFPBinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
+//  SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisFP<0>
+//]>;
+// 
+
+def FPMULDS :      T8BinaryDSOp8<0x8B, "fpmul", fmul>;
+def FPMULSD :      T8BinarySDOp8<0x8B, "fpmul", fmul>;
+
+def FPDIV :      T8BinarySNOp8<0x8C, "fpdiv", fdiv>;
+
+
+// Attempt to implement the single multiplication via a pattern
+/*
+def : Pat<(fpround (f64 fmul (fpextend (f32 FPReg:$src1) ), (f64 DFPReg:$src2) ) ),
+    (FPMULDS (f32:$src1), (f64:$src2))>;
+*/
+
+
+// fpextend -> Erweitern (i.e. FP32 -> FP64)
+// fpround -> Reduzieren (i.e. FP64 -> FP32)
+
+// Custom additions for implicit conversions in floating point ops
+def T8xxIMPEXT : SDNode<"T8xxISD::FP_IMPLICIT_EXT", SDTFPExtendOp, []>;
+def T8xxIMPROUND : SDNode<"T8xxISD::FP_IMPLICIT_ROUND", SDTFPRoundOp, []>;
+
+
+def FPC64TO32  : T8Inst<(outs FPReg:$dst), (ins DFPReg:$src),
+                         "",
+               	         [(set f32:$dst, (T8xxIMPROUND f64:$src))]> {
+		   	 let isCodeGenOnly = 1;
+			 let isPseudo = 1;
+}
+
+def FPC32TO64  : T8Inst<(outs DFPReg:$dst), (ins FPReg:$src),
+                     	 "",
+               	         [(set f64:$dst, (T8xxIMPEXT f32:$src))]> {
+		   	 let isCodeGenOnly = 1;
+			 let isPseudo = 1;
+}
+
+
+
 
 
 // Store f32 to global address
@@ -44,6 +141,18 @@ def FPSTNLSN : T8InstOp8<0x88,
 def : Pat<(store f32:$val, ADDRri:$addr),
           (FPSTNLSN f32:$val, (LDLP ADDRri:$addr) )>;
 
+// Store f64 to global address
+def FPSTNLDB : T8InstOp8<0x84,
+		(outs),
+       	 	(ins DFPReg:$val, MemSrc:$addr),
+		"fpstnldb",
+		[(store f64:$val, ADDRr:$addr)]> {
+		}
+
+def : Pat<(store f64:$val, ADDRri:$addr),
+          (FPSTNLDB f64:$val, (LDLP ADDRri:$addr) )>;
+
+
 // Load f32 from global address
 def FPLDNLSN : T8InstOp8<0x8E,
 		(outs FPReg:$val),
@@ -57,6 +166,37 @@ def FPLDNLSN : T8InstOp8<0x8E,
 def : Pat<(load ADDRri:$addr),
           (FPLDNLSN (LDLP ADDRri:$addr) )>;
 
+
+
+// Load f32 from global address
+def FPLDNLDB : T8InstOp8<0x8A,
+		(outs DFPReg:$val),
+       	 	(ins MemSrc:$addr),
+		"fpldnldb",
+		[(set f64:$val, (load ADDRr:$addr))]>
+{
+}
+
+
+
+
+def FPUR64TOR32  : T8InstFPU4<0x8, (outs FPReg:$dst), (ins DFPReg:$src),
+                         "fpur64tor32",
+               	         [(set f32:$dst, (fpround f64:$src))]> {
+}
+
+def FPUR32TOR64  : T8InstFPU4<0x7, (outs DFPReg:$dst), (ins FPReg:$src),
+                     	 "fpur32tor64",
+               	         [(set f64:$dst, (fpextend f32:$src))]> {
+}
+
+
+
+// Pattern for FP loads from WPtr stack
+def : Pat<(load ADDRri:$addr),
+          (FPLDNLDB (LDLP ADDRri:$addr) )>;
+
+
 /*
 def FPREMFIRST : T8InstOp8<0x8F, "fpremfirst">;
 def FPREMSTEP :   T8InstOp8<0x90, "fpremstep">;
@@ -65,33 +205,68 @@ def FPUABS :  	   T8InstFPU4<0xB, "fpuabs">;
 
 
 // Comparison
-def FPEQ :        T8InstOp8<0x95,
+def FPEQSN :      T8InstOp8<0x95,
     	 	  (outs OReg:$cc),
 		  (ins FPReg:$lhs, FPReg:$rhs),
 		  "fpeq",
 		  [(set i32:$cc,
-		  (i32 (setcc f32:$lhs, f32:$rhs, SETOEQ)))]>;
+		  (i32 (setcc f32:$lhs, f32:$rhs, SETOEQ)))]>
+{
+	 let DecoderNamespace = "FPSN";
+}
 
 
-def FPGT :        T8InstOp8<0x94,
+def FPEQDB :      T8InstOp8<0x95,
+    	 	  (outs OReg:$cc),
+		  (ins DFPReg:$lhs, DFPReg:$rhs),
+		  "fpeq",
+		  [(set i32:$cc,
+		  (i32 (setcc f64:$lhs, f64:$rhs, SETOEQ)))]>
+{
+	 let DecoderNamespace = "FPDB";
+}
+
+
+def FPGTSN :      T8InstOp8<0x94,
     	 	  (outs OReg:$cc),
 		  (ins FPReg:$lhs, FPReg:$rhs),
 		  "fpgt",
 		  [(set i32:$cc,
-		  (i32 (setcc f32:$lhs, f32:$rhs, SETOGT)))]>;
+		  (i32 (setcc f32:$lhs, f32:$rhs, SETOGT)))]>
+{
+	 let DecoderNamespace = "FPSN";
+}
+
+def FPGTDB :      T8InstOp8<0x94,
+    	 	  (outs OReg:$cc),
+		  (ins DFPReg:$lhs, DFPReg:$rhs),
+		  "fpgt",
+		  [(set i32:$cc,
+		  (i32 (setcc f64:$lhs, f64:$rhs, SETOGT)))]>
+{
+	 let DecoderNamespace = "FPDB";
+}
+
+
 
 /* Other comparisons will be created by patterns */
 def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETONE),
-           (EQC (FPEQ $rhs, $lhs), 0)>;
+           (EQC (FPEQSN $rhs, $lhs), 0)>;
+
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETONE),
+           (EQC (FPEQDB $rhs, $lhs), 0)>;
 
 def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOGE),
-           (EQC (FPGT $rhs, $lhs), 0)>;
+           (EQC (FPGTSN $rhs, $lhs), 0)>;
+
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE),
+           (EQC (FPGTDB $rhs, $lhs), 0)>;
 
 
 /*
 // Load/Store
 def FPLDNLDB :   T8InstOp8<0x8A, "fpldnldb">;
-def FPLDNLSN :   T8InstOp8<0x8E, "fpldnlsn">;
+def FPLDNLSN :   T8InstOp8<0x8E, "fpldnlsn">;3
 
 def FPSTNLDB :   T8InstOp8<0x84, "fpstnldb">;
 def FPSTNLSN :   T8InstOp8<0x88, "fpstnlsn">;

@@ -558,7 +558,8 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 
 	  // Introduce new virtual register for stack location
 	  Register RegFPStack;
-	  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
+	  if ((MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID) ||
+	      (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID))
 	    {
 	      RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
 	    }
@@ -573,8 +574,14 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	    {
 	      BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDLP),RegFPStack).
 		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	      DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
-		addReg(RegFPStack);
+	      // Load single when register is single precision
+	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)		
+		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
+		  addReg(RegFPStack);
+	      // Load double when register is single precision
+	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)		
+		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLDB),RegClone).
+		  addReg(RegFPStack);
 	    }
 	}
     }
@@ -641,7 +648,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
       if (I->isReg () &&
 	  !I->getReg().isPhysical() &&
 	  ((RC->getID () == T8xx::ORegRegClassID) ||
-	   (RC->getID () == T8xx::FPRegRegClassID)))
+	   (RC->getID () == T8xx::FPRegRegClassID) ||
+	   (RC->getID () == T8xx::DFPRegRegClassID)))
 	{
 	  Register Reg = I->getReg();
 	  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
@@ -652,6 +660,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 		OpDepth.push_back (std::make_pair(SubE, I));
 	      if (RC->getID () == T8xx::FPRegRegClassID)
 		OpDepthFP.push_back (std::make_pair(SubE, I));
+	      if (RC->getID () == T8xx::DFPRegRegClassID)
+		OpDepthFP.push_back (std::make_pair(SubE, I));
 	    }
 	  else
 	    {
@@ -661,6 +671,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      if (RC->getID () == T8xx::ORegRegClassID)
 		OpDepth.push_back (std::make_pair(10000, I));
 	      if (RC->getID () == T8xx::FPRegRegClassID)
+		OpDepthFP.push_back (std::make_pair(10000, I));
+	      if (RC->getID () == T8xx::DFPRegRegClassID)
 		OpDepthFP.push_back (std::make_pair(10000, I));
 	    }
 	  //	  printf ("Op Depth %i\n", OpDepth.back ());
@@ -1021,7 +1033,8 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 			    // For floating point numbers, an additional i32 register
 			    // is needed to address the stack
 			    Register RegFPStack;
-			    if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
+			    if ((MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID) || 
+				(MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID))
 			      {
 				RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
 			      }
@@ -1047,7 +1060,14 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 			      {
 				BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
 				  addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-				BuildMI(MBB, MBBI, DL, TII->get(T8xx::FPSTNLSN)).addReg(RegClone).addReg(RegFPStack);
+
+				if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
+				  BuildMI(MBB, MBBI, DL, TII->get(T8xx::FPSTNLSN)).
+				    addReg(RegClone).addReg(RegFPStack);
+
+				if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
+				  BuildMI(MBB, MBBI, DL, TII->get(T8xx::FPSTNLDB)).
+				    addReg(RegClone).addReg(RegFPStack);
 			      }
 			  }
 		      }
@@ -1110,6 +1130,11 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 		if (I->isReg () &&
 		    !I->getReg().isPhysical () &&
 		    (RC->getID () == T8xx::FPRegRegClassID))
+		  ++reg_u_fp;
+
+		if (I->isReg () &&
+		    !I->getReg().isPhysical () &&
+		    (RC->getID () == T8xx::DFPRegRegClassID))
 		  ++reg_u_fp;
 	      }
 

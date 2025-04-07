@@ -61,6 +61,14 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "LDIFF";
   case T8xxISD::REV:
     return "REV";
+  case T8xxISD::FP_IMPLICIT_EXT:
+    return "FP_IMPLICIT_EXT";
+  case T8xxISD::FP_IMPLICIT_ROUND:
+    return "FP_IMPLICIT_ROUND";
+  case T8xxISD::DS_FMUL:
+    return "DS_FMUL";
+  case T8xxISD::SD_FMUL:
+    return "SD_FMUL";
   }
 }
 
@@ -121,6 +129,24 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   //  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
 
   setMinFunctionAlignment(Align(4));
+
+  // TODO: Test ...
+  setOperationAction(ISD::FMUL, MVT::f32, Custom);
+
+  // ARM does not have floating-point extending loads.
+  for (MVT VT : MVT::fp_valuetypes()) {
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::f32, Expand);
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::f16, Expand);
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::bf16, Expand);
+  }
+  // ... or truncating stores
+  setTruncStoreAction(MVT::f64, MVT::f32, Expand);
+  setTruncStoreAction(MVT::f32, MVT::f16, Expand);
+  setTruncStoreAction(MVT::f64, MVT::f16, Expand);
+  setTruncStoreAction(MVT::f32, MVT::bf16, Expand);
+  setTruncStoreAction(MVT::f64, MVT::bf16, Expand);
+
+  
 
   // Nodes that require custom lowering
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
@@ -193,7 +219,47 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
   case ISD::GlobalAddress:
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
+
+  case ISD::FMUL:
+    printf ("####### Lower FMUL  #########\n");
+    return LowerFMUL(Op, DAG);
   }
+}
+
+
+SDValue T8xxTargetLowering::LowerFMUL(SDValue Op, SelectionDAG &DAG) const
+{
+  // First test ...
+  SDValue Op0 = Op.getOperand(0);
+  SDValue Op1 = Op.getOperand(1);
+  SDLoc DL(Op);
+  //  SDValue Op2 = Op.getOperand(2);
+
+  // Create zero "extension" nodes
+
+  if (Op0.getOpcode () == ISD::FP_EXTEND)
+    printf ("LowerFMUL: FP_EXTEND\n");
+  
+  return (Op);
+
+
+  SDValue Conv0 = DAG.getNode(T8xxISD::FP_IMPLICIT_EXT, DL, DAG.getVTList(MVT::f64),
+			   Op0);
+  SDValue Conv1 = DAG.getNode(T8xxISD::FP_IMPLICIT_EXT, DL, DAG.getVTList(MVT::f64),
+			   Op1);
+
+  SDValue MUL = DAG.getNode(ISD::FMUL, DL, DAG.getVTList(MVT::f64),
+			    Conv0, Conv1);
+
+  SDValue RConv = DAG.getNode(T8xxISD::FP_IMPLICIT_ROUND, DL, DAG.getVTList(MVT::f32),
+			      MUL);
+  
+  Conv0.dump ();
+  Conv1.dump ();
+  MUL.dump ();
+  RConv.dump ();
+
+  return (RConv);
 }
 
 

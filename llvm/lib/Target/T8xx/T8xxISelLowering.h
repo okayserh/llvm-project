@@ -35,7 +35,11 @@ namespace llvm {
     EQ,
     BRNCOND,
     LDIFF,
-    REV
+    REV,
+    FP_IMPLICIT_EXT,
+    FP_IMPLICIT_ROUND,
+    DS_FMUL,
+    SD_FMUL
   };
   }
 
@@ -87,6 +91,7 @@ namespace llvm {
                         const SmallVectorImpl<ISD::OutputArg> &Outs,
                         LLVMContext &Context) const override;
 
+    SDValue LowerFMUL(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSTORE(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
