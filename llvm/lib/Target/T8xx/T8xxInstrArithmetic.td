@@ -82,51 +82,18 @@ class T8BinarySDOp8<bits<8> opval, string opstr, SDNode opnode> :
 // Arithmethic
 def FPADD :      T8BinarySNOp8<0x87, "fpadd", fadd>;
 def FPSUB :      T8BinarySNOp8<0x89, "fpsub", fsub>;
-def FPMULSN :      T8BinarySNOp8<0x8B, "fpmul", fmul>;
-def FPMULDB :      T8BinaryDBOp8<0x8B, "fpmul", fmul>;
 // Note: The default fmul does not allow for mixed inputs!
 //def SDTFPBinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
 //  SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisFP<0>
 //]>;
 // 
 
+def FPMULDB :      T8BinaryDBOp8<0x8B, "fpmul", fmul>;
+def FPMULSN :      T8BinarySNOp8<0x8B, "fpmul", fmul>;
 def FPMULDS :      T8BinaryDSOp8<0x8B, "fpmul", fmul>;
 def FPMULSD :      T8BinarySDOp8<0x8B, "fpmul", fmul>;
 
 def FPDIV :      T8BinarySNOp8<0x8C, "fpdiv", fdiv>;
-
-
-// Attempt to implement the single multiplication via a pattern
-/*
-def : Pat<(fpround (f64 fmul (fpextend (f32 FPReg:$src1) ), (f64 DFPReg:$src2) ) ),
-    (FPMULDS (f32:$src1), (f64:$src2))>;
-*/
-
-
-// fpextend -> Erweitern (i.e. FP32 -> FP64)
-// fpround -> Reduzieren (i.e. FP64 -> FP32)
-
-// Custom additions for implicit conversions in floating point ops
-def T8xxIMPEXT : SDNode<"T8xxISD::FP_IMPLICIT_EXT", SDTFPExtendOp, []>;
-def T8xxIMPROUND : SDNode<"T8xxISD::FP_IMPLICIT_ROUND", SDTFPRoundOp, []>;
-
-
-def FPC64TO32  : T8Inst<(outs FPReg:$dst), (ins DFPReg:$src),
-                         "",
-               	         [(set f32:$dst, (T8xxIMPROUND f64:$src))]> {
-		   	 let isCodeGenOnly = 1;
-			 let isPseudo = 1;
-}
-
-def FPC32TO64  : T8Inst<(outs DFPReg:$dst), (ins FPReg:$src),
-                     	 "",
-               	         [(set f64:$dst, (T8xxIMPEXT f32:$src))]> {
-		   	 let isCodeGenOnly = 1;
-			 let isPseudo = 1;
-}
-
-
-
 
 
 // Store f32 to global address
@@ -177,9 +144,12 @@ def FPLDNLDB : T8InstOp8<0x8A,
 {
 }
 
+// Pattern for FP loads from WPtr stack
+def : Pat<(load ADDRri:$addr),
+          (FPLDNLDB (LDLP ADDRri:$addr) )>;
 
 
-
+// Conversions between f32 and f64
 def FPUR64TOR32  : T8InstFPU4<0x8, (outs FPReg:$dst), (ins DFPReg:$src),
                          "fpur64tor32",
                	         [(set f32:$dst, (fpround f64:$src))]> {
@@ -191,17 +161,31 @@ def FPUR32TOR64  : T8InstFPU4<0x7, (outs DFPReg:$dst), (ins FPReg:$src),
 }
 
 
+// Conversion from int to f32 or f64
+def FPI32TOR32 :  T8InstOp8<0x96,
+			    (outs FPReg:$dst),
+			    (ins OReg:$src),
+			    "fpi32tor32", []>;
 
-// Pattern for FP loads from WPtr stack
-def : Pat<(load ADDRri:$addr),
-          (FPLDNLDB (LDLP ADDRri:$addr) )>;
+def FPI32TOR64 :  T8InstOp8<0x98,
+		            (outs DFPReg:$dst),
+			    (ins OReg:$src),
+			    "fpi32tor64", []>;
 
+// Round FAreg to integer according to current rounding mode
+// Result remains in floating point register!
+def FPINTSN :       T8InstOp8<0xA1,
+			   (outs FPReg:$dst),
+			   (ins FPReg:$src),
+			   "fpint", []>
+{
+ let DecoderNamespace = "FPSN";
+}
 
-/*
-def FPREMFIRST : T8InstOp8<0x8F, "fpremfirst">;
-def FPREMSTEP :   T8InstOp8<0x90, "fpremstep">;
-def FPUABS :  	   T8InstFPU4<0xB, "fpuabs">;
-*/
+def FPINTDB :       T8InstOp8<0xA1,
+			   (outs DFPReg:$dst),
+			   (ins DFPReg:$src),
+			   "fpint", []>;
 
 
 // Comparison
@@ -263,64 +247,65 @@ def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE),
            (EQC (FPGTDB $rhs, $lhs), 0)>;
 
 
-/*
-// Load/Store
-def FPLDNLDB :   T8InstOp8<0x8A, "fpldnldb">;
-def FPLDNLSN :   T8InstOp8<0x8E, "fpldnlsn">;3
+// Indexed Load/Store
+def FPLDNLDBI :  T8InstOp8<0x82, (outs), (ins),  "fpldnldbi", []>;
+def FPLDNLSNI :  T8InstOp8<0x86, (outs), (ins),  "fpldnlsni", []>;
 
-def FPSTNLDB :   T8InstOp8<0x84, "fpstnldb">;
-def FPSTNLSN :   T8InstOp8<0x88, "fpstnlsn">;
+// Tests for Nan, not finite and orderability
+def FPNAN :       T8InstOp8<0x91,
+			    (outs OReg:$nan),
+			    (ins),  // Needs one FPReg, but does not "consume" it from FP-stack
+			    "fpnan", []>;
 
-def FPLDNLDBI :  T8InstOp8<0x82, "fpldnldbi">;
-def FPLDNLSNI :  T8InstOp8<0x86, "fpldnlsni">;
+def FPORDERED :   T8InstOp8<0x92,
+			    (outs OReg:$ord),
+			    (ins),  // Needs two FPReg, but does not "consume" them from FP-stack
+			    "fpordered", []>;
 
-// Type conversion
-def FPUR32TOR64 :  T8InstFPU4<0x7, "fpur32tor64">;
-def FPUR64TOR32 :  T8InstFPU4<0x8, "fpur64tor32">;
+def FPNOTFINITE : T8InstOp8<0x93,
+			    (outs OReg:$inf),
+			    (ins),  // Needs one FPReg, but does not "consume" it from FP-stack
+			    "fpnotfinite", []>;
+
+def FPB32TOR64 :  T8InstOp8<0x9A, (outs), (ins),  "fpb32tor64", []>;
+def FPTESTERR :   T8InstOp8<0x9C, (outs), (ins),  "fptesterr", []>;
+def FPRTOI32 :    T8InstOp8<0x9D, (outs), (ins),  "fprtoi32", []>;
+def FPSTNLI32 :   T8InstOp8<0x9E, (outs), (ins),  "fpstnli32", []>;
+def FPLDZEROSN :  T8InstOp8<0x9F, (outs), (ins),  "fpldzerosn", []>;
+
+def FPLDZERODB :  T8InstOp8<0xA0, (outs), (ins),  "fpldzerodb", []>;
+def FPDUP :       T8InstOp8<0xA3, (outs), (ins),  "fpdup", []>;
+def FPREV :       T8InstOp8<0xA4, (outs), (ins),  "fprev", []>;
+def FPLDNLADDDB : T8InstOp8<0xA6, (outs), (ins),  "fpldnladddb", []>;
+def FPLDNLMULDB : T8InstOp8<0xA8, (outs), (ins),  "fpldnlmuldb", []>;
+def FPLDNLADDSN : T8InstOp8<0xAA, (outs), (ins),  "fpldnladdsn", []>;
+def FPENTRY :     T8InstOp8<0xAB, (outs), (ins),  "fpentry", []>;
+def FPLDNLMULSN : T8InstOp8<0xAC, (outs), (ins),  "fpldnlmulsn", []>;
+
+def FPREMFIRST : T8InstOp8<0x8F, (outs), (ins), "fpremfirst", []>;
+def FPREMSTEP :   T8InstOp8<0x90, (outs), (ins), "fpremstep", []>;
 
 
+/* These are in fact combinations of ldc <opcode> and fpentry */
+def FPUSQRTFIRST : T8InstFPU4<0x1, (outs), (ins), "fpusqrtfirst", []>;
+def FPUSQRTSTEP :  T8InstFPU4<0x2, (outs), (ins), "fpusqrtstep", []>;
+def FPUSQRTLAST :  T8InstFPU4<0x3, (outs), (ins), "fpusqrtlast", []>;
+def FPURP :  	   T8InstFPU4<0x4, (outs), (ins), "fpurp", []>;
+def FPURM :  	   T8InstFPU4<0x5, (outs), (ins), "fpurm", []>;
+def FPURZ :  	   T8InstFPU4<0x6, (outs), (ins), "fpurz", []>;
+def FPUEXPDEC32 :  T8InstFPU4<0x9, (outs), (ins), "fpuexpdec32", []>;
+def FPUEXPINC32 :  T8InstFPU4<0xA, (outs), (ins), "fpuexpinc32", []>;
+def FPUABS :  	   T8InstFPU4<0xB, (outs), (ins), "fpuabs", []>;
+def FPUNOROUND :   T8InstFPU4<0xD, (outs), (ins), "fpunoround", []>;
 
-def FPNAN :       T8InstOp8<0x91, "fpnan">;
-def FPORDERED :   T8InstOp8<0x92, "fpordered">;
-def FPNOTFINITE : T8InstOp8<0x93, "fpnotfinite">;
-def FPI32TOR32 :  T8InstOp8<0x96, "fpi32tor32">;
-def FPI32TOR64 :  T8InstOp8<0x98, "fpi32tor64">;
-def FPB32TOR64 :  T8InstOp8<0x9A, "fpb32tor64">;
-def FPTESTERR :   T8InstOp8<0x9C, "fptesterr">;
-def FPRTOI32 :    T8InstOp8<0x9D, "fprtoi32">;
-def FPSTNLI32 :   T8InstOp8<0x9E, "fpstnli32">;
-def FPLDZEROSN :  T8InstOp8<0x9F, "fpldzerosn">;
+def FPUCHKI32 :    T8InstFPU4<0xE, (outs), (ins), "fpuchki32", []>;
+def FPUCHKI64 :    T8InstFPU4<0xF, (outs), (ins), "fpuchki64", []>;
 
-def FPLDZERODB :  T8InstOp8<0xA0, "fpldzerodb">;
-def FPINT :       T8InstOp8<0xA1, "fpint">;
-def FPDUP :       T8InstOp8<0xA3, "fpdup">;
-def FPREV :       T8InstOp8<0xA4, "fprev">;
-def FPLDNLADDDB : T8InstOp8<0xA6, "fpldnladddb">;
-def FPLDNLMULDB : T8InstOp8<0xA8, "fpldnlmuldb">;
-def FPLDNLADDSN : T8InstOp8<0xAA, "fpldnladdsn">;
-def FPENTRY :     T8InstOp8<0xAB, "fpentry">;
-def FPLDNLMULSN : T8InstOp8<0xAC, "fpldnlmulsn">;
-*/
+def FPUDIVBY2 :    T8InstFPU8<0x11, (outs), (ins), "fpudivby2", []>;
+def FPUMULBY2 :    T8InstFPU8<0x12, (outs), (ins), "fpumulby2", []>;
+def FPURN :        T8InstFPU8<0x22, (outs), (ins), "fpurn", []>;
 
-/* These are in fact combinations of ldc <opcode> and fpentry
-def FPUSQRTFIRST : T8InstFPU4<0x1, "fpusqrtfirst">;
-def FPUSQRTSTEP :  T8InstFPU4<0x2, "fpusqrtstep">;
-def FPUSQRTLAST :  T8InstFPU4<0x3, "fpusqrtlast">;
-def FPURP :  	   T8InstFPU4<0x4, "fpurp">;
-def FPURM :  	   T8InstFPU4<0x5, "fpurm">;
-def FPURZ :  	   T8InstFPU4<0x6, "fpurz">;
-def FPUEXPDEC32 :  T8InstFPU4<0x9, "fpuexpdec32">;
-def FPUEXPINC32 :  T8InstFPU4<0xA, "fpuexpinc32">;
-def FPUNOROUND :   T8InstFPU4<0xD, "fpunoround">;
+def FPCHKERR :     T8InstOp8<0x83,  (outs), (ins), "fpchkerr", []>;
+def FPUSETERR :    T8InstFPU8<0x23, (outs), (ins), "fpuseterr", []>;
+def FPUCLRERR :    T8InstFPU8<0x9C, (outs), (ins), "fpuclrerr", []>;
 
-def FPUCHKI32 :    T8InstFPU4<0xE, "fpuchki32">;
-def FPUCHKI64 :    T8InstFPU4<0xF, "fpuchki64">;
-
-def FPUDIVBY2 :    T8InstFPU8<0x11, "fpudivby2">;
-def FPUMULBY2 :    T8InstFPU8<0x12, "fpumulby2">;
-def FPURN :        T8InstFPU8<0x22, "fpurn">;
-
-def FPCHKERR :   T8InstOp8<0x83, "fpchkerr">;
-def FPUSETERR :    T8InstFPU8<0x23, "fpuseterr">;
-def FPUCLRERR :    T8InstFPU8<0x9C, "fpuclrerr">;
-*/

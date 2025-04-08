@@ -132,6 +132,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   // TODO: Test ...
   setOperationAction(ISD::FMUL, MVT::f32, Custom);
+  setOperationAction(ISD::FMUL, MVT::f64, Custom);
 
   // ARM does not have floating-point extending loads.
   for (MVT VT : MVT::fp_valuetypes()) {
@@ -238,28 +239,26 @@ SDValue T8xxTargetLowering::LowerFMUL(SDValue Op, SelectionDAG &DAG) const
   // Create zero "extension" nodes
 
   if (Op0.getOpcode () == ISD::FP_EXTEND)
-    printf ("LowerFMUL: FP_EXTEND\n");
+    {
+      printf ("LowerFMUL: FP_EXTEND\n");
+      SDValue Op0_F32 = Op.getOperand(0).getOperand(0);
+      
+      SDValue MUL = DAG.getNode(T8xxISD::DS_FMUL, DL, DAG.getVTList(MVT::f64),
+				Op0_F32, Op1);
+      return (MUL);
+    }
   
+  if (Op1.getOpcode () == ISD::FP_EXTEND)
+    {
+      printf ("LowerFMUL: FP_EXTEND\n");
+      SDValue Op1_F32 = Op.getOperand(1).getOperand(0);
+
+      SDValue MUL = DAG.getNode(T8xxISD::DS_FMUL, DL, DAG.getVTList(MVT::f64),
+				Op1_F32, Op0);
+      return (MUL);
+    }
+
   return (Op);
-
-
-  SDValue Conv0 = DAG.getNode(T8xxISD::FP_IMPLICIT_EXT, DL, DAG.getVTList(MVT::f64),
-			   Op0);
-  SDValue Conv1 = DAG.getNode(T8xxISD::FP_IMPLICIT_EXT, DL, DAG.getVTList(MVT::f64),
-			   Op1);
-
-  SDValue MUL = DAG.getNode(ISD::FMUL, DL, DAG.getVTList(MVT::f64),
-			    Conv0, Conv1);
-
-  SDValue RConv = DAG.getNode(T8xxISD::FP_IMPLICIT_ROUND, DL, DAG.getVTList(MVT::f32),
-			      MUL);
-  
-  Conv0.dump ();
-  Conv1.dump ();
-  MUL.dump ();
-  RConv.dump ();
-
-  return (RConv);
 }
 
 
