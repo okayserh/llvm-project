@@ -61,14 +61,24 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "LDIFF";
   case T8xxISD::REV:
     return "REV";
-  case T8xxISD::FP_IMPLICIT_EXT:
-    return "FP_IMPLICIT_EXT";
-  case T8xxISD::FP_IMPLICIT_ROUND:
-    return "FP_IMPLICIT_ROUND";
+
+    // Casting floating point operations
+  case T8xxISD::DS_FADD:
+    return "DS_FADD";
+  case T8xxISD::SD_FADD:
+    return "SD_FADD";
+  case T8xxISD::DS_FSUB:
+    return "DS_FSUB";
+  case T8xxISD::SD_FSUB:
+    return "SD_FSUB";
   case T8xxISD::DS_FMUL:
     return "DS_FMUL";
   case T8xxISD::SD_FMUL:
     return "SD_FMUL";
+  case T8xxISD::DS_FDIV:
+    return "DS_FDIV";
+  case T8xxISD::SD_FDIV:
+    return "SD_FDIV";
   }
 }
 

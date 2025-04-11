@@ -37,9 +37,6 @@ def SDTFP_SD_BinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
 ]>;
 
 
-def T8xxDS_FMUL : SDNode<"T8xxISD::DS_FMUL", SDTFP_DS_BinOp, []>;
-def T8xxSD_FMUL : SDNode<"T8xxISD::SD_FMUL", SDTFP_SD_BinOp, []>;
-
 class T8BinaryDBOp8<bits<8> opval, string opstr, SDNode opnode> :
       T8InstOp8<opval,
                 (outs DFPReg:$dst),
@@ -64,7 +61,7 @@ class T8BinaryDSOp8<bits<8> opval, string opstr, SDNode opnode> :
                 (outs FPReg:$dst),
        	 	(ins DFPReg:$src1, FPReg:$src2),
 		opstr,
-		[(set f32:$dst, (T8xxDS_FMUL f64:$src1, f32:$src2))]>
+		[(set f32:$dst, (opnode f64:$src1, f32:$src2))]>
 {
 	 	 let DecoderNamespace = "FPDS";
 }
@@ -74,26 +71,39 @@ class T8BinarySDOp8<bits<8> opval, string opstr, SDNode opnode> :
                 (outs DFPReg:$dst),
        	 	(ins FPReg:$src1, DFPReg:$src2),
 		opstr,
-		[(set f64:$dst, (T8xxSD_FMUL f32:$src1, f64:$src2))]>
+		[(set f64:$dst, (opnode f32:$src1, f64:$src2))]>
 {
 	 	 let DecoderNamespace = "FPSD";
 }
 
 // Arithmethic
-def FPADD :      T8BinarySNOp8<0x87, "fpadd", fadd>;
-def FPSUB :      T8BinarySNOp8<0x89, "fpsub", fsub>;
+//def FPADD :      T8BinarySNOp8<0x87, "fpadd", fadd>;
+//def FPSUB :      T8BinarySNOp8<0x89, "fpsub", fsub>;
 // Note: The default fmul does not allow for mixed inputs!
 //def SDTFPBinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
 //  SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisFP<0>
 //]>;
 // 
 
-def FPMULDB :      T8BinaryDBOp8<0x8B, "fpmul", fmul>;
-def FPMULSN :      T8BinarySNOp8<0x8B, "fpmul", fmul>;
-def FPMULDS :      T8BinaryDSOp8<0x8B, "fpmul", fmul>;
-def FPMULSD :      T8BinarySDOp8<0x8B, "fpmul", fmul>;
 
-def FPDIV :      T8BinarySNOp8<0x8C, "fpdiv", fdiv>;
+multiclass T8BinaryCastOp<bits<8> opval, string opstr,
+	   		SDNode opnode>
+{
+	def "T8xxDS_"#NAME : SDNode<"T8xxISD::DS_"#NAME, SDTFP_DS_BinOp, []>;
+	def "T8xxSD_"#NAME : SDNode<"T8xxISD::SD_"#NAME, SDTFP_SD_BinOp, []>;
+
+	def NAME#DB :      T8BinaryDBOp8<opval, opstr, opnode>;
+	def NAME#SN :      T8BinarySNOp8<opval, opstr, opnode>;
+	def NAME#DS :      T8BinaryDSOp8<opval, opstr, !cast<SDNode>("T8xxDS_"#NAME)>;
+	def NAME#SD :      T8BinarySDOp8<opval, opstr, !cast<SDNode>("T8xxSD_"#NAME)>;
+}
+
+// Note: The respective T8xxISD::DS_... need to be defined int T8xxISelLowering.h!
+defm FADD : T8BinaryCastOp<0x87, "fpadd", fadd>;
+defm FSUB : T8BinaryCastOp<0x89, "fpsub", fsub>;
+defm FMUL : T8BinaryCastOp<0x8B, "fpmul", fmul>;
+defm FDIV : T8BinaryCastOp<0x8C, "fpdiv", fdiv>;
+
 
 
 // Store f32 to global address
@@ -188,7 +198,8 @@ def FPINTDB :       T8InstOp8<0xA1,
 			   "fpint", []>;
 
 
-// Comparison
+// Comparison (TODO: These instructions also have the "casting property" that
+// the length of FAreg is set to the length of FBreg)
 def FPEQSN :      T8InstOp8<0x95,
     	 	  (outs OReg:$cc),
 		  (ins FPReg:$lhs, FPReg:$rhs),
@@ -282,7 +293,7 @@ def FPLDNLADDSN : T8InstOp8<0xAA, (outs), (ins),  "fpldnladdsn", []>;
 def FPENTRY :     T8InstOp8<0xAB, (outs), (ins),  "fpentry", []>;
 def FPLDNLMULSN : T8InstOp8<0xAC, (outs), (ins),  "fpldnlmulsn", []>;
 
-def FPREMFIRST : T8InstOp8<0x8F, (outs), (ins), "fpremfirst", []>;
+def FPREMFIRST :  T8InstOp8<0x8F, (outs), (ins), "fpremfirst", []>;
 def FPREMSTEP :   T8InstOp8<0x90, (outs), (ins), "fpremstep", []>;
 
 

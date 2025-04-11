@@ -554,8 +554,6 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	  Register RegClone = MRI.cloneVirtualRegister (Reg);
 	  Use->setReg (RegClone);
 
-	  VRM.grow ();
-
 	  // Introduce new virtual register for stack location
 	  Register RegFPStack;
 	  if ((MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID) ||
@@ -564,6 +562,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	      RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
 	    }
 
+	  VRM.grow ();
 
 	  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::ORegRegClassID)
 	    {
@@ -579,7 +578,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
 		  addReg(RegFPStack);
 	      // Load double when register is single precision
-	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)		
+	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
 		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLDB),RegClone).
 		  addReg(RegFPStack);
 	    }

@@ -36,10 +36,14 @@ namespace llvm {
     BRNCOND,
     LDIFF,
     REV,
-    FP_IMPLICIT_EXT,
-    FP_IMPLICIT_ROUND,
+    DS_FADD,
+    SD_FADD,
+    DS_FSUB,
+    SD_FSUB,
     DS_FMUL,
-    SD_FMUL
+    SD_FMUL,
+    DS_FDIV,
+    SD_FDIV
   };
   }
 
