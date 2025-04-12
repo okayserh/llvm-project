@@ -159,6 +159,43 @@ def : Pat<(load ADDRri:$addr),
           (FPLDNLDB (LDLP ADDRri:$addr) )>;
 
 
+// Patterns for load / mul and load / add operations. These do not
+// save any processor cycles but make the code more compact (2 bytes saved).
+def FPLDNLADDSN : T8InstOp8<0xAA,
+			   (outs FPReg:$dst),
+			   (ins FPReg:$src, MemSrc:$addr),
+			   "fpldnladdsn",
+			   [(set f32:$dst, (fadd f32:$src, (load ADDRr:$addr)))]>;
+
+def FPLDNLADDDB : T8InstOp8<0xA6,
+			   (outs DFPReg:$dst),
+			   (ins DFPReg:$src, MemSrc:$addr),
+			   "fpldnladddb",
+			   [(set f64:$dst, (fadd f64:$src, (load ADDRr:$addr)))]>;
+
+def FPLDNLMULSN : T8InstOp8<0xAC,
+			   (outs FPReg:$dst),
+			   (ins FPReg:$src, MemSrc:$addr),
+			   "fpldnlmulsn",
+			   [(set f32:$dst, (fmul f32:$src, (load ADDRr:$addr)))]>;
+
+def FPLDNLMULDB : T8InstOp8<0xA8,
+			   (outs DFPReg:$dst),
+			   (ins DFPReg:$src, MemSrc:$addr),
+			   "fpldnlmuldb",
+			   [(set f64:$dst, (fadd f64:$src, (load ADDRr:$addr)))]>;
+
+def : Pat<(fmul FPReg:$op1, (load ADDRri:$addr)),
+          (FPLDNLMULSN FPReg:$op1, (LDLP ADDRri:$addr) )>;
+def : Pat<(fmul DFPReg:$op1, (load ADDRri:$addr)),
+          (FPLDNLMULDB DFPReg:$op1, (LDLP ADDRri:$addr) )>;
+
+def : Pat<(fadd FPReg:$op1, (load ADDRri:$addr)),
+          (FPLDNLADDSN FPReg:$op1, (LDLP ADDRri:$addr) )>;
+def : Pat<(fadd DFPReg:$op1, (load ADDRri:$addr)),
+          (FPLDNLADDDB DFPReg:$op1, (LDLP ADDRri:$addr) )>;
+
+
 // Conversions between f32 and f64
 def FPUR64TOR32  : T8InstFPU4<0x8, (outs FPReg:$dst), (ins DFPReg:$src),
                          "fpur64tor32",
@@ -287,11 +324,7 @@ def FPLDZEROSN :  T8InstOp8<0x9F, (outs), (ins),  "fpldzerosn", []>;
 def FPLDZERODB :  T8InstOp8<0xA0, (outs), (ins),  "fpldzerodb", []>;
 def FPDUP :       T8InstOp8<0xA3, (outs), (ins),  "fpdup", []>;
 def FPREV :       T8InstOp8<0xA4, (outs), (ins),  "fprev", []>;
-def FPLDNLADDDB : T8InstOp8<0xA6, (outs), (ins),  "fpldnladddb", []>;
-def FPLDNLMULDB : T8InstOp8<0xA8, (outs), (ins),  "fpldnlmuldb", []>;
-def FPLDNLADDSN : T8InstOp8<0xAA, (outs), (ins),  "fpldnladdsn", []>;
 def FPENTRY :     T8InstOp8<0xAB, (outs), (ins),  "fpentry", []>;
-def FPLDNLMULSN : T8InstOp8<0xAC, (outs), (ins),  "fpldnlmulsn", []>;
 
 def FPREMFIRST :  T8InstOp8<0x8F, (outs), (ins), "fpremfirst", []>;
 def FPREMSTEP :   T8InstOp8<0x90, (outs), (ins), "fpremstep", []>;
