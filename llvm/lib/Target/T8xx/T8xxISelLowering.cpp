@@ -176,6 +176,14 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
 
+  // TODO: Implement efficiently
+  setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
+
+  setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
+  setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
+
   // TODO: Check wheter promote is correct for the other types
   setOperationAction(ISD::SETCC, MVT::i8, Promote);
   setOperationAction(ISD::SETCC, MVT::i16, Promote);
@@ -341,6 +349,10 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   if (Cond.getOpcode() == ISD::SETCC) {
     // For SETCC use "inverse" comparison
     CondCodeSDNode *CCNode = cast<CondCodeSDNode>(Cond.getOperand(2));
+
+    // CCNode->get().dump ();
+    printf ("### Cond Code %i\n", (int)CCNode->get());
+
     NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
 				 Cond.getOperand(0),
 				 Cond.getOperand(1),

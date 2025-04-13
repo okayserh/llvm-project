@@ -34,7 +34,7 @@ public:
     IntPtrType = SignedInt;
     UseZeroLengthBitfieldAlignment = true;
     resetDataLayout("e-m:e-p:32:32:32-i8:8:8-i16:32:32-"
-                    "i32:32:32-f64:32:32-f32:32-n32-S32");
+                    "i32:32:32-i64:32:32-f64:32:32-f32:32-n32-S32");
   }
 
   void getTargetDefines(const LangOptions &Opts,

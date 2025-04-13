@@ -31,26 +31,37 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
 }
 
 static std::string computeDataLayout(const Triple &T) {
+
+  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   // Note: This needs to be equivalent to the target string that
   // is provided in clang/lib/Basic/Targets/T8xx.h (method T8xxTargetInfo)
+  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   
-  // T8xx is typically little endian
+  // https://llvm.org/docs/LangRef.html#data-layout
+
+  // T8xx is little endian
   std::string Ret = "e";
+
+  // Mangling ELF
   Ret += "-m:e";
 
-  // Some ABIs have 32bit pointers.
+  // 32bit pointers.
   Ret += "-p:32:32:32";
 
   // Alignments
   // 8 bit can be accessed by special instructions,
   // Unaligned 16 bit integers need substantial effort to convert and retrieve
   // 32 bit is natural alignment
-  Ret += "-i8:8:8-i16:32:32-i32:32:32"; // 32 bit integers should naturally be aligned 32 bit
+  // 64 bit needs to be carried out by lib functions etc., hence 32 bit alignment
+  Ret += "-i8:8:8-i16:32:32-i32:32:32-i64:32:32"; // 32 bit integers should naturally be aligned 32 bit
 
-  // On T8xx 128 floats are aligned to 128 bits, on others only to 64.
-  // On T8xxV9 registers can hold 64 or 32 bits, on others only 32.
-  Ret += "-f64:32:32-f32:32-n32";
+  // On T8xx 64 floats are aligned to 32 bits
+  Ret += "-f64:32:32-f32:32";
 
+  // Native integer size is 32 Bit
+  Ret += "-n32";
+
+  // Natural alignment of stack
   Ret += "-S32";
 
   return Ret;
