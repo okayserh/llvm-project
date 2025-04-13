@@ -108,6 +108,11 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
     return;
   }
 
+  // Dynamic stack realignment
+  Align MaxAlign = MFI.getMaxAlign();
+  
+  printf ("Requested Alignment %li\n", MaxAlign.value ());
+
   // Attempt to adjust stack offset
   /* Note: This is just a helper variable in the MFI object. */
   printf ("Current FI Offset = %i\n", MFI.getOffsetAdjustment ());
@@ -122,6 +127,13 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
     .addImm(-((StackSize / 4) + 1))
         .setMIFlag(MachineInstr::FrameSetup);
+
+  /* Now some dynamic alignment would be needed if the requested alignment is above 4 bytes */
+  if (MaxAlign.value () > 4)
+    {
+      // Dynamic realignment
+    }
+  
 }
 
 MachineBasicBlock::iterator T8xxFrameLowering::
@@ -154,12 +166,24 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   // First write down all registers
   MachineRegisterInfo &RI = MF.getRegInfo ();
 
+  // The backend has to take care that the requested alignment is met
+  // https://groups.google.com/g/llvm-dev/c/U3r-kxd1Loc?pli=1
+  
+  // Dynamic stack realignment
+  Align MaxAlign = MFI.getMaxAlign();  
+  printf ("Requested Alignment %li\n", MaxAlign.value ());
+    /* Now some dynamic alignment would be needed if the requested alignment is above 4 bytes */
+  if (MaxAlign.value () > 4)
+    {
+      // Dynamic realignment
+    }
+  
   // Restore the stack pointer to what it was at the beginning of the function.
   /* Real stack adjustment */
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
     .addImm((StackSize / 4) + 1)
         .setMIFlag(MachineInstr::FrameSetup);
-
+  
   printf ("emitEpilogue End\n");
 }
 
