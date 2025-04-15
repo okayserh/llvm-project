@@ -27,6 +27,29 @@
 
 using namespace llvm;
 
+
+// Current stack implementation at T8xx
+// |                                  |  Higher address
+// |----------------------------------|  
+// |                                  |
+// | IPtr when function was called    |  WPtr+0 (WPtr at function entry and exit)
+// |                                  |
+// |----------------------------------|  
+// |                                  |
+// | arguments passed on the stack    |
+// |                                  |  WPtr+n+1
+// |----------------------------------|
+// |                                  |  WPtr+n
+// | local variables of fixed size    |
+// | including spill slots            |  WPtr+1
+// |----------------------------------|
+// |                                  |
+// |                                  |  (WPtr during function execution), 0 reserved
+// |----------------------------------|
+
+// TODO: Idea is to pass function parameters in a separate stack
+
+
 // Copied from old version
 inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align,
                                    uint64_t Skew = 0) {
@@ -131,6 +154,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   /* Now some dynamic alignment would be needed if the requested alignment is above 4 bytes */
   if (MaxAlign.value () > 4)
     {
+      
       // Dynamic realignment
     }
   
@@ -241,6 +265,7 @@ T8xxFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
       Subtarget.getStackPointerBias();
 
   if (UseFP) {
+    // TODO: This is currently always returned as T8xx::WPTR (cf. T8xxRegisterInfo.cpp)
     FrameReg = RegInfo->getFrameRegister(MF);
     return StackOffset::getFixed(FrameOffset);
   } else {
