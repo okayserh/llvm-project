@@ -48,6 +48,10 @@ using namespace llvm;
 // |----------------------------------|
 
 // TODO: Idea is to pass function parameters in a separate stack
+// Idea 2: Adjust workspace before function call and
+// load WPtr to BReg
+// Within function, BReg is then saved in aligned frame and used to access
+// the function parameters, if needed.
 
 
 // Copied from old version
