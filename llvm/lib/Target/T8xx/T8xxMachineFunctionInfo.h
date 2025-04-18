@@ -9,8 +9,8 @@
 // This file declares  T8xx specific per-machine-function information.
 //
 //===----------------------------------------------------------------------===//
-#ifndef LLVM_LIB_TARGET_SPARC_SPARCMACHINEFUNCTIONINFO_H
-#define LLVM_LIB_TARGET_SPARC_SPARCMACHINEFUNCTIONINFO_H
+#ifndef LLVM_LIB_TARGET_T8XX_T8XXMACHINEFUNCTIONINFO_H
+#define LLVM_LIB_TARGET_T8XX_T8XXMACHINEFUNCTIONINFO_H
 
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"

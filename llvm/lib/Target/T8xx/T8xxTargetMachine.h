@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_SPARCTARGETMACHINE_H
-#define LLVM_LIB_TARGET_SPARC_SPARCTARGETMACHINE_H
+#ifndef LLVM_LIB_TARGET_T8XX_T8XXTARGETMACHINE_H
+#define LLVM_LIB_TARGET_T8XX_T8XXTARGETMACHINE_H
 
 #include "T8xxInstrInfo.h"
 #include "T8xxSubtarget.h"

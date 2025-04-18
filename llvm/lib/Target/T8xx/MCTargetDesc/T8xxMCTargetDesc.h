@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_MCTARGETDESC_SPARCMCTARGETDESC_H
-#define LLVM_LIB_TARGET_SPARC_MCTARGETDESC_SPARCMCTARGETDESC_H
+#ifndef LLVM_LIB_TARGET_T8XX_MCTARGETDESC_T8XXMCTARGETDESC_H
+#define LLVM_LIB_TARGET_T8XX_MCTARGETDESC_T8XXMCTARGETDESC_H
 
 #include "llvm/Support/DataTypes.h"
 

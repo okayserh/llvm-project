@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_SPARCISELLOWERING_H
-#define LLVM_LIB_TARGET_SPARC_SPARCISELLOWERING_H
+#ifndef LLVM_LIB_TARGET_T8XX_T8XXISELLOWERING_H
+#define LLVM_LIB_TARGET_T8XX_T8XXISELLOWERING_H
 
 #include "T8xx.h"
 #include "llvm/CodeGen/TargetLowering.h"

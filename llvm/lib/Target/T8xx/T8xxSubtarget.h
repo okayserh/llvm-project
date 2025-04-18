@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_SPARCSUBTARGET_H
-#define LLVM_LIB_TARGET_SPARC_SPARCSUBTARGET_H
+#ifndef LLVM_LIB_TARGET_T8XX_T8XXSUBTARGET_H
+#define LLVM_LIB_TARGET_T8XX_T8XXSUBTARGET_H
 
 #include "T8xxFrameLowering.h"
 #include "T8xxISelLowering.h"

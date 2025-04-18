@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_SPARCFRAMELOWERING_H
-#define LLVM_LIB_TARGET_SPARC_SPARCFRAMELOWERING_H
+#ifndef LLVM_LIB_TARGET_T8XX_T8XXFRAMELOWERING_H
+#define LLVM_LIB_TARGET_T8XX_T8XXFRAMELOWERING_H
 
 #include "T8xx.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"

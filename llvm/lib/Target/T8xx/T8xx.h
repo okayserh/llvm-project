@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_SPARC_H
-#define LLVM_LIB_TARGET_SPARC_SPARC_H
+#ifndef LLVM_LIB_TARGET_T8XX_T8XX_H
+#define LLVM_LIB_TARGET_T8XX_T8XX_H
 
 #include "MCTargetDesc/T8xxMCTargetDesc.h"
 #include "llvm/Support/ErrorHandling.h"

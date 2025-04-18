@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_MCTARGETDESC_SPARCMCEXPR_H
-#define LLVM_LIB_TARGET_SPARC_MCTARGETDESC_SPARCMCEXPR_H
+#ifndef LLVM_LIB_TARGET_T8XX_MCTARGETDESC_T8XXMCEXPR_H
+#define LLVM_LIB_TARGET_T8XX_MCTARGETDESC_T8XXMCEXPR_H
 
 #include "T8xxFixupKinds.h"
 #include "llvm/MC/MCExpr.h"

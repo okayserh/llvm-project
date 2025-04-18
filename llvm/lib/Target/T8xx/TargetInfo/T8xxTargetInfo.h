@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SPARC_TARGETINFO_SPARCTARGETINFO_H
-#define LLVM_LIB_TARGET_SPARC_TARGETINFO_SPARCTARGETINFO_H
+#ifndef LLVM_LIB_TARGET_T8XX_TARGETINFO_T8XXTARGETINFO_H
+#define LLVM_LIB_TARGET_T8XX_TARGETINFO_T8XXTARGETINFO_H
 
 namespace llvm {
 

@@ -183,6 +183,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   printf ("emitEpilogue\n");
 
   // Compute the stack size, to determine if we need an epilogue at all.
+  MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   DebugLoc dl = MBBI->getDebugLoc();
