@@ -59,8 +59,6 @@ BitVector T8xxRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 const TargetRegisterClass*
 T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
                                       unsigned Kind) const {
-  //  const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
-  //  return &T8xx::IntRegsRegClass;
   return &T8xx::ORegRegClass;
 }
 
@@ -87,6 +85,9 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   
   printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %li\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
   MI.dump ();
+
+  // Test if the new frame element has arrived
+  // MFI.dump (MF);
 
   // Determine if we can eliminate the index from this kind of instruction.
   unsigned ImmOpIdx = 0;
@@ -122,7 +123,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       if (-MFI.getObjectOffset (i) > obj_size)
 	obj_size = -MFI.getObjectOffset (i);
   printf ("Aligned Objects size = %i\n", obj_size);
-  
+
   int Offset = 0;
   // FI < 0 = fixed stack objects (i.e. call parameters)
   if (FI < 0)
@@ -142,25 +143,66 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   
   printf ("eliminateFrameIndex  FI: %i Offset: %li Size: %li StackSize %li  ImmOp %li  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
 
-
-  // Note: There was erroneous behavior in the initial version
-  // Since the R15 was "used", the next call to eliminateFrameIndex
-  // counted one additional used register, which led to
-  // a double usage of certain stack positions.
-  // Note: This error is back :-/. Presumably since WPTR is now
-  // included as real register, the function also takes this up.
-  FIOp.ChangeToRegister(T8xx::WPTR, false);
-
-  if (bWordAlignedFO)
+  // If FI is smaller 0, use the "spilled" WPtr
+  if (FI < 0)
     {
-      assert ((Offset % 4 == 0) && "Framepointer offset must be word aligned!");
-      ImmOp.setImm(Offset / 4);
+      MachineBasicBlock *MBB = MI.getParent ();
+      DebugLoc dl = MI.getDebugLoc();
+      const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+      const T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
+      
+      
+      /*
+      BuildMI(*MBB, *II, dl, TII.get(T8xx::LDL), T8xx::AREG)
+	.addFrameIndex(TMFI.getWPtrSlot ())
+	.addImm(0);
+      */
+      // Directly replace with $areg = LDL $wptr, <xx>
+      int WPtrOffset = obj_size + MFI.getObjectOffset(TMFI.getWPtrSlot ());
+      WPtrOffset += MFI.getOffsetAdjustment ();
+      BuildMI(*MBB, *II, dl, TII.get(T8xx::LDL), T8xx::AREG)
+	.addReg(T8xx::WPTR)
+	.addImm(WPtrOffset / 4);
+      
+      Offset = fixed_obj_size - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm();
+
+      // LDLP -> TODO
+      if (MI.getOpcode() == T8xx::LDLP)
+	BuildMI(*MBB, *II, dl, TII.get(T8xx::ADC), T8xx::AREG)
+	  .addReg(T8xx::AREG)
+	  .addImm(Offset);
+
+      // LDL
+      if (MI.getOpcode() == T8xx::LDL)
+	BuildMI(*MBB, *II, dl, TII.get(T8xx::LDNL), T8xx::AREG)
+	  .addReg(T8xx::AREG)
+	  .addImm(Offset / 4);
+
+      // STL
+      if (MI.getOpcode() == T8xx::STL)
+	BuildMI(*MBB, *II, dl, TII.get(T8xx::STNL))
+	  .addReg(T8xx::AREG)
+	  .addReg(T8xx::BREG)
+	  .addImm(Offset / 4);
+
+      MI.eraseFromParent ();
     }
   else
-    ImmOp.setImm(Offset);
+    // Regular case for frame and parameters when no alignment > 4 is requested
+    {
+      FIOp.ChangeToRegister(T8xx::WPTR, false);
+
+      if (bWordAlignedFO)
+	{
+	  assert ((Offset % 4 == 0) && "Framepointer offset must be word aligned!");
+	  ImmOp.setImm(Offset / 4);
+	}
+      else
+	ImmOp.setImm(Offset);
+    }
       
   printf ("After eliminateFrameIndex\n");
-  MI.dump ();
+  //  MI.dump ();
 
   return false;
 }

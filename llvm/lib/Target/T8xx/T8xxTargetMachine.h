@@ -34,6 +34,10 @@ public:
                      bool JIT);
   ~T8xxTargetMachine() override;
 
+  MachineFunctionInfo *
+  createMachineFunctionInfo(BumpPtrAllocator &Allocator, const Function &F,
+                            const TargetSubtargetInfo *STI) const override;
+
   const T8xxSubtarget *getSubtargetImpl() const { return &Subtarget; }
   const T8xxSubtarget *getSubtargetImpl(const Function &) const override;
 

@@ -7,10 +7,18 @@
 //===----------------------------------------------------------------------===//
 
 #include "T8xxMachineFunctionInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 
 using namespace llvm;
 
 void T8xxMachineFunctionInfo::anchor() { }
+
+T8xxMachineFunctionInfo::T8xxMachineFunctionInfo(const Function &F,
+						 const TargetSubtargetInfo *STI)
+  : GlobalBaseReg(0), VarArgsFrameOffset(0), SRetReturnReg(0),
+    IsLeafProc(false), WPtrStackSlot(-1)
+{
+}
 
 MachineFunctionInfo *T8xxMachineFunctionInfo::clone(
     BumpPtrAllocator &Allocator, MachineFunction &DestMF,

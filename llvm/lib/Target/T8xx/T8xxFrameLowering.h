@@ -24,6 +24,9 @@ class T8xxFrameLowering : public TargetFrameLowering {
 public:
   explicit T8xxFrameLowering(const T8xxSubtarget &ST);
 
+  // Introduce a spill register for WPtr ?
+  void spillFPBP(MachineFunction &MF) const override;
+
   /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
   /// the function.
   void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
@@ -55,6 +58,9 @@ private:
 
   // Returns true if MF is a leaf procedure.
   bool isLeafProc(MachineFunction &MF) const;
+
+  uint64_t computeParameterSize(MachineFunction &MF) const;
+  uint64_t computeFrameSize(MachineFunction &MF) const;
 
   uint64_t computeStackSize(MachineFunction &MF) const;
 

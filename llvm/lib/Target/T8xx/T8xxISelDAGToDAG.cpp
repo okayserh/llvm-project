@@ -88,6 +88,7 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
     else
       return true;
   }
+
   if (Addr.getOpcode() == ISD::TargetExternalSymbol ||
       Addr.getOpcode() == ISD::TargetGlobalAddress ||
       Addr.getOpcode() == ISD::TargetGlobalTLSAddress) {
@@ -149,6 +150,7 @@ bool T8xxDAGToDAGISel::SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offse
     printf ("Object %i  Alignment %li\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
     return true;
   }
+
   if (Addr.getOpcode() == ISD::TargetExternalSymbol ||
       Addr.getOpcode() == ISD::TargetGlobalAddress ||
       Addr.getOpcode() == ISD::TargetGlobalTLSAddress) {
@@ -200,8 +202,8 @@ bool T8xxDAGToDAGISel::SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offse
 // Register + immediate
 
 bool T8xxDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &Base, SDValue &Offset) {
-  if (Addr.getOpcode() == ISD::FrameIndex) return false;
-  if (Addr.getOpcode() == ISD::TargetExternalSymbol ||
+  if (Addr.getOpcode() == ISD::FrameIndex ||
+      Addr.getOpcode() == ISD::TargetExternalSymbol ||
       Addr.getOpcode() == ISD::TargetGlobalAddress ||
       Addr.getOpcode() == ISD::TargetGlobalTLSAddress) {
     return false; // direct calls.
@@ -214,8 +216,8 @@ bool T8xxDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &Base, SDValue &Offset
 
 
 bool T8xxDAGToDAGISel::SelectADDRr(SDValue Addr, SDValue &Base) {
-  if (Addr.getOpcode() == ISD::FrameIndex) return false;
-  if (Addr.getOpcode() == ISD::TargetExternalSymbol ||
+  if (Addr.getOpcode() == ISD::FrameIndex ||
+      Addr.getOpcode() == ISD::TargetExternalSymbol ||
       Addr.getOpcode() == ISD::TargetGlobalAddress ||
       Addr.getOpcode() == ISD::TargetGlobalTLSAddress) {
     return false; // direct calls.

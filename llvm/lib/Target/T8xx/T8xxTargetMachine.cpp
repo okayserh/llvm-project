@@ -11,6 +11,7 @@
 
 #include "T8xxTargetMachine.h"
 #include "T8xx.h"
+#include "T8xxMachineFunctionInfo.h"
 #include "T8xxTargetObjectFile.h"
 #include "TargetInfo/T8xxTargetInfo.h"
 #include "llvm/CodeGen/Passes.h"
@@ -111,6 +112,15 @@ T8xxTargetMachine::T8xxTargetMachine(const Target &T, const Triple &TT,
 }
 
 T8xxTargetMachine::~T8xxTargetMachine() = default;
+
+
+MachineFunctionInfo *T8xxTargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return T8xxMachineFunctionInfo::create<T8xxMachineFunctionInfo>(Allocator,
+								  F, STI);
+}
+
 
 const T8xxSubtarget *
 T8xxTargetMachine::getSubtargetImpl(const Function &F) const {

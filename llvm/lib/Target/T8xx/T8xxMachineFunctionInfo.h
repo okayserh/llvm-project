@@ -32,6 +32,9 @@ namespace llvm {
     /// IsLeafProc - True if the function is a leaf procedure.
     bool IsLeafProc;
 
+    // A stack slot which is used to conserve the WPtr when function was entered
+    int WPtrStackSlot;
+
     /// A mapping from CodeGen vreg index to a boolean value indicating whether
     /// the given register is considered to be "stackified", meaning it has been
     /// determined or made to meet the stack requirements:
@@ -41,12 +44,16 @@ namespace llvm {
     BitVector VRegStackified;
 
   public:
+    /*
     T8xxMachineFunctionInfo()
       : GlobalBaseReg(0), VarArgsFrameOffset(0), SRetReturnReg(0),
-        IsLeafProc(false) {}
+        IsLeafProc(false), WPtrStackSlot(-1) {}
     explicit T8xxMachineFunctionInfo(MachineFunction &MF)
       : GlobalBaseReg(0), VarArgsFrameOffset(0), SRetReturnReg(0),
-        IsLeafProc(false) {}
+        IsLeafProc(false), WPtrStackSlot(-1) {}
+    */
+    T8xxMachineFunctionInfo() = default;
+    T8xxMachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI);
 
     MachineFunctionInfo *
     clone(BumpPtrAllocator &Allocator, MachineFunction &DestMF,
@@ -64,6 +71,10 @@ namespace llvm {
 
     void setLeafProc(bool rhs) { IsLeafProc = rhs; }
     bool isLeafProc() const { return IsLeafProc; }
+
+    // Access to Stack slot for WPtr
+    void setWPtrSlot(int slot) { WPtrStackSlot = slot; }
+    int getWPtrSlot() const { return WPtrStackSlot; }
 
     // Copied from WebAssemblyMachineFunctionInfo.h
     void stackifyVReg(MachineRegisterInfo &MRI, unsigned VReg) {

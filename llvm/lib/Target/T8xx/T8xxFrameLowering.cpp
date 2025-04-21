@@ -97,27 +97,57 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
 }
 
 
-uint64_t T8xxFrameLowering::computeStackSize(MachineFunction &MF) const {
+uint64_t T8xxFrameLowering::computeParameterSize(MachineFunction &MF) const
+{
   const MachineFrameInfo &MFI = MF.getFrameInfo();
 
   // Get the size of parameters on the stack
   int64_t fixed_obj_size = 0;
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
     fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ());
+
+  return ((uint64_t) fixed_obj_size);
+}
+
+uint64_t T8xxFrameLowering::computeFrameSize(MachineFunction &MF) const
+{
   int64_t obj_size = 0;
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+
   /* Old version, where the object size with stack alignment is used. Produces
-     incorrect results, when the larger alignments are requested the LLVM code */
+     incorrect results, when the larger alignments are requested in the LLVM code */
+  /*
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
     obj_size += MFI.getObjectSize (i) > 0 ?
       RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ()) : 0;
+  */
 
   /* New version, Obj size is determined as the maximum negative index in the frame */
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
     if (MFI.getObjectSize (i) > 0)
       if (-MFI.getObjectOffset (i) > obj_size)
 	obj_size = -MFI.getObjectOffset (i);
+
+  return ((uint64_t) obj_size);
+}
+
+uint64_t T8xxFrameLowering::computeStackSize(MachineFunction &MF) const {
   
-  return (obj_size + fixed_obj_size);
+  return (computeParameterSize (MF) + computeFrameSize (MF));
+}
+
+
+// Introduce a spill register for WPtr ?
+void T8xxFrameLowering::spillFPBP(MachineFunction &MF) const
+{
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  Align MaxAlign = MFI.getMaxAlign();
+  T8xxMachineFunctionInfo *TMFI = MF.getInfo<T8xxMachineFunctionInfo> ();
+  
+  // TODO: Always is only for test purpose. Later introduce
+  // the "slower" frame only when alignments > 4 are needed
+  if (1)
+    TMFI->setWPtrSlot (MFI.CreateSpillStackObject (4, Align(4)));
 }
 
 
@@ -125,43 +155,96 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
   printf ("emitPrologue\n");
   
-  // Compute the stack size, to determine if we need a prologue at all.
   MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
-  uint64_t StackSize = computeStackSize(MF);
-  if (!StackSize) {
-    return;
-  }
-
+  T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
+  
   // Dynamic stack realignment
   Align MaxAlign = MFI.getMaxAlign();
   
   printf ("Requested Alignment %li\n", MaxAlign.value ());
 
+  // If alignment > 4 bytes is requested an additional spill slot
+  // is required to store the old WPtr in the frame.
+  // if (MaxAlign > 4)
+
+  // Compute the stack size, to determine if we need a prologue at all.
+  uint64_t FixedStackSize = computeParameterSize (MF);  
+  uint64_t StackSize = computeFrameSize(MF);
+  if ((FixedStackSize + StackSize) == 0) {
+    return;
+  }
+
   // Attempt to adjust stack offset
   /* Note: This is just a helper variable in the MFI object. */
-  printf ("Current FI Offset = %i\n", MFI.getOffsetAdjustment ());
+  printf ("Current FI Offset = %li\n", MFI.getOffsetAdjustment ());
   // Note: The +1 is for R0, which is reserved for the return address
   MFI.setOffsetAdjustment (4);
   
   // Adjust the stack pointer.
-  /* Save the return address on old stack position 0 */ 
+
+  // Save the return address on old stack position 0
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
 
-  /* Real adjustment via AJW */
-  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-    .addImm(-((StackSize / 4) + 1))
+
+  // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
+  //  if (MaxAlign.value () > 4)
+  if (1)
+    {
+      // Dynamic realignment
+      // Adjust WPtr by required space for parameters
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	.addImm(-(FixedStackSize / 4))
         .setMIFlag(MachineInstr::FrameSetup);
 
-  /* Now some dynamic alignment would be needed if the requested alignment is above 4 bytes */
-  if (MaxAlign.value () > 4)
-    {
-      
-      // Dynamic realignment
+      // Now adjust WPtr by required space for frame and add alignment as required
+      // Start with WPtr in AReg
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::LDLP), T8xx::AREG)
+	.addReg(T8xx::WPTR)
+	.addImm(0)
+        .setMIFlag(MachineInstr::FrameSetup);
+
+      // Subtract required space
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADC), T8xx::AREG)
+	.addReg(T8xx::AREG)
+	.addImm(-(StackSize + 4))  // One additional space is required to avoid conflict with Parameters
+        .setMIFlag(MachineInstr::FrameSetup);
+
+      // And with 11111100 (where the number of 0s depends on the required alignment)
+      // Note this operations nulls the lower bits. Hence it reduces the WPtr to
+      // the next properly aligned position!
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::LDC), T8xx::AREG)
+	.addImm(MaxAlign.value () - 1)
+        .setMIFlag(MachineInstr::FrameSetup);
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::NOT), T8xx::AREG)
+	.addReg(T8xx::AREG)
+	.setMIFlag(MachineInstr::FrameSetup);
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AND), T8xx::AREG)
+	.addReg(T8xx::AREG)
+	.addReg(T8xx::BREG)
+	.setMIFlag(MachineInstr::FrameSetup);
+
+      // Adjust WPtr accordingly
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::GAJW), T8xx::AREG)
+	.addReg(T8xx::AREG)
+        .setMIFlag(MachineInstr::FrameSetup);
+
+      // Now the AReg holds the WPtr with just space for parameters
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL))
+	.addReg(T8xx::AREG)
+	.addFrameIndex(TMFI.getWPtrSlot ())
+	.addImm(0)
+	.setMIFlag(MachineInstr::FrameSetup);
     }
-  
+  else
+    {
+      // Real adjustment via AJW
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	.addImm(-(((FixedStackSize + StackSize) / 4) + 1))
+        .setMIFlag(MachineInstr::FrameSetup);
+    }
 }
 
 MachineBasicBlock::iterator T8xxFrameLowering::
@@ -187,13 +270,14 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   DebugLoc dl = MBBI->getDebugLoc();
-  uint64_t StackSize = computeStackSize(MF);
-  if (!StackSize) {
+  T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
+
+  uint64_t FixedStackSize = computeParameterSize (MF);  
+  uint64_t StackSize = computeFrameSize(MF);
+
+  if ((FixedStackSize + StackSize) == 0) {
     return;
   }
-
-  // First write down all registers
-  MachineRegisterInfo &RI = MF.getRegInfo ();
 
   // The backend has to take care that the requested alignment is met
   // https://groups.google.com/g/llvm-dev/c/U3r-kxd1Loc?pli=1
@@ -201,18 +285,43 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   // Dynamic stack realignment
   Align MaxAlign = MFI.getMaxAlign();  
   printf ("Requested Alignment %li\n", MaxAlign.value ());
-    /* Now some dynamic alignment would be needed if the requested alignment is above 4 bytes */
-  if (MaxAlign.value () > 4)
+
+  // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
+  if (1)
+  //  if (MaxAlign.value () > 4)
     {
-      // Dynamic realignment
-    }
-  
-  // Restore the stack pointer to what it was at the beginning of the function.
-  /* Real stack adjustment */
-  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-    .addImm((StackSize / 4) + 1)
+      // Retrieve "old" WPtr from spill location
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::LDL), T8xx::AREG)
+	.addFrameIndex(TMFI.getWPtrSlot ())
+	.addImm(0)
+	.setMIFlag(MachineInstr::FrameSetup);
+      // Set WPtr to "old" WPtr
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::GAJW), T8xx::AREG)
+	.addReg(T8xx::AREG)
         .setMIFlag(MachineInstr::FrameSetup);
-  
+
+      // Since GAJW does not "pop" an element from the register stack,
+      // the return value is in BREG, while it needs to be in AREG
+      // at this place! Hence swap AREG and BREG
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::REV), T8xx::AREG)
+	.addReg(T8xx::AREG)
+	.addReg(T8xx::BREG)
+        .setMIFlag(MachineInstr::FrameSetup);
+      
+      // Finally adjust by parameter space
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	.addImm(FixedStackSize / 4)
+        .setMIFlag(MachineInstr::FrameSetup);
+    }
+  else
+    {
+      // Restore the stack pointer to what it was at the beginning of the function.
+      /* Real stack adjustment */
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	.addImm(((FixedStackSize + StackSize) / 4) + 1)
+        .setMIFlag(MachineInstr::FrameSetup);
+    }
+      
   printf ("emitEpilogue End\n");
 }
 
