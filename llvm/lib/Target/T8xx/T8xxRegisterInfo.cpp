@@ -117,11 +117,12 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   fixed_obj_size = (fixed_obj_size + 3) / 4 * 4;
   printf ("Aligned Fixed objects size = %i\n", fixed_obj_size);
 
-  unsigned obj_size = 0;
+  // Find start of first "frame" object (parameters are treated separately)
+  unsigned obj_size = MFI.getStackSize ();
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
     if (MFI.getObjectSize (i) > 0)
-      if (-MFI.getObjectOffset (i) > obj_size)
-	obj_size = -MFI.getObjectOffset (i);
+      if (MFI.getObjectOffset (i) < obj_size)
+	obj_size = MFI.getObjectOffset (i);
   printf ("Aligned Objects size = %i\n", obj_size);
 
   int Offset = 0;
@@ -132,7 +133,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     }
   else
     {
-      Offset = obj_size + MFI.getObjectOffset(FI) + ImmOp.getImm() ;
+      Offset = MFI.getObjectOffset(FI) - obj_size + ImmOp.getImm() ;
     }
   
   // Note: getObjectOffset is positive for the function parameter (0, 4, 8)
@@ -151,14 +152,8 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
       const T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
       
-      
-      /*
-      BuildMI(*MBB, *II, dl, TII.get(T8xx::LDL), T8xx::AREG)
-	.addFrameIndex(TMFI.getWPtrSlot ())
-	.addImm(0);
-      */
       // Directly replace with $areg = LDL $wptr, <xx>
-      int WPtrOffset = obj_size + MFI.getObjectOffset(TMFI.getWPtrSlot ());
+      int WPtrOffset = MFI.getObjectOffset(TMFI.getWPtrSlot ()) - obj_size;
       WPtrOffset += MFI.getOffsetAdjustment ();
       BuildMI(*MBB, *II, dl, TII.get(T8xx::LDL), T8xx::AREG)
 	.addReg(T8xx::WPTR)

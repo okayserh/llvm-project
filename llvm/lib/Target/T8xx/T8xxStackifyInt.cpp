@@ -237,29 +237,23 @@ public:
 static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
                                 const MachineRegisterInfo &MRI,
                                 const LiveIntervals &LIS) {
-  //  printf ("getVRegDef P1\n");
-
   // Most registers are in SSA form here so we try a quick MRI query first.
   if (MachineInstr *Def = MRI.getUniqueVRegDef(Reg))
     return Def;
-
-  //  printf ("getVRegDef P2\n");
 
   // MRI doesn't know what the Def is. Try asking LIS.
   if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
           LIS.getInstructionIndex(*Insert)))
     {
       const LiveInterval &li = LIS.getInterval(Reg);
-      li.dump ();
-      printf ("SlotIndex %i\n", ValNo->def);
+      //      li.dump ();
+      //      printf ("SlotIndex %i\n", ValNo->def);
       MachineInstr *temp = LIS.getInstructionFromIndex(ValNo->def);
       if (temp)
 	temp->dump ();
 
     return LIS.getInstructionFromIndex(ValNo->def);
     }
-
-  //  printf ("getVRegDef P3\n");
 
   return nullptr;
 }
@@ -700,8 +694,17 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      if (OpDepth[0].first > 2)
 		str2code = "BsABl";
 	      else
-		// TODO: Check for commuting operators
-		str2code = "BA";
+		{
+		  // TODO: Check for commuting operators
+		  // For commuting operators this string can be used (i.e.
+		  // result is same with AREG and BREG switched (like add,mul)
+		  // str2code = "BA";
+
+		  // For non commuting operators this string must be used
+		  // It brings AREG and BREG into the required order
+		  // (div, sub, stnl!)
+		  str2code = "BAR";
+		}
 	    }
 	  else
 	    {
@@ -819,6 +822,26 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
 	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
+	    }
+	      break;
+
+	      // Insert reversal of two top register stack positions
+	      // Required for BA case with non commuting operator
+	    case 'R': {
+	      // Assert somehow that only two operands are available
+
+	      // Note Character denotes operand position!
+	      MachineOperand *Use1 = OpDepth[0].second;
+	      Register Reg1 = Use1->getReg ();
+	      MachineOperand *Use2 = OpDepth[1].second;
+	      Register Reg2 = Use2->getReg ();
+
+	      MachineBasicBlock::iterator MBBI = *MI;
+	      DebugLoc DL = MI->getDebugLoc();
+
+	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::REV),Reg2)
+		.addReg(Reg1)
+		.addReg(Reg2);
 	    }
 	      break;
 
@@ -1087,8 +1110,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII)
       //    for (auto MII = MBB.begin(); MII != MBB.end(); ++MII)
       {
-	printf ("######## NewInstruction");
-
 	MachineInstr *Insert = &*MII;
 
 	// Don't nest anything inside an inline asm, because we don't have

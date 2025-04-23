@@ -68,7 +68,8 @@ DisableLeafProc("disable-t8xx-leaf-proc",
                 cl::Hidden);
 
 T8xxFrameLowering::T8xxFrameLowering(const T8xxSubtarget &ST)
-  : TargetFrameLowering(TargetFrameLowering::StackGrowsDown,  // StackDir
+//  : TargetFrameLowering(TargetFrameLowering::StackGrowsDown,  // StackDir
+  : TargetFrameLowering(TargetFrameLowering::StackGrowsUp,  // StackDir
 			Align(4),  // StackAlignment
 			0,      // LocalAreaOffset
 			Align(4)) {}   // TransientRealignment
@@ -111,8 +112,8 @@ uint64_t T8xxFrameLowering::computeParameterSize(MachineFunction &MF) const
 
 uint64_t T8xxFrameLowering::computeFrameSize(MachineFunction &MF) const
 {
-  int64_t obj_size = 0;
   MachineFrameInfo &MFI = MF.getFrameInfo();
+  int64_t obj_size = MFI.getStackSize ();
 
   /* Old version, where the object size with stack alignment is used. Produces
      incorrect results, when the larger alignments are requested in the LLVM code */
@@ -125,10 +126,10 @@ uint64_t T8xxFrameLowering::computeFrameSize(MachineFunction &MF) const
   /* New version, Obj size is determined as the maximum negative index in the frame */
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
     if (MFI.getObjectSize (i) > 0)
-      if (-MFI.getObjectOffset (i) > obj_size)
-	obj_size = -MFI.getObjectOffset (i);
+      if (MFI.getObjectOffset (i) < obj_size)
+	obj_size = MFI.getObjectOffset (i);
 
-  return ((uint64_t) obj_size);
+  return ((uint64_t) (MFI.getStackSize () - obj_size));
 }
 
 uint64_t T8xxFrameLowering::computeStackSize(MachineFunction &MF) const {
@@ -161,6 +162,9 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
   
+  // Debugging output. Print current frame info
+  MFI.dump (MF);
+
   // Dynamic stack realignment
   Align MaxAlign = MFI.getMaxAlign();
   
@@ -173,6 +177,9 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   // Compute the stack size, to determine if we need a prologue at all.
   uint64_t FixedStackSize = computeParameterSize (MF);  
   uint64_t StackSize = computeFrameSize(MF);
+
+  uint64_t OffsetAdj = MaxAlign.value ();
+
   if ((FixedStackSize + StackSize) == 0) {
     return;
   }
@@ -180,8 +187,15 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   // Attempt to adjust stack offset
   /* Note: This is just a helper variable in the MFI object. */
   printf ("Current FI Offset = %li\n", MFI.getOffsetAdjustment ());
-  // Note: The +1 is for R0, which is reserved for the return address
-  MFI.setOffsetAdjustment (4);
+
+  // Note: Stack position 0 may be used by some Transputer internals
+  // Hence do not use that. However, when alignments other than the natural
+  // 4 bytes are used, adjust the offset accordingly.
+  // TODO: The current approach is rather wasteful with stack space.
+  // Maybe the required stack slot 0 can be already included in the
+  // calculation of the aligned workspace pointer?
+  
+  MFI.setOffsetAdjustment (MaxAlign.value ());
   
   // Adjust the stack pointer.
 
@@ -209,7 +223,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
       // Subtract required space
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADC), T8xx::AREG)
 	.addReg(T8xx::AREG)
-	.addImm(-(StackSize + 4))  // One additional space is required to avoid conflict with Parameters
+	.addImm(-(StackSize + OffsetAdj))  // One additional space is required to avoid conflict with Parameters
         .setMIFlag(MachineInstr::FrameSetup);
 
       // And with 11111100 (where the number of 0s depends on the required alignment)
