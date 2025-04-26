@@ -310,7 +310,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 	.addImm(0)
 	.setMIFlag(MachineInstr::FrameSetup);
       // Set WPtr to "old" WPtr
-      BuildMI(MBB, MBBI, dl, TII.get(T8xx::GAJW), T8xx::AREG)
+      BuildMI(MBB, MBBI, dl, TII.get(T8xx::GAJW), T8xx::ABREG)
 	.addReg(T8xx::AREG)
         .setMIFlag(MachineInstr::FrameSetup);
 
@@ -318,8 +318,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
       // the return value is in BREG, while it needs to be in AREG
       // at this place! Hence swap AREG and BREG
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::REV), T8xx::AREG)
-	.addReg(T8xx::AREG)
-	.addReg(T8xx::BREG)
+	.addReg(T8xx::ABREG)
         .setMIFlag(MachineInstr::FrameSetup);
       
       // Finally adjust by parameter space

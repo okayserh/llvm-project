@@ -117,7 +117,6 @@ def LADD :    T8InstOp8<0x16, (outs OReg:$dst1), (ins OReg:$src1, OReg:$src2, OR
 def LSUB :    T8InstOp8<0x38, (outs OReg:$dst1), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lsub", []>;
 def LSUM :    T8InstOp8<0x37, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lsum", []>;
 def LMUL :    T8InstOp8<0x31, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lmul", []>;
-def LDIV :    T8InstOp8<0x1A, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "ldiv", []>;
 def NORM :    T8InstOp8<0x19, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "norm", []>;
 
 def SUM :     T8InstOp8<0x52, (outs OReg:$dst), (ins OReg:$src1, OReg:$src2), "sum", []>;

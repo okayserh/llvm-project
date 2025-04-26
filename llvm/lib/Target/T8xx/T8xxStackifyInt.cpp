@@ -844,9 +844,17 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      MachineBasicBlock::iterator MBBI = *MI;
 	      DebugLoc DL = MI->getDebugLoc();
 
+	      Register RegJoin;
+	      RegJoin = MRI.createVirtualRegister (&T8xx::LRegRegClass);
+
+	      VRM.grow ();
+	      
+	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::JOIN),RegJoin)
+		.addReg (Reg1)
+		.addReg (Reg2);
+
 	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::REV),Reg2)
-		.addReg(Reg1)
-		.addReg(Reg2);
+		.addReg(RegJoin);
 	    }
 	      break;
 

@@ -102,6 +102,16 @@ def MxStackSelect : SDTypeProfile<1, 1, [
 def MxSelect : SDNode<"T8xxISD::REV", MxStackSelect>;
 
 
+def MxStackJoin : SDTypeProfile<1, 2, [
+  /* RES       */ SDTCisVT<0, i64>,
+  /* AREG/BREG */ SDTCisVT<1, i32>,
+  /* AREG/BREG */ SDTCisVT<2, i32>
+]>;
+
+def MxJoin : SDNode<"T8xxISD::JOIN", MxStackJoin>;
+
+
+
 //===----------------------------------------------------------------------===//
 // Conditional Move Pseudo Instructions
 //
@@ -286,11 +296,6 @@ def OR  : T8BinaryOp8<0x4B, "or", or>;  // #53
 def AND : T8BinaryOp8<0x46, "and", and>;  // #53
 
 
-
-def : Pat<(udiv (i32 OReg:$lhs), (i32 OReg:$rhs)),
-           (LDIV $rhs, $lhs, (LDC 0) )>;
-
-
 // Dummy instruction to test the code generated
 def SRA : T8BinaryOp8<0x23, "sra", sra>;  // #53
 
@@ -307,6 +312,8 @@ defm SRA : T8BinaryOp<0x01, 0x21, "lshr", sra>;  // #53   (Pseudo Code, needs tr
 defm ROTR : T8BinaryOp<0x01, 0x22, "lshr", rotr>;
 defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
 */
+
+
 
 
 // Load i32 from frame index
@@ -464,6 +471,26 @@ def REV :     T8InstOp4<0x0,
 		"rev",
 		[(set i32:$dst, (MxSelect i64:$src))]>;
 
+// Move the "low word" of an LReg to the destination register
+// Since the low word is already in the destination register on the operand stack,
+// this is a pseudo instruction
+def SELLOW :  T8Inst<(outs OReg:$dst),
+	             (ins LReg:$src),
+	             "sellow",
+		     [(set i32:$dst, (MxSelect i64:$src))]>
+{
+    let isPseudo = 1;
+}
+
+def JOIN :  T8Inst<(outs LReg:$dst),
+	           (ins OReg:$src1, OReg:$src2),
+	           "join",
+		   [(set i64:$dst, (MxJoin i32:$src1, i32:$src2))]>
+{
+    let isPseudo = 1;
+}
+
+
 // Unsigned comparisons are a bit more complex
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGT),
            (EQC (REV (LDIFF $rhs, $lhs, (LDC 1))), 0)>;   // ab in reference
@@ -485,6 +512,16 @@ def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUEQ),
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUNE),
            (DIFF $lhs, $rhs)>;
 
+
+// Unsigned arithmetic operations
+
+def LDIV :    T8InstOp8<0x1A, (outs LReg:$dst), (ins OReg:$src1, OReg:$src2, OReg:$src3), "ldiv", []>;
+
+def : Pat<(udiv (i32 OReg:$lhs), (i32 OReg:$rhs)),
+           (SELLOW (LDIV $rhs, $lhs, (LDC 0)) )>;
+
+def : Pat<(urem (i32 OReg:$lhs), (i32 OReg:$rhs)),
+           (REV (LDIV $rhs, $lhs, (LDC 0)) )>;
 
 
 //===----------------------------------------------------------------------===//

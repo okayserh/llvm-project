@@ -35,6 +35,7 @@ namespace llvm {
     BRNCOND,
     LDIFF,
     REV,
+    JOIN,
     DS_FADD,
     SD_FADD,
     DS_FSUB,

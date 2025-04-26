@@ -59,6 +59,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "LDIFF";
   case T8xxISD::REV:
     return "REV";
+  case T8xxISD::JOIN:
+    return "JOIN";
 
     // Casting floating point operations
   case T8xxISD::DS_FADD:
@@ -367,8 +369,19 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
       }
       
   } else {
+
+    printf ("#### LowerBRCOND Negation Case\n");
+    
+    SDValue Op0 = Op.getOperand(0);
+    SDValue Op1 = Op.getOperand(1);
+    SDValue Op2 = Op.getOperand(2);
+
+    Op0.dump ();
+    Op1.dump ();
+    Op2.dump ();
+
     // Otherwise insert logical not (= EQ 0)
-    NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
+    NewCond = DAG.getSetCC (DL, Cond.getValueType (),
 			    Cond.getValue(0),
 			    DAG.getConstant(0, DL, MVT::i32),
 			    ISD::CondCode::SETEQ);

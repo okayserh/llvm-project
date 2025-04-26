@@ -443,6 +443,12 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
+    // Pseudo instruction needs to be removed
+  case T8xx::SELLOW:
+  case T8xx::JOIN:
+    MBB.erase (MI);
+    break;
+
   case T8xx::RET:
     {
       BuildMI (MBB, MI, DL, get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
@@ -474,8 +480,8 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       BuildMI (MBB, MI, DL, get(T8xx::ADC), T8xx::AREG).addReg(T8xx::AREG).addImm(-4);
       BuildMI (MBB, MI, DL, get(T8xx::LDPI), T8xx::AREG).addReg(T8xx::AREG);
       */
-      BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
-      BuildMI (MBB, MI, DL, get(T8xx::REV));
+      BuildMI (MBB, MI, DL, get(T8xx::GCALL), T8xx::ABREG).addReg(T8xx::AREG);
+      BuildMI (MBB, MI, DL, get(T8xx::REV), T8xx::AREG).addReg(T8xx::ABREG);
       MBB.erase(MI);
 
       /*
