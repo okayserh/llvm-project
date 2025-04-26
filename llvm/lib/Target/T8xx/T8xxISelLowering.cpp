@@ -300,33 +300,10 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
   SDLoc DL(Op);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
 
-  // Catch the unsigned comparisons
-  // Note: The U stands actually for unordered!!!
-  if (CC == ISD::SETUGT || CC == ISD::SETUGE ||
-      CC == ISD::SETULT || CC == ISD::SETULE ||
-      CC == ISD::SETUEQ || CC == ISD::SETUNE)
-    {
-      Op0.dump ();
-      Op1.dump ();
-      Op.getOperand(2).dump ();
-
-
-      SDValue OneConst = DAG.getConstant(1, DL, MVT::i32);
-      // TODO: In the VTList try to adapt this to the original node!
-      SDValue Diff = DAG.getNode(T8xxISD::LDIFF, DL, DAG.getVTList(MVT::i32, MVT::i32),
-				 OneConst, Op1, Op0);
-      SDValue Rev = DAG.getNode(T8xxISD::REV, DL, MVT::i32,
-				Diff.getValue(0), Diff.getValue(1));
-
-      SDValue SetCC = DAG.getSetCC (DL, Rev.getOperand(0).getValueType (),
-			    Rev.getValue(0),
-			    DAG.getConstant(0, DL, MVT::i32),
-			    ISD::CondCode::SETEQ);
-
-      return SetCC;
-    }
-  else
-    return (Op);
+  // Currently nothing to do. The unsigned integer comparisons
+  // have been implemented as patterns in the instruction definition
+  
+  return (Op);
 }
 
 
@@ -364,6 +341,14 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
       case ISD::SETLE:
       case ISD::SETGT:
       case ISD::SETGE:
+
+      case ISD::SETUEQ:
+      case ISD::SETUNE:
+      case ISD::SETUGE:
+      case ISD::SETUGT:
+      case ISD::SETULE:
+      case ISD::SETULT:
+
 	NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
 				 Cond.getOperand(0),
 				 Cond.getOperand(1),
@@ -372,15 +357,12 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 
 	// Otherwise use the original condition and introduce a negation
       default:
+	printf ("### Use Negation %i\n", (int)CCNode->get());
+	
 	NewCond = DAG.getSetCC (DL, Cond.getValueType (),
 				Cond.getValue(0),
 				DAG.getConstant(0, DL, MVT::i32),
 				ISD::CondCode::SETEQ);
-	/*
-	SDValue CompConst = DAG.getConstant(0, DL, MVT::i32);
-	NewCond = DAG.getNode (T8xxISD::EQ, DL, Cond.getValueType (),
-			       Chain, Cond, CompConst);
-	*/
 	break;
       }
       
@@ -390,10 +372,6 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 			    Cond.getValue(0),
 			    DAG.getConstant(0, DL, MVT::i32),
 			    ISD::CondCode::SETEQ);
-    /*
-    SDValue CompConst = DAG.getConstant(0, DL, MVT::i32);
-    NewCond = DAG.getNode(T8xxISD::EQ, DL, Op.getValueType (), Chain, Cond, CompConst);
-    */
   }
 
   // Use the "negative" BRCOND.

@@ -642,7 +642,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  !I->getReg().isPhysical() &&
 	  ((RC->getID () == T8xx::ORegRegClassID) ||
 	   (RC->getID () == T8xx::FPRegRegClassID) ||
-	   (RC->getID () == T8xx::DFPRegRegClassID)))
+	   (RC->getID () == T8xx::DFPRegRegClassID) ||
+	   (RC->getID () == T8xx::LRegRegClassID)))
 	{
 	  Register Reg = I->getReg();
 	  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
@@ -650,6 +651,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	    {
 	      int SubE = getDepth (DefI, MRI, LIS, RC->getID ());
 	      if (RC->getID () == T8xx::ORegRegClassID)
+		OpDepth.push_back (std::make_pair(SubE, I));
+	      if (RC->getID () == T8xx::LRegRegClassID)
 		OpDepth.push_back (std::make_pair(SubE, I));
 	      if (RC->getID () == T8xx::FPRegRegClassID)
 		OpDepthFP.push_back (std::make_pair(SubE, I));
@@ -662,6 +665,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      // not possible to move the respective instruction get
 	      // depth "10000" (arbitrary value)
 	      if (RC->getID () == T8xx::ORegRegClassID)
+		OpDepth.push_back (std::make_pair(10000, I));
+	      if (RC->getID () == T8xx::LRegRegClassID)  // TODO: Verify this is the correct way to do it
 		OpDepth.push_back (std::make_pair(10000, I));
 	      if (RC->getID () == T8xx::FPRegRegClassID)
 		OpDepthFP.push_back (std::make_pair(10000, I));

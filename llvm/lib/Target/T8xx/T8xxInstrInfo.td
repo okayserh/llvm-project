@@ -84,21 +84,19 @@ def MxCmov    : SDNode<"T8xxISD::CMOV",        MxSDT_Cmov>;
 
 /* Example for an operation that yields two results. Might be used for
 the long arithmetic operations of the Transputer (i.e. ldiff etc.) */
-def MxLongArithmetic : SDTypeProfile<2, 3, [
-  /* RES 1 */ SDTCisInt<0>,
-  /* RES 2 */ SDTCisInt<1>,
-  /*   LHS */ SDTCisSameAs<0, 2>,
-  /*   RHS */ SDTCisSameAs<0, 3>,
-  /*   CCR */ SDTCisSameAs<1, 4>
+def MxLongArithmetic : SDTypeProfile<1, 3, [
+  /* RES 1 */ SDTCisVT<0, i64>,
+  /*   LHS */ SDTCisVT<1, i32>,
+  /*   RHS */ SDTCisVT<2, i32>,
+  /*   CCR */ SDTCisVT<3, i32>
 ]>;
 
 def MxLongDiff : SDNode<"T8xxISD::LDIFF", MxLongArithmetic>;
 
 
-def MxStackSelect : SDTypeProfile<1, 2, [
-  /* RES */ SDTCisInt<0>,
-  /*   AREG */ SDTCisSameAs<0, 1>,
-  /*   BREG */ SDTCisSameAs<0, 2>,
+def MxStackSelect : SDTypeProfile<1, 1, [
+  /* RES       */ SDTCisVT<0, i32>,
+  /* AREG/BREG */ SDTCisVT<1, i64>
 ]>;
 
 def MxSelect : SDNode<"T8xxISD::REV", MxStackSelect>;
@@ -420,6 +418,7 @@ def : Pat<(truncstorei8 i32:$val, ADDRri8:$addr),
 // SETULE
 // SETUGT
 // SETUGE
+// are used (include/CodeGen/ISDOpcodes.h)
 
 def EQC   : T8InstImm<0xC,
 		(outs OReg:$cc),
@@ -451,31 +450,41 @@ def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETGE),
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLE),
            (EQC (DIFF $lhs, $rhs), 0)>;
 
-// TODO: Just to test if this is what stops llc!!!
-/*
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGT),
-           (EQC (DIFF $lhs, $rhs), 0)>;
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGE),
-           (EQC (DIFF $lhs, $rhs), 0)>;
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULE),
-           (EQC (DIFF $lhs, $rhs), 0)>;
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULT),
-           (EQC (DIFF $lhs, $rhs), 0)>;
-*/
-
-
 def LDIFF :   T8InstOp8<0x4F,
-    	      (outs OReg:$dst1, OReg:$dst2),
+    	      (outs LReg:$dst),
 	      (ins OReg:$src1, OReg:$src2, OReg:$src3),
 	      "ldiff",
-	      [(set i32:$dst1, i32:$dst2, (MxLongDiff i32:$src1, i32:$src2, i32:$src3))]>;
+	      [(set i64:$dst, (MxLongDiff i32:$src1, i32:$src2, i32:$src3))]>;
 
 
+// Moves the "high word" of an LReg to the destination register
 def REV :     T8InstOp4<0x0,
 		(outs OReg:$dst),
-		(ins OReg:$src1, OReg:$src2),
+		(ins LReg:$src),
 		"rev",
-		[(set i32:$dst, (MxSelect i32:$src1, i32:$src2))]>;
+		[(set i32:$dst, (MxSelect i64:$src))]>;
+
+// Unsigned comparisons are a bit more complex
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGT),
+           (EQC (REV (LDIFF $rhs, $lhs, (LDC 1))), 0)>;   // ab in reference
+
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULT),
+           (EQC (REV (LDIFF $lhs, $rhs, (LDC 1))), 0)>;   // ba in reference
+
+// Greater Equal is NOT Less Than
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGE),
+           (REV (LDIFF $lhs, $rhs, (LDC 1)))>;  // ba in reference
+
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULE),
+           (REV (LDIFF $rhs, $lhs, (LDC 1)))>;      // ab in reference
+
+// Note: Same as SETEQ
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUEQ),
+           (EQC (DIFF $lhs, $rhs), 0)>;
+// Note: Same as SETNE
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUNE),
+           (DIFF $lhs, $rhs)>;
+
 
 
 //===----------------------------------------------------------------------===//

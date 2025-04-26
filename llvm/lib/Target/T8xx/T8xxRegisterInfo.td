@@ -32,37 +32,26 @@ def FCREG : T8xxReg<2, "FCREG">, DwarfRegNum<[24]>;
 
 // Long registers (combines two stack registers)
 def ABREG : T8xxReg<6, "ABREG">, DwarfRegNum<[25]>;
-def BCREG : T8xxReg<7, "BCREG">, DwarfRegNum<[26]>;
+//def BCREG : T8xxReg<7, "BCREG">, DwarfRegNum<[26]>;
 
-
-/*
-// Aliases of the F* registers to hold 64-bit fp values (doubles)
-class T8xxDFReg<bits<16> Enc, string n, list<Register> subregs> : T8xxReg<Enc, n> {
-      let SubRegs = subregs;
-      let CoveredBySubRegs = 1;
-}
-
-def DFAREG: T8xxDFReg<70, "DFAREG", [FAREG]>, DwarfRegNum<[70]>;
-def DFBREG: T8xxDFReg<71, "DFBREG", [FBREG]>, DwarfRegNum<[71]>;
-def DFCREG: T8xxDFReg<72, "DFCREG", [FCREG]>, DwarfRegNum<[72]>;
-*/
 
 // Register classes.
-//
-// FIXME: the register order should be defined in terms of the preferred
-// allocation order...
-//
 
 // The frame pointer or workspace pointer is special
 // in that it is used in special adressing modes
+
+// Note: Template parameters are:
+// namespace, list<ValueType>, int alignment, regList, RegAltNameIndex idx = NoRegAltName
+
 def WptrRegs : RegisterClass<"T8xx", [i32], 32,
                             (add WPTR)>;
 
 def OReg : RegisterClass<"T8xx", [i32], 32,
      	                  (add AREG, BREG, CREG)>;
 
+// Note, the "low word" is usually AReg, the "high word" is usually BReg
 def LReg : RegisterClass<"T8xx", [i64], 32,
-     	                  (add ABREG, BCREG)>;
+     	                  (add ABREG)>;
 
 def FPReg:  RegisterClass<"T8xx", [f32], 32,
      	                  (add FAREG, FBREG, FCREG)>;
