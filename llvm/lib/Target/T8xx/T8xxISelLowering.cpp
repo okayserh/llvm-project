@@ -53,8 +53,6 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "ADD_WPTR";
   case T8xxISD::CMOV:
     return "CMOV";
-  case T8xxISD::EQ:
-    return "EQ";
   case T8xxISD::BRNCOND:
     return "BRNCOND";
   case T8xxISD::LDIFF:
@@ -303,6 +301,7 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
 
   // Catch the unsigned comparisons
+  // Note: The U stands actually for unordered!!!
   if (CC == ISD::SETUGT || CC == ISD::SETUGE ||
       CC == ISD::SETULT || CC == ISD::SETULE ||
       CC == ISD::SETUEQ || CC == ISD::SETUNE)
@@ -324,8 +323,6 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
 			    DAG.getConstant(0, DL, MVT::i32),
 			    ISD::CondCode::SETEQ);
 
-      // TODO: Not the correct code.
-      //return DAG.getNode(T8xxISD::EQ, DL, MVT::i32, Op0, Op1);
       return SetCC;
     }
   else
@@ -350,17 +347,53 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
     // For SETCC use "inverse" comparison
     CondCodeSDNode *CCNode = cast<CondCodeSDNode>(Cond.getOperand(2));
 
+    ISD::CondCode invCC = getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ());
+
     // CCNode->get().dump ();
     printf ("### Cond Code %i\n", (int)CCNode->get());
+    printf ("### Cond Code %i\n", (int)getSetCCInverse (CCNode->get(),
+							Cond.getOperand(2).getValueType ()));
 
-    NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
+    switch (invCC)
+      {
+	// If the inverted condition is in the range of implemented
+	// operators, use it
+      case ISD::SETEQ:
+      case ISD::SETNE:
+      case ISD::SETLT:
+      case ISD::SETLE:
+      case ISD::SETGT:
+      case ISD::SETGE:
+	NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
 				 Cond.getOperand(0),
 				 Cond.getOperand(1),
 				 getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ()));
+	break;
+
+	// Otherwise use the original condition and introduce a negation
+      default:
+	NewCond = DAG.getSetCC (DL, Cond.getValueType (),
+				Cond.getValue(0),
+				DAG.getConstant(0, DL, MVT::i32),
+				ISD::CondCode::SETEQ);
+	/*
+	SDValue CompConst = DAG.getConstant(0, DL, MVT::i32);
+	NewCond = DAG.getNode (T8xxISD::EQ, DL, Cond.getValueType (),
+			       Chain, Cond, CompConst);
+	*/
+	break;
+      }
+      
   } else {
     // Otherwise insert logical not (= EQ 0)
+    NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
+			    Cond.getValue(0),
+			    DAG.getConstant(0, DL, MVT::i32),
+			    ISD::CondCode::SETEQ);
+    /*
     SDValue CompConst = DAG.getConstant(0, DL, MVT::i32);
     NewCond = DAG.getNode(T8xxISD::EQ, DL, Op.getValueType (), Chain, Cond, CompConst);
+    */
   }
 
   // Use the "negative" BRCOND.

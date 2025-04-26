@@ -61,14 +61,6 @@ def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
-def MxSDT_EQ : SDTypeProfile<1, 2, [
-  /*  Cond */ SDTCisVT<0, i32>,  // Actually a boolean. However on the Transputer those are represented as 32 bit ints
-  /*  ARG1 */ SDTCisVT<1, i32>,
-  /*  ARG2 */ SDTCisVT<2, i32>
-]>;
-
-def MxEQ : SDNode<"T8xxISD::EQ",  MxSDT_EQ>;
-
 /* The transputer conditional jump goes the conditional branch on
   false! Hence we introduce a special code for this one */
 
@@ -458,6 +450,19 @@ def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETGE),
 
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLE),
            (EQC (DIFF $lhs, $rhs), 0)>;
+
+// TODO: Just to test if this is what stops llc!!!
+/*
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGT),
+           (EQC (DIFF $lhs, $rhs), 0)>;
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGE),
+           (EQC (DIFF $lhs, $rhs), 0)>;
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULE),
+           (EQC (DIFF $lhs, $rhs), 0)>;
+def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULT),
+           (EQC (DIFF $lhs, $rhs), 0)>;
+*/
+
 
 def LDIFF :   T8InstOp8<0x4F,
     	      (outs OReg:$dst1, OReg:$dst2),
