@@ -58,6 +58,21 @@ def SDT_AddWptr     : SDTypeProfile<1, 2, [SDTCisPtrTy<0>, SDTCisPtrTy<1>, SDTCi
 
 def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
 
+
+// A definition of the store instruction to access the parameter
+// stack for function calls.
+
+// First parameter is Argument to be saved,
+// Second is the stack offset as simple constant
+
+def SDT_T8xxParmStack : SDTypeProfile<0, 2,
+                                       [SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
+
+def T8xxParmStack : SDNode<"T8xxISD::STL_PARM", SDT_T8xxParmStack,
+    		    	   [SDNPHasChain, SDNPInGlue, SDNPOutGlue,
+			   SDNPMayStore]>;
+
+
 def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
@@ -387,6 +402,10 @@ def STL : T8InstImm<0xD,
 		[(store i32:$val, ADDRri:$addr)]> {
 		}
 
+def : Pat<(T8xxParmStack i32:$val, imm:$imm),
+          (STL i32:$val, WPTR, i32imm:$imm )>;
+
+
 // Store i32 to global address
 def STNL : T8InstImm<0xE,
 		(outs),
@@ -421,10 +440,10 @@ def : Pat<(truncstorei8 i32:$val, ADDRri8:$addr),
 // SETLE +
 // SETGT +
 // SETGE +
-// SETULT
-// SETULE
-// SETUGT
-// SETUGE
+// SETULT +
+// SETULE +
+// SETUGT +
+// SETUGE +
 // are used (include/CodeGen/ISDOpcodes.h)
 
 def EQC   : T8InstImm<0xC,

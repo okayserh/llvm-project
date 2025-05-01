@@ -41,16 +41,16 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch (Opcode) {
   default:
     return NULL;
+  case T8xxISD::CALL:
+    return "CALL";
   case T8xxISD::RET_FLAG:
     return "RetFlag";
   case T8xxISD::LOAD_SYM:
     return "LOAD_SYM";
-  case T8xxISD::CALL:
-    return "CALL";
-  case T8xxISD::LOAD_OP_STACK:
-    return "LOAD_OP_STACK";
   case T8xxISD::ADD_WPTR:
     return "ADD_WPTR";
+  case T8xxISD::STL_PARM:
+    return "STL_PARM";
   case T8xxISD::CMOV:
     return "CMOV";
   case T8xxISD::BRNCOND:
@@ -620,17 +620,9 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   CCInfo.AnalyzeCallOperands(Outs, CC_T8xx32);
 
   // Get the size of the outgoing arguments stack space requirement.
-  // Note: Named "ArgsSize" in SparcISelLowering
-  // Old Code (LLVM 17)
-  //  const unsigned NumBytes = CCInfo.getNextStackOffset();
-  // New Code (LLVM 18) ???
   unsigned NumBytes = CCInfo.getStackSize();
 
-  /* Old LEG Code
-  Chain =
-    DAG.getCALLSEQ_START(Chain, DAG.getIntPtrConstant(NumBytes, Loc, true), 0,
-                           Loc);
-  */
+  // Create node for CALLSEQ_START
   Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, Loc);
 
   SmallVector<std::pair<unsigned, SDValue>, 8> RegsToPass;
@@ -679,6 +671,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // ldl %r1
     // stl -2
 
+    /*
     SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
     assert (VA.getLocMemOffset() % 4 == 0 &&
 	    "Only 4 byte aligned offset allowed");
@@ -688,22 +681,16 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
                                        MachinePointerInfo()));
-
-    /*
-    SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
+    */
     assert (VA.getLocMemOffset() % 4 == 0 &&
 	    "Only 4 byte aligned offset allowed");
 
-    int32_t Offset = VA.getLocMemOffset();
-    SDValue PtrOff = DAG.getIntPtrConstant(-(Offset / 4 + 1), Loc);
-
-    PtrOff = DAG.getNode(ISD::ADD, Loc, MVT::i32, StackPtr, PtrOff);
-    MachinePointerInfo DstInfo =
-            MachinePointerInfo::getStack(DAG.getMachineFunction(), Offset);
-
-    MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
-                                       DstInfo));
-    */
+    SDValue Off = DAG.getSignedConstant(-(VA.getLocMemOffset() + 4), Loc,
+					getPointerTy(DAG.getDataLayout()));
+    SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
+    SDValue Ops[] = {Chain, Arg, Off};
+    MemOpChains.push_back (
+			   DAG.getNode(T8xxISD::STL_PARM, Loc, VTs, Ops));        
   }
 
   // Emit all stores, make sure they occur before the call.

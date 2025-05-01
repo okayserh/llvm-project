@@ -28,7 +28,6 @@ def CC_T8xx32 : CallingConv<[
 ]>;
 
 def RetCC_T8xx32 : CallingConv<[
-  // i32 are returned in registers R1, R2
   CCIfType<[i32], CCAssignToReg<[AREG]>>,
   CCIfType<[i64], CCAssignToStack<4, 4>>,
 

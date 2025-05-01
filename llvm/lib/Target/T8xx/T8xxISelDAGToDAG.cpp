@@ -103,6 +103,12 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
    * is a regular register.
    */
 
+  // Try to eliminate the tedious way through ldlp, stnl and
+  // condense it into 
+  if (Addr.getOpcode() == T8xxISD::ADD_WPTR)
+    printf ("T8xxISD:ADD_WPTR\n");
+
+
 #if 0
   if (Addr.getOpcode() == ISD::ADD) {
     printf ("ISD:ADD\n");

@@ -27,8 +27,8 @@ namespace llvm {
     CALL,            // A call instruction.
     RET_FLAG,        // Return with a flag operand.
     LOAD_SYM,
-    LOAD_OP_STACK,
     ADD_WPTR,
+    STL_PARM,
 
     // T8xx conditional moves.
     CMOV,
