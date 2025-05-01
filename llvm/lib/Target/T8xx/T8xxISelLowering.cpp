@@ -658,39 +658,14 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // Instead negative indices should be used for function parameters that should
     // be put on the stack
 
-    // TODO: The resulting code looks like:
-    // ldlp -2
-    // stl %r2
-    // ldl %r1
-    // ldl %r2
-    // stnl
-    // I.e. the address of the frame location is first put into a
-    // register and then the actual parameter is copied
-    // via a stnl to that address
-    // Might be faster to use:
-    // ldl %r1
-    // stl -2
-
-    /*
-    SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
-    assert (VA.getLocMemOffset() % 4 == 0 &&
-	    "Only 4 byte aligned offset allowed");
-    SDValue PtrOff = DAG.getSignedConstant(-(VA.getLocMemOffset() + 4), Loc,
-					   getPointerTy(DAG.getDataLayout()));
-    PtrOff = DAG.getNode(T8xxISD::ADD_WPTR, Loc, MVT::i32, StackPtr, PtrOff);
-
-    MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, PtrOff,
-                                       MachinePointerInfo()));
-    */
     assert (VA.getLocMemOffset() % 4 == 0 &&
 	    "Only 4 byte aligned offset allowed");
 
-    SDValue Off = DAG.getSignedConstant(-(VA.getLocMemOffset() + 4), Loc,
+    SDValue Off = DAG.getSignedConstant(-1 - (VA.getLocMemOffset() / 4), Loc,
 					getPointerTy(DAG.getDataLayout()));
     SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
     SDValue Ops[] = {Chain, Arg, Off};
-    MemOpChains.push_back (
-			   DAG.getNode(T8xxISD::STL_PARM, Loc, VTs, Ops));        
+    MemOpChains.push_back (DAG.getNode(T8xxISD::STL_PARM, Loc, VTs, Ops));
   }
 
   // Emit all stores, make sure they occur before the call.

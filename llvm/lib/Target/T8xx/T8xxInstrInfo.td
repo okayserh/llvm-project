@@ -402,8 +402,11 @@ def STL : T8InstImm<0xD,
 		[(store i32:$val, ADDRri:$addr)]> {
 		}
 
+// This pattern is used for the treatment of call parameters
+// They are positioned relative to the WPTR but the framepointer
+// does support this kind of operation.
 def : Pat<(T8xxParmStack i32:$val, imm:$imm),
-          (STL i32:$val, WPTR, i32imm:$imm )>;
+          (STL i32:$val, WPTR, imm:$imm )>;
 
 
 // Store i32 to global address
