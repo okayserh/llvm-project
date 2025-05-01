@@ -539,7 +539,55 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
   if (!Reg.isPhysical())
     {
       if (VRM.isAssignedReg (Reg))
-	MBB->splice (MI, DefI->getParent (), DefI);
+	{
+	  /*
+	  printf ("### Splice\n");
+	  MI->dump ();
+	  printf ("### Def Instr.\n");	  
+	  DefI->dump ();
+	  */
+
+	  MachineBasicBlock::iterator ItDef = *DefI;
+	  MachineBasicBlock::iterator ItMi = *MI;
+
+	  // If the instructions are already in the right sequence,
+	  // no splice is required
+	  if (std::next(ItDef) == ItMi)
+	    printf ("### Instruction sequence already OK\n");
+	  else
+	    {
+	      if (DefI->getOpcode () == T8xx::COPY)
+		{		  
+		  // If the results of the copy is needed at some other place,
+		  // the return value is stored in a temporary variable
+		  printf ("### Copy instruction\n");
+		  DebugLoc DL = DefI->getDebugLoc();
+
+		  Register RegClone = MRI.cloneVirtualRegister (Reg);
+		  Use->setReg (RegClone);
+		  
+		  // TODO: Just to see if this works. Might be rather inefficient to have this
+		  // after each newly created virtual register
+		  VRM.grow ();
+	      
+		  // Store temporary variable after defining instruction
+		  if (VRM.isAssignedReg (Reg))
+		    VRM.assignVirt2StackSlot (Reg);
+		  
+		  MachineBasicBlock::iterator MBBI = *DefI;
+		  
+		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
+		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		  
+		  // Create new virtual register for clone
+		  DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).
+		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+		}
+
+	      // Shift defining instruction in front of consuming instruction
+	      MBB->splice (MI, DefI->getParent (), DefI);
+	    }
+	}
       else
 	{
 	  DebugLoc DL = MI->getDebugLoc();
@@ -1108,8 +1156,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 		      }
 		  }
 	      }
-	    // TODO: Find a way to treat multiple definitions (Should only be rare
-	    // special cases)
 	  }
 
       }
