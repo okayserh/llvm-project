@@ -61,24 +61,6 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "REV";
   case T8xxISD::JOIN:
     return "JOIN";
-
-    // Casting floating point operations
-  case T8xxISD::DS_FADD:
-    return "DS_FADD";
-  case T8xxISD::SD_FADD:
-    return "SD_FADD";
-  case T8xxISD::DS_FSUB:
-    return "DS_FSUB";
-  case T8xxISD::SD_FSUB:
-    return "SD_FSUB";
-  case T8xxISD::DS_FMUL:
-    return "DS_FMUL";
-  case T8xxISD::SD_FMUL:
-    return "SD_FMUL";
-  case T8xxISD::DS_FDIV:
-    return "DS_FDIV";
-  case T8xxISD::SD_FDIV:
-    return "SD_FDIV";
   }
 }
 
@@ -141,24 +123,27 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setMinFunctionAlignment(Align(4));
 
   // TODO: Test ...
-  setOperationAction(ISD::FMUL, MVT::f32, Custom);
-  setOperationAction(ISD::FMUL, MVT::f64, Custom);
-
-  // ARM does not have floating-point extending loads.
-  for (MVT VT : MVT::fp_valuetypes()) {
-    setLoadExtAction(ISD::EXTLOAD, VT, MVT::f32, Expand);
-    setLoadExtAction(ISD::EXTLOAD, VT, MVT::f16, Expand);
-    setLoadExtAction(ISD::EXTLOAD, VT, MVT::bf16, Expand);
-  }
-  // ... or truncating stores
-  setTruncStoreAction(MVT::f64, MVT::f32, Expand);
-  setTruncStoreAction(MVT::f32, MVT::f16, Expand);
-  setTruncStoreAction(MVT::f64, MVT::f16, Expand);
-  setTruncStoreAction(MVT::f32, MVT::bf16, Expand);
-  setTruncStoreAction(MVT::f64, MVT::bf16, Expand);
-
+  if (Subtarget->useFPU ())
+    {
+      /*
+      setOperationAction(ISD::FMUL, MVT::f32, Custom);
+      setOperationAction(ISD::FMUL, MVT::f64, Custom);
+      */
+      
+      // ARM does not have floating-point extending loads.
+      for (MVT VT : MVT::fp_valuetypes()) {
+	setLoadExtAction(ISD::EXTLOAD, VT, MVT::f32, Expand);
+	setLoadExtAction(ISD::EXTLOAD, VT, MVT::f16, Expand);
+	setLoadExtAction(ISD::EXTLOAD, VT, MVT::bf16, Expand);
+      }
+      // ... or truncating stores
+      setTruncStoreAction(MVT::f64, MVT::f32, Expand);
+      setTruncStoreAction(MVT::f32, MVT::f16, Expand);
+      setTruncStoreAction(MVT::f64, MVT::f16, Expand);
+      setTruncStoreAction(MVT::f32, MVT::bf16, Expand);
+      setTruncStoreAction(MVT::f64, MVT::bf16, Expand);
+    }
   
-
   // Nodes that require custom lowering
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
@@ -238,14 +223,16 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
   case ISD::GlobalAddress:
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
-
+    /*
   case ISD::FMUL:
     printf ("####### Lower FMUL  #########\n");
     return LowerFMUL(Op, DAG);
+    */
   }
 }
 
 
+/*
 SDValue T8xxTargetLowering::LowerFMUL(SDValue Op, SelectionDAG &DAG) const
 {
   // First test ...
@@ -278,6 +265,7 @@ SDValue T8xxTargetLowering::LowerFMUL(SDValue Op, SelectionDAG &DAG) const
 
   return (Op);
 }
+*/
 
 
 SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const

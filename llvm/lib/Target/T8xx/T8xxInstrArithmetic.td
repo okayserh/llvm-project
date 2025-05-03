@@ -13,29 +13,12 @@
 
 /*
 Floating point instructions
+The T8xx floating unit uses the same assembler instruction for
+single and double precision operations. However, for binary
+operations both parameters must have the same length.
 */
 
 /* https://discourse.llvm.org/t/how-to-resolve-decoding-conflict/32818 */
-
-// The Transputer floating point unit maintains a flag with the floating
-// point register stack, which indicates whether the content is single
-// or double precision. Thus, fmul, fdiv, fadd, fsub can cope with
-// mixed precision and include the respective rounding or extension
-// The LLVM standard FP binary op assumes that both operands and
-// the result are the same. Therefore, the two type patterns are
-// defined to enable a description of the aforementioned transputer
-// instructions.
-
-// Result and second operand are F64, first operand is F32
-def SDTFP_DS_BinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
-  SDTCisVT<0, f32>, SDTCisVT<1, f64>, SDTCisVT<2, f32>
-]>;
-
-// Result and second operand are F32, first operand is F64
-def SDTFP_SD_BinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
-  SDTCisVT<0, f64>, SDTCisVT<1, f32>, SDTCisVT<2, f64>
-]>;
-
 
 class T8BinaryDBOp8<bits<8> opval, string opstr, SDNode opnode> :
       T8InstOp8<opval,
@@ -56,46 +39,12 @@ class T8BinarySNOp8<bits<8> opval, string opstr, SDNode opnode> :
 	 	 let DecoderNamespace = "FPSN";
 }
 
-class T8BinaryDSOp8<bits<8> opval, string opstr, SDNode opnode> :
-      T8InstOp8<opval,
-                (outs FPReg:$dst),
-       	 	(ins DFPReg:$src1, FPReg:$src2),
-		opstr,
-		[(set f32:$dst, (opnode f64:$src1, f32:$src2))]>
-{
-	 	 let DecoderNamespace = "FPDS";
-}
-
-class T8BinarySDOp8<bits<8> opval, string opstr, SDNode opnode> :
-      T8InstOp8<opval,
-                (outs DFPReg:$dst),
-       	 	(ins FPReg:$src1, DFPReg:$src2),
-		opstr,
-		[(set f64:$dst, (opnode f32:$src1, f64:$src2))]>
-{
-	 	 let DecoderNamespace = "FPSD";
-}
-
-// Arithmethic
-//def FPADD :      T8BinarySNOp8<0x87, "fpadd", fadd>;
-//def FPSUB :      T8BinarySNOp8<0x89, "fpsub", fsub>;
-// Note: The default fmul does not allow for mixed inputs!
-//def SDTFPBinOp : SDTypeProfile<1, 2, [      // fadd, fmul, etc.
-//  SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisFP<0>
-//]>;
-// 
-
 
 multiclass T8BinaryCastOp<bits<8> opval, string opstr,
 	   		SDNode opnode>
 {
-	def "T8xxDS_"#NAME : SDNode<"T8xxISD::DS_"#NAME, SDTFP_DS_BinOp, []>;
-	def "T8xxSD_"#NAME : SDNode<"T8xxISD::SD_"#NAME, SDTFP_SD_BinOp, []>;
-
 	def NAME#DB :      T8BinaryDBOp8<opval, opstr, opnode>;
 	def NAME#SN :      T8BinarySNOp8<opval, opstr, opnode>;
-	def NAME#DS :      T8BinaryDSOp8<opval, opstr, !cast<SDNode>("T8xxDS_"#NAME)>;
-	def NAME#SD :      T8BinarySDOp8<opval, opstr, !cast<SDNode>("T8xxSD_"#NAME)>;
 }
 
 // Note: The respective T8xxISD::DS_... need to be defined int T8xxISelLowering.h!

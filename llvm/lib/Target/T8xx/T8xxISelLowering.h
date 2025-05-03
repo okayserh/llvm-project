@@ -35,15 +35,7 @@ namespace llvm {
     BRNCOND,
     LDIFF,
     REV,
-    JOIN,
-    DS_FADD,
-    SD_FADD,
-    DS_FSUB,
-    SD_FSUB,
-    DS_FMUL,
-    SD_FMUL,
-    DS_FDIV,
-    SD_FDIV
+    JOIN
   };
   }
 
@@ -95,7 +87,7 @@ namespace llvm {
                         const SmallVectorImpl<ISD::OutputArg> &Outs,
                         LLVMContext &Context) const override;
 
-    SDValue LowerFMUL(SDValue Op, SelectionDAG &DAG) const;
+    //    SDValue LowerFMUL(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSTORE(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
