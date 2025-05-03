@@ -79,22 +79,9 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
                                           MachineBasicBlock::iterator MBBI,
                                           int NumBytes,
                                           unsigned ADDrr,
-                                          unsigned ADDri) const {
-
+                                          unsigned ADDri) const
+{
   printf ("emitSPAdjustment\n");
-
-  /* TODO: This was used for the SPARC to adjust the stack pointer register.
-     Could possible be the WPtr register that needs adjustment.
-  DebugLoc dl;
-  const T8xxInstrInfo &TII =
-      *static_cast<const T8xxInstrInfo *>(MF.getSubtarget().getInstrInfo());
-
-  if (NumBytes >= -4096 && NumBytes < 4096) {
-    BuildMI(MBB, MBBI, dl, TII.get(ADDri), T8xx::R6)
-      .addReg(T8xx::R6).addImm(NumBytes);
-    return;
-  }
-  */
 }
 
 
@@ -108,33 +95,6 @@ uint64_t T8xxFrameLowering::computeParameterSize(MachineFunction &MF) const
     fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ());
 
   return ((uint64_t) fixed_obj_size);
-}
-
-uint64_t T8xxFrameLowering::computeFrameSize(MachineFunction &MF) const
-{
-  MachineFrameInfo &MFI = MF.getFrameInfo();
-  int64_t obj_size = MFI.getStackSize ();
-
-  /* Old version, where the object size with stack alignment is used. Produces
-     incorrect results, when the larger alignments are requested in the LLVM code */
-  /*
-  for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)    
-    obj_size += MFI.getObjectSize (i) > 0 ?
-      RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ()) : 0;
-  */
-
-  /* New version, Obj size is determined as the maximum negative index in the frame */
-  for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
-    if (MFI.getObjectSize (i) > 0)
-      if (MFI.getObjectOffset (i) < obj_size)
-	obj_size = MFI.getObjectOffset (i);
-
-  return ((uint64_t) (MFI.getStackSize () - obj_size));
-}
-
-uint64_t T8xxFrameLowering::computeStackSize(MachineFunction &MF) const {
-  
-  return (computeParameterSize (MF) + computeFrameSize (MF));
 }
 
 
@@ -176,10 +136,11 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 
   // Compute the stack size, to determine if we need a prologue at all.
   uint64_t FixedStackSize = computeParameterSize (MF);  
-  uint64_t StackSize = computeFrameSize(MF);
-
+  uint64_t StackSize = MFI.getStackSize ();
   uint64_t OffsetAdj = MaxAlign.value ();
 
+  printf ("Fixed Stack %li   Stack %li   OffsetAdj %li\n", FixedStackSize, StackSize, OffsetAdj);
+  
   if ((FixedStackSize + StackSize) == 0) {
     return;
   }
@@ -223,7 +184,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
       // Subtract required space
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::ADC), T8xx::AREG)
 	.addReg(T8xx::AREG)
-	.addImm(-(StackSize + OffsetAdj))  // One additional space is required to avoid conflict with Parameters
+	.addImm(-((StackSize - FixedStackSize) + OffsetAdj))  // One additional space is required to avoid conflict with Parameters
         .setMIFlag(MachineInstr::FrameSetup);
 
       // And with 11111100 (where the number of 0s depends on the required alignment)
@@ -256,7 +217,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
     {
       // Real adjustment via AJW
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-	.addImm(-(((FixedStackSize + StackSize) / 4) + 1))
+	.addImm(-((StackSize + OffsetAdj) / 4))
         .setMIFlag(MachineInstr::FrameSetup);
     }
 }
@@ -287,7 +248,8 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
 
   uint64_t FixedStackSize = computeParameterSize (MF);  
-  uint64_t StackSize = computeFrameSize(MF);
+  uint64_t StackSize = MFI.getStackSize ();
+  uint64_t OffsetAdj = MFI.getOffsetAdjustment ();
 
   if ((FixedStackSize + StackSize) == 0) {
     return;
@@ -331,7 +293,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
       // Restore the stack pointer to what it was at the beginning of the function.
       /* Real stack adjustment */
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-	.addImm(((FixedStackSize + StackSize) / 4) + 1)
+	.addImm((StackSize + OffsetAdj) / 4)
         .setMIFlag(MachineInstr::FrameSetup);
     }
       

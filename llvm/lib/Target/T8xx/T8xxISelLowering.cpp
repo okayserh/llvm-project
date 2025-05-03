@@ -661,11 +661,28 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     assert (VA.getLocMemOffset() % 4 == 0 &&
 	    "Only 4 byte aligned offset allowed");
 
-    SDValue Off = DAG.getSignedConstant(-1 - (VA.getLocMemOffset() / 4), Loc,
+    // Floating point values are handled via a store instruction
+    // For integers, use a short cut
+    if (Arg.getValueType ().isFloatingPoint ())
+      {
+	// The conversion of a byte offset to an index is carried out later in expandPostRAPPseude
+	SDValue Off = DAG.getSignedConstant(-4 -VA.getLocMemOffset(), Loc,
+					    getPointerTy(DAG.getDataLayout()));
+
+	SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
+	Off = DAG.getNode(T8xxISD::ADD_WPTR, Loc, MVT::i32, StackPtr, Off);
+	MemOpChains.push_back(DAG.getStore(Chain, Loc, Arg, Off,
+					   MachinePointerInfo()));
+      }
+    else
+      {
+	SDValue Off = DAG.getSignedConstant(-1 - (VA.getLocMemOffset() / 4), Loc,
 					getPointerTy(DAG.getDataLayout()));
-    SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
-    SDValue Ops[] = {Chain, Arg, Off};
-    MemOpChains.push_back (DAG.getNode(T8xxISD::STL_PARM, Loc, VTs, Ops));
+
+	SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
+	SDValue Ops[] = {Chain, Arg, Off};
+	MemOpChains.push_back (DAG.getNode(T8xxISD::STL_PARM, Loc, VTs, Ops));
+      }
   }
 
   // Emit all stores, make sure they occur before the call.

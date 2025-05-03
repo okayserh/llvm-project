@@ -82,12 +82,11 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   int FI = FIOp.getIndex();
 
   bool bWordAlignedFO = false;
+
+  // Note: Calculation of stack offsets happens in PrologEpilogInserter
   
   printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %li\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
   MI.dump ();
-
-  // Test if the new frame element has arrived
-  // MFI.dump (MF);
 
   // Determine if we can eliminate the index from this kind of instruction.
   unsigned ImmOpIdx = 0;
@@ -110,37 +109,54 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
 
   // Get the size of parameters on the stack
+  // TODO: Replace the hardcoded 4 with the properly obtained value
   unsigned fixed_obj_size = 0;
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
     fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), 4);
+
+  /* TODO: maybe make an assertion of this. I.e. fixed_object_size
+     should be always aligned as the contributing elements are already
+     rounded up to alignment.
   printf ("Fixed objects size = %i\n", fixed_obj_size);
   fixed_obj_size = (fixed_obj_size + 3) / 4 * 4;
   printf ("Aligned Fixed objects size = %i\n", fixed_obj_size);
+  */
 
+  // Dynamic stack realignment
+  Align MaxAlign = MFI.getMaxAlign();
+  /*
+  fixed_obj_size += RoundUpToAlignment (fixed_obj_size, MaxAlign.value ());
+  */
+  
   // Find start of first "frame" object (parameters are treated separately)
-  unsigned obj_size = MFI.getStackSize ();
+  unsigned first_frame_pos = MFI.getStackSize ();
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
     if (MFI.getObjectSize (i) > 0)
-      if (MFI.getObjectOffset (i) < obj_size)
-	obj_size = MFI.getObjectOffset (i);
-  printf ("Aligned Objects size = %i\n", obj_size);
+      if (MFI.getObjectOffset (i) < first_frame_pos)
+	first_frame_pos = MFI.getObjectOffset (i);
+
+  // Align first frame pos to required alignment of MachineFunction
+  first_frame_pos = RoundUpToAlignment (first_frame_pos, MaxAlign.value ());
+
+  printf ("Aligned Objects size = %i\n", first_frame_pos);
 
   int Offset = 0;
   // FI < 0 = fixed stack objects (i.e. call parameters)
   if (FI < 0)
     {
-      Offset = obj_size + fixed_obj_size - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm() ;
+      // TODO: Old stuff.
+      Offset = first_frame_pos + fixed_obj_size - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm() ;
     }
   else
     {
-      Offset = MFI.getObjectOffset(FI) - obj_size + ImmOp.getImm() ;
+      // First non parameter object should start at zero
+      Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
     }
   
-  // Note: getObjectOffset is positive for the function parameter (0, 4, 8)
-  // getObjectOffset is negative for the frame object (-4, -8, -12)
-  
+  // Add offset for WPTR Loc 0 (used internally)
   // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
   Offset += MFI.getOffsetAdjustment ();
+  printf ("MFI.offsetAdjustment %i\n", MFI.getOffsetAdjustment ());
   
   printf ("eliminateFrameIndex  FI: %i Offset: %li Size: %li StackSize %li  ImmOp %li  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
 
@@ -153,19 +169,23 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       const T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
       
       // Directly replace with $areg = LDL $wptr, <xx>
-      int WPtrOffset = MFI.getObjectOffset(TMFI.getWPtrSlot ()) - obj_size;
+      int WPtrOffset = MFI.getObjectOffset(TMFI.getWPtrSlot ()) - first_frame_pos;
       WPtrOffset += MFI.getOffsetAdjustment ();
       BuildMI(*MBB, *II, dl, TII.get(T8xx::LDL), T8xx::AREG)
 	.addReg(T8xx::WPTR)
 	.addImm(WPtrOffset / 4);
-      
+
       Offset = fixed_obj_size - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm();
 
       // LDLP -> TODO
       if (MI.getOpcode() == T8xx::LDLP)
-	BuildMI(*MBB, *II, dl, TII.get(T8xx::ADC), T8xx::AREG)
-	  .addReg(T8xx::AREG)
-	  .addImm(Offset);
+	{
+	  // Save an embarrissing "adc 0" when offset is zero
+	  if (Offset != 0)
+	    BuildMI(*MBB, *II, dl, TII.get(T8xx::ADC), T8xx::AREG)
+	      .addReg(T8xx::AREG)
+	      .addImm(Offset);
+	}
 
       // LDL
       if (MI.getOpcode() == T8xx::LDL)
@@ -196,7 +216,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 	ImmOp.setImm(Offset);
     }
       
-  printf ("After eliminateFrameIndex\n");
+  printf ("After eliminateFrameIndex\n\n");
   //  MI.dump ();
 
   return false;

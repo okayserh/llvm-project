@@ -60,9 +60,6 @@ private:
   bool isLeafProc(MachineFunction &MF) const;
 
   uint64_t computeParameterSize(MachineFunction &MF) const;
-  uint64_t computeFrameSize(MachineFunction &MF) const;
-
-  uint64_t computeStackSize(MachineFunction &MF) const;
 
   // Emits code for adjusting SP in function prologue/epilogue.
   void emitSPAdjustment(MachineFunction &MF,

@@ -556,7 +556,10 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	    printf ("### Instruction sequence already OK\n");
 	  else
 	    {
-	      if (DefI->getOpcode () == T8xx::COPY)
+	      // Specifically only address the COPY $areg instruction! 
+	      if ((DefI->getOpcode () == T8xx::COPY) &&
+		  (DefI->getOperand (1).isReg ()) &&
+		  (DefI->getOperand (1).getReg () == T8xx::AREG))
 		{		  
 		  // If the results of the copy is needed at some other place,
 		  // the return value is stored in a temporary variable
@@ -619,7 +622,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)		
 		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
 		  addReg(RegFPStack);
-	      // Load double when register is single precision
+	      // Load double when register is double precision
 	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
 		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLDB),RegClone).
 		  addReg(RegFPStack);
@@ -982,8 +985,16 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 		  // integer variable?
 		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
 		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
-		    addReg(RegFPStack);
+
+		  // Load single when register is singe precision
+		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)		
+		    BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
+		      addReg(RegFPStack);
+
+		  // Load double when register is double precision
+		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
+		    BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPLDNLDB),RegClone).
+		      addReg(RegFPStack);
 		}
 	    }
 	      break;
@@ -1185,11 +1196,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 	// When the instruction does not define anything, it is a store
 	// instruction and should be recursed
-
-	// TODO: The FPLDNLSN instruction does define a floating point register
-	// but consumes an integer register. Hence those instruction are currently
-	// not properly treated within this code.
-
 	if (Range_defs.begin () == Range_defs.end ())
 	  {
 	    unsigned int reg_u_fp = 0,

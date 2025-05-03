@@ -140,7 +140,7 @@ def FPLDNLSN : T8InstOp8<0x8E,
 }
 
 // Pattern for FP loads from WPtr stack
-def : Pat<(load ADDRri:$addr),
+def : Pat<(f32 (load ADDRri:$addr)),
           (FPLDNLSN (LDLP ADDRri:$addr) )>;
 
 
@@ -155,7 +155,7 @@ def FPLDNLDB : T8InstOp8<0x8A,
 }
 
 // Pattern for FP loads from WPtr stack
-def : Pat<(load ADDRri:$addr),
+def : Pat<(f64 (load ADDRri:$addr)),
           (FPLDNLDB (LDLP ADDRri:$addr) )>;
 
 
