@@ -28,7 +28,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTarget() {
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializeT8xxDAGToDAGISelLegacyPass(PR);
   initializeT8xxStackPassPass(PR);
-  initializeT8xxMoveConstPassPass(PR);
 }
 
 static std::string computeDataLayout(const Triple &T) {

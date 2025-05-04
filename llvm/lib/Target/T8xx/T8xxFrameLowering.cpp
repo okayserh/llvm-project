@@ -362,19 +362,3 @@ T8xxFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     return StackOffset::getFixed(FrameOffset + MF.getFrameInfo().getStackSize());
   }
 }
-
-
-void T8xxFrameLowering::determineCalleeSaves(MachineFunction &MF,
-                                              BitVector &SavedRegs,
-                                              RegScavenger *RS) const {
-  TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
-
-  /*
-  if (!DisableLeafProc && isLeafProc(MF)) {
-    T8xxMachineFunctionInfo *MFI = MF.getInfo<T8xxMachineFunctionInfo>();
-    MFI->setLeafProc(true);
-
-    remapRegsForLeafProc(MF);
-  }
-  */
-}

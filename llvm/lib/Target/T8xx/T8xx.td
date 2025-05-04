@@ -32,7 +32,6 @@ def FeatureSoftFloat : SubtargetFeature<"soft-float", "UseSoftFloat", "true",
 
 include "T8xxRegisterInfo.td"
 include "T8xxCallingConv.td"
-include "T8xxSchedule.td"
 include "T8xxInstrInfo.td"
 
 def T8xxInstrInfo : InstrInfo;

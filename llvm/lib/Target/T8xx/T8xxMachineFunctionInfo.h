@@ -44,14 +44,6 @@ namespace llvm {
     BitVector VRegStackified;
 
   public:
-    /*
-    T8xxMachineFunctionInfo()
-      : GlobalBaseReg(0), VarArgsFrameOffset(0), SRetReturnReg(0),
-        IsLeafProc(false), WPtrStackSlot(-1) {}
-    explicit T8xxMachineFunctionInfo(MachineFunction &MF)
-      : GlobalBaseReg(0), VarArgsFrameOffset(0), SRetReturnReg(0),
-        IsLeafProc(false), WPtrStackSlot(-1) {}
-    */
     T8xxMachineFunctionInfo() = default;
     T8xxMachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI);
 
