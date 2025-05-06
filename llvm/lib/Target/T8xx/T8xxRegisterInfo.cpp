@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/Type.h"
+#include "llvm/Support/Alignment.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 
@@ -62,15 +63,6 @@ T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
   return &T8xx::ORegRegClass;
 }
 
-
-// Copied from old version
-inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align,
-                                   uint64_t Skew = 0) {
-  Skew %= Align;
-  return (Value + Align - 1 - Skew) / Align * Align + Skew;
-}
-
-
 bool
 T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                        int SPAdj, unsigned FIOperandNum,
@@ -81,6 +73,9 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineOperand &FIOp = MI.getOperand(FIOperandNum);
   int FI = FIOp.getIndex();
 
+  // Needed to get infos about stack alignment
+  const T8xxFrameLowering *TFL = getFrameLowering(MF);
+  
   bool bWordAlignedFO = false;
 
   // Note: Calculation of stack offsets happens in PrologEpilogInserter
@@ -112,7 +107,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // TODO: Replace the hardcoded 4 with the properly obtained value
   unsigned fixed_obj_size = 0;
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
-    fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), 4);
+    fixed_obj_size += alignTo (MFI.getObjectSize (i), TFL->getStackAlign ());
 
   /* TODO: maybe make an assertion of this. I.e. fixed_object_size
      should be always aligned as the contributing elements are already
@@ -124,9 +119,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   // Dynamic stack realignment
   Align MaxAlign = MFI.getMaxAlign();
-  /*
-  fixed_obj_size += RoundUpToAlignment (fixed_obj_size, MaxAlign.value ());
-  */
   
   // Find start of first "frame" object (parameters are treated separately)
   unsigned first_frame_pos = MFI.getStackSize ();
@@ -136,22 +128,16 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 	first_frame_pos = MFI.getObjectOffset (i);
 
   // Align first frame pos to required alignment of MachineFunction
-  first_frame_pos = RoundUpToAlignment (first_frame_pos, MaxAlign.value ());
-
+  first_frame_pos = alignTo (first_frame_pos, MaxAlign);
   printf ("Aligned Objects size = %i\n", first_frame_pos);
 
   int Offset = 0;
-  // FI < 0 = fixed stack objects (i.e. call parameters)
   if (FI < 0)
-    {
-      // TODO: Old stuff.
-      Offset = first_frame_pos + fixed_obj_size - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm() ;
-    }
+    // FI < 0   -> fixed stack objects (i.e. call parameters)
+    Offset = MFI.getStackSize () - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm() ;
   else
-    {
-      // First non parameter object should start at zero
-      Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
-    }
+    // FI >= 0  -> stack frame objects (i.e. function variables and temporary stack objects)
+    Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
   
   // Add offset for WPTR Loc 0 (used internally)
   // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
@@ -161,7 +147,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   printf ("eliminateFrameIndex  FI: %i Offset: %li Size: %li StackSize %li  ImmOp %li  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
 
   // If FI is smaller 0, use the "spilled" WPtr
-  if (FI < 0)
+  if ((FI < 0) && TFL->isComplexFrame (MF))
     {
       MachineBasicBlock *MBB = MI.getParent ();
       DebugLoc dl = MI.getDebugLoc();
@@ -217,7 +203,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     }
       
   printf ("After eliminateFrameIndex\n\n");
-  //  MI.dump ();
 
   return false;
 }

@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
+#include "llvm/Support/Alignment.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetOptions.h"
@@ -102,12 +103,9 @@ uint64_t T8xxFrameLowering::computeParameterSize(MachineFunction &MF) const
 void T8xxFrameLowering::spillFPBP(MachineFunction &MF) const
 {
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  Align MaxAlign = MFI.getMaxAlign();
   T8xxMachineFunctionInfo *TMFI = MF.getInfo<T8xxMachineFunctionInfo> ();
   
-  // TODO: Always is only for test purpose. Later introduce
-  // the "slower" frame only when alignments > 4 are needed
-  if (1)
+  if (isComplexFrame (MF))
     TMFI->setWPtrSlot (MFI.CreateSpillStackObject (4, Align(4)));
 }
 
@@ -129,10 +127,6 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   Align MaxAlign = MFI.getMaxAlign();
   
   printf ("Requested Alignment %li\n", MaxAlign.value ());
-
-  // If alignment > 4 bytes is requested an additional spill slot
-  // is required to store the old WPtr in the frame.
-  // if (MaxAlign > 4)
 
   // Compute the stack size, to determine if we need a prologue at all.
   uint64_t FixedStackSize = computeParameterSize (MF);  
@@ -163,10 +157,8 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   // Save the return address on old stack position 0
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
 
-
   // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
-  //  if (MaxAlign.value () > 4)
-  if (1)
+  if (isComplexFrame (MF))
     {
       // Dynamic realignment
       // Adjust WPtr by required space for parameters
@@ -263,8 +255,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   printf ("Requested Alignment %li\n", MaxAlign.value ());
 
   // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
-  if (1)
-  //  if (MaxAlign.value () > 4)
+  if (isComplexFrame (MF))
     {
       // Retrieve "old" WPtr from spill location
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::LDL), T8xx::AREG)

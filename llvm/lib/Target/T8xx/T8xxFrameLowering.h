@@ -15,6 +15,7 @@
 
 #include "T8xx.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/Support/TypeSize.h"
 
 namespace llvm {
@@ -23,6 +24,14 @@ class T8xxSubtarget;
 class T8xxFrameLowering : public TargetFrameLowering {
 public:
   explicit T8xxFrameLowering(const T8xxSubtarget &ST);
+
+  // Return whether the complex frame setup for alignments greater than
+  // the "natural" alignment is needed
+  bool isComplexFrame (const MachineFunction &MF) const
+  {
+    const MachineFrameInfo &MFI = MF.getFrameInfo();
+    return (MFI.getMaxAlign ().value() > getStackAlign().value ());
+  };
 
   // Introduce a spill register for WPtr ?
   void spillFPBP(MachineFunction &MF) const override;
