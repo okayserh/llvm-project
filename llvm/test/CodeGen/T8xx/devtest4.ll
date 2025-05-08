@@ -18,10 +18,10 @@ define i32 @test4(i32) #0 {
 ; CHECK-LABEL: test4:
 ; CHECK: stl 0
 ; CHECK: ajw -7
-; CHECK: ldlp 4
-; CHECK: stl 2
+; CHECK: ldlp 1
+; CHECK: stl 4
 ; CHECK: ldc 4
-; CHECK: ldl 2
+; CHECK: ldl 4
 ; CHECK: adc 4
 ; CHECK: sb
 ; CHECK: ldl 6
@@ -29,27 +29,27 @@ define i32 @test4(i32) #0 {
 ; CHECK: stl 3
 ; CHECK: ldl 3
 ; CHECK: stl 6
-; CHECK: ldl 2
+; CHECK: ldl 4
 ; CHECK: adc 1
 ; CHECK: lb
 ; CHECK: ldc 8
 ; CHECK: shl
-; CHECK: ldl 2
+; CHECK: ldl 4
 ; CHECK: lb
 ; CHECK: or
-; CHECK: stl 1
-; CHECK: ldl 2
+; CHECK: stl 5
+; CHECK: ldl 4
 ; CHECK: adc 3
 ; CHECK: lb
 ; CHECK: ldc 24
 ; CHECK: shl
-; CHECK: ldl 2
+; CHECK: ldl 4
 ; CHECK: adc 2
 ; CHECK: lb
 ; CHECK: ldc 16
 ; CHECK: shl
 ; CHECK: or
-; CHECK: ldl 1
+; CHECK: ldl 5
 ; CHECK: or
 ; CHECK: ldl 3
 ; CHECK: add

@@ -33,30 +33,30 @@ define dso_local i32 @test12(i8 noundef signext %0) #0 {
 ; CHECK-LABEL: test12:
 ; CHECK: stl 0
 ; CHECK: ajw -7
-; CHECK: ldlp 5
-; CHECK: adc 3
-; CHECK: stl 1
+; CHECK: ldlp 1
+; CHECK: stl 5
 ; CHECK: ldl 6
-; CHECK: ldl 1
+; CHECK: ldl 5
 ; CHECK: sb
 ; CHECK: ldc 0
 ; CHECK-LABEL: .LBB0_1:
-; CHECK: stl 2
+; CHECK: stl 4
 ; CHECK: ldc 8
-; CHECK: ldl 2
+; CHECK: ldl 4
 ; CHECK: gt
 ; CHECK: cj .LBB0_3
-; CHECK: ldlp 3
-; CHECK: adc 3
-; CHECK: ldl 2
+; CHECK: ldlp 1
+; CHECK: adc 1
+; CHECK: ldl 4
 ; CHECK: add
 ; CHECK: ldc 4
+; CHECK: rev
 ; CHECK: sb
-; CHECK: ldl 2
+; CHECK: ldl 4
 ; CHECK: adc 1
 ; CHECK: j .LBB0_1
 ; CHECK-LABEL: .LBB0_3:
-; CHECK: ldl 1
+; CHECK: ldl 5
 ; CHECK: lb
 ; CHECK: ldc 128
 ; CHECK: xword

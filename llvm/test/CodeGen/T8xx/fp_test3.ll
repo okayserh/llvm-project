@@ -18,17 +18,16 @@ entry:
 ; CHECK: ajw -5
 ; CHECK: ldlp 3
 ; CHECK: fpldnlsn
-; CHECK: ldlp 1
+; CHECK: ldlp 2
 ; CHECK: fpstnlsn
+; CHECK: ldlp 2
+; CHECK: fpldnlsn
 ; CHECK: ldlp 4
-; CHECK: fpldnlsn
-; CHECK: ldlp 1
-; CHECK: fpldnlsn
-; CHECK: fpmul
-; CHECK: ldlp 1
+; CHECK: fpldnlmulsn
+; CHECK: ldlp 2
 ; CHECK: fpldnlsn
 ; CHECK: fpadd
-; CHECK: ldlp 2
+; CHECK: ldlp 1
 ; CHECK: fpstnlsn
 ; CHECK: ldc 0
 ; CHECK: ajw 5

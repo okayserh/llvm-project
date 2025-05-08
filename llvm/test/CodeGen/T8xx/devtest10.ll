@@ -13,17 +13,16 @@ define dso_local i32 @test10(i8 noundef signext %0) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -6
 ; CHECK: ldl 5
-; CHECK: stl 1
-; CHECK: ldl 1
-; CHECK: ldlp 4
-; CHECK: adc 3
+; CHECK: stl 4
+; CHECK: ldl 4
+; CHECK: ldlp 1
 ; CHECK: sb
 ; CHECK: ldc 6
-; CHECK: ldlp 2
-; CHECK: adc 3
+; CHECK: ldlp 1
+; CHECK: adc 1
 ; CHECK: adc 4
 ; CHECK: sb
-; CHECK: ldl 1
+; CHECK: ldl 4
 ; CHECK: ajw 6
 ; CHECK: ldl 0
 ; CHECK: gcall

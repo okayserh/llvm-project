@@ -22,24 +22,23 @@ define i32 @test13(i8 signext) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -7
 ; CHECK: ldl 6
-; CHECK: stl 1
-; CHECK: ldlp 5
-; CHECK: adc 3
-; CHECK: stl 2
-; CHECK: ldl 1
-; CHECK: ldl 2
+; CHECK: stl 5
+; CHECK: ldlp 1
+; CHECK: stl 4
+; CHECK: ldl 5
+; CHECK: ldl 4
 ; CHECK: sb
-; CHECK: ldl 1
+; CHECK: ldl 5
 ; CHECK: ldc 14
 ; CHECK: gt
 ; CHECK: cj .LBB0_2
 ; CHECK: ldc 0
-; CHECK: ldlp 3
-; CHECK: adc 3
+; CHECK: ldlp 1
+; CHECK: adc 1
 ; CHECK: adc 4
 ; CHECK: sb
 ; CHECK-LABEL: .LBB0_2:
-; CHECK: ldl 2
+; CHECK: ldl 4
 ; CHECK: lb
 ; CHECK: ldc 128
 ; CHECK: xword

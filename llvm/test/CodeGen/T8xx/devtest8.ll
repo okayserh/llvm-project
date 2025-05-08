@@ -19,22 +19,33 @@ define i32 @test8a(i32) #0 {
   ret i32 %11
 ; CHECK-LABEL: test8a:
 ; CHECK: stl 0
-; CHECK: ajw -6
+; CHECK: ajw -1
+; CHECK: ldlp 0
+; CHECK: adc -28
+; CHECK: ldc 7
+; CHECK: not
+; CHECK: and
+; CHECK: gajw
+; CHECK: stl 5
 ; CHECK: ldc .L.str
-; CHECK: stl 1
-; CHECK: ldl 1
-; CHECK: stl 3
+; CHECK: stl 4
+; CHECK: ldl 4
+; CHECK: stl 2
 ; CHECK: ldl 5
-; CHECK: ldl 1
+; CHECK: ldnl 0
+; CHECK: ldl 4
 ; CHECK: add
 ; CHECK: lb
 ; CHECK: ldc 128
 ; CHECK: xword
-; CHECK: stl 2
-; CHECK: ldl 2
-; CHECK: stl 4
-; CHECK: ldl 2
-; CHECK: ajw 6
+; CHECK: stl 3
+; CHECK: ldl 3
+; CHECK: stl 1
+; CHECK: ldl 3
+; CHECK: ldl 5
+; CHECK: gajw
+; CHECK: rev
+; CHECK: ajw 1
 ; CHECK: ldl 0
 ; CHECK: gcall
 }
@@ -53,15 +64,14 @@ define i32 @test8b(i32) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -4
 ; CHECK: ldl 3
-; CHECK: ldlp 4294967295
-; CHECK: stnl 0
+; CHECK: stl 4294967295
 ; CHECK: ldc test8a
 ; CHECK: gcall
 ; CHECK: rev
-; CHECK: stl 1
-; CHECK: ldl 1
 ; CHECK: stl 2
-; CHECK: ldl 1
+; CHECK: ldl 2
+; CHECK: stl 1
+; CHECK: ldl 2
 ; CHECK: ldc 5
 ; CHECK: mul
 ; CHECK: ajw 4

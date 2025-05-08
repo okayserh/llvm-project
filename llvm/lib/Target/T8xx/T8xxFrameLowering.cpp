@@ -105,7 +105,7 @@ void T8xxFrameLowering::spillFPBP(MachineFunction &MF) const
   MachineFrameInfo &MFI = MF.getFrameInfo();
   T8xxMachineFunctionInfo *TMFI = MF.getInfo<T8xxMachineFunctionInfo> ();
   
-  if (isComplexFrame (MF))
+  if (MFI.shouldRealignStack ())
     TMFI->setWPtrSlot (MFI.CreateSpillStackObject (4, Align(4)));
 }
 
@@ -158,7 +158,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
 
   // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
-  if (isComplexFrame (MF))
+  if (MFI.shouldRealignStack ())
     {
       // Dynamic realignment
       // Adjust WPtr by required space for parameters
@@ -255,7 +255,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   printf ("Requested Alignment %li\n", MaxAlign.value ());
 
   // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
-  if (isComplexFrame (MF))
+  if (MFI.shouldRealignStack ())
     {
       // Retrieve "old" WPtr from spill location
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::LDL), T8xx::AREG)

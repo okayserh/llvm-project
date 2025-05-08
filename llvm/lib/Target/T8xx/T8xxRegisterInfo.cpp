@@ -142,12 +142,12 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // Add offset for WPTR Loc 0 (used internally)
   // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
   Offset += MFI.getOffsetAdjustment ();
-  printf ("MFI.offsetAdjustment %i\n", MFI.getOffsetAdjustment ());
+  printf ("MFI.offsetAdjustment %li\n", MFI.getOffsetAdjustment ());
   
   printf ("eliminateFrameIndex  FI: %i Offset: %li Size: %li StackSize %li  ImmOp %li  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
 
   // If FI is smaller 0, use the "spilled" WPtr
-  if ((FI < 0) && TFL->isComplexFrame (MF))
+  if ((FI < 0) && MFI.shouldRealignStack())
     {
       MachineBasicBlock *MBB = MI.getParent ();
       DebugLoc dl = MI.getDebugLoc();

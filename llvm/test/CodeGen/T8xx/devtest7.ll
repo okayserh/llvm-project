@@ -27,21 +27,21 @@ define i32 @test7(i32, i32) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -8
 ; CHECK: ldl 7
-; CHECK: stl 1
-; CHECK: ldl 1
+; CHECK: stl 5
+; CHECK: ldl 5
 ; CHECK: ldc 1
 ; CHECK: shl
 ; CHECK: ldl 6
 ; CHECK: add
-; CHECK: stl 2
-; CHECK: ldl 2
-; CHECK: stl 5
-; CHECK: ldl 2
 ; CHECK: stl 4
-; CHECK: ldl 2
+; CHECK: ldl 4
+; CHECK: stl 1
+; CHECK: ldl 4
+; CHECK: stl 2
+; CHECK: ldl 4
 ; CHECK: stl 3
-; CHECK: ldl 2
-; CHECK: ldl 1
+; CHECK: ldl 4
+; CHECK: ldl 5
 ; CHECK: mul
 ; CHECK: ajw 8
 ; CHECK: ldl 0

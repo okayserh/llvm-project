@@ -166,10 +166,10 @@ public:
   void addIRPasses() override;
   bool addInstSelector() override;
 
-  //  void addPreRegAlloc() override;
-
   void addPostRegAlloc() override;
   void addPreEmitPass() override;
+
+  void addMachineLateOptimization() override;
 
 
   // No reg alloc
@@ -201,13 +201,6 @@ bool T8xxPassConfig::addInstSelector() {
   return false;
 }
 
-// This should move LDC instructions to the appropriate blocks
-/*
-void T8xxPassConfig::addPreRegAlloc() {
-  printf ("Added T8xx Move Const Pass\n");
-  addPass(createT8xxMoveConstPass());
-}
-*/
 
 void T8xxPassConfig::addPostRegAlloc() {
   // TODO: Initially intended to do an allocation of the
@@ -221,3 +214,24 @@ void T8xxPassConfig::addPostRegAlloc() {
 void T8xxPassConfig::addPreEmitPass(){
 }
 
+void T8xxPassConfig::addMachineLateOptimization()
+{
+  // Note: This leads potentially to errors in the produced assembler
+  // code as it assumes a classical register setup and not an operand
+  // register stack as in the T8xx.
+  // Cleanup of redundant immediate/address loads.
+  //addPass(&MachineLateInstrsCleanupID);
+
+  // Branch folding must be run after regalloc and prolog/epilog insertion.
+  addPass(&BranchFolderPassID);
+
+  // Tail duplication.
+  // Note that duplicating tail just increases code size and degrades
+  // performance for targets that require Structured Control Flow.
+  // In addition it can also make CFG irreducible. Thus we disable it.
+  if (!TM->requiresStructuredCFG())
+    addPass(&TailDuplicateLegacyID);
+
+  // Copy propagation.
+  addPass(&MachineCopyPropagationID);
+}

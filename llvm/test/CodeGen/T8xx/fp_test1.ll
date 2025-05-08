@@ -25,21 +25,21 @@ entry:
 ; CHECK: ajw -8
 ; CHECK: ldlp 6
 ; CHECK: fpldnlsn
-; CHECK: ldlp 2
+; CHECK: ldlp 4
 ; CHECK: fpstnlsn
+; CHECK: ldlp 4
+; CHECK: fpldnlsn
 ; CHECK: ldlp 7
-; CHECK: fpldnlsn
-; CHECK: ldlp 2
-; CHECK: fpldnlsn
-; CHECK: fpmul
+; CHECK: fpldnlmulsn
 ; CHECK: ldlp 3
-; CHECK: fpstnlsn
-; CHECK: fpldnlsn
-; CHECK: ldlp 5
 ; CHECK: fpstnlsn
 ; CHECK: ldlp 3
 ; CHECK: fpldnlsn
-; CHECK: ldlp 2
+; CHECK: ldlp 1
+; CHECK: fpstnlsn
+; CHECK: ldlp 4
+; CHECK: fpldnlsn
+; CHECK: ldlp 3
 ; CHECK: fpldnlsn
 ; CHECK: fpgt
 ; CHECK: eqc 0
@@ -49,10 +49,10 @@ entry:
 ; CHECK-LABEL: .LBB0_1:
 ; CHECK: ldc 25
 ; CHECK-LABEL: .LBB0_3:
-; CHECK: stl 1
-; CHECK: ldl 1
-; CHECK: stl 4
-; CHECK: ldl 1
+; CHECK: stl 5
+; CHECK: ldl 5
+; CHECK: stl 2
+; CHECK: ldl 5
 ; CHECK: ajw 8
 ; CHECK: ldl 0
 ; CHECK: gcall

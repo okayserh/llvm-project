@@ -26,10 +26,10 @@ entry:
 ; CHECK: lb
 ; CHECK: ldc 128
 ; CHECK: xword
-; CHECK: stl 1
-; CHECK: ldl 1
 ; CHECK: stl 2
-; CHECK: ldl 1
+; CHECK: ldl 2
+; CHECK: stl 1
+; CHECK: ldl 2
 ; CHECK: ajw 4
 ; CHECK: ldl 0
 ; CHECK: gcall
@@ -51,15 +51,14 @@ entry:
 ; CHECK: stl 0
 ; CHECK: ajw -4
 ; CHECK: ldl 3
-; CHECK: ldlp 4294967295
-; CHECK: stnl 0
+; CHECK: stl 4294967295
 ; CHECK: ldc test22a
 ; CHECK: gcall
 ; CHECK: rev
-; CHECK: stl 1
-; CHECK: ldl 1
 ; CHECK: stl 2
-; CHECK: ldl 1
+; CHECK: ldl 2
+; CHECK: stl 1
+; CHECK: ldl 2
 ; CHECK: ldc 5
 ; CHECK: mul
 ; CHECK: ajw 4

@@ -25,14 +25,6 @@ class T8xxFrameLowering : public TargetFrameLowering {
 public:
   explicit T8xxFrameLowering(const T8xxSubtarget &ST);
 
-  // Return whether the complex frame setup for alignments greater than
-  // the "natural" alignment is needed
-  bool isComplexFrame (const MachineFunction &MF) const
-  {
-    const MachineFrameInfo &MFI = MF.getFrameInfo();
-    return (MFI.getMaxAlign ().value() > getStackAlign().value ());
-  };
-
   // Introduce a spill register for WPtr ?
   void spillFPBP(MachineFunction &MF) const override;
 
