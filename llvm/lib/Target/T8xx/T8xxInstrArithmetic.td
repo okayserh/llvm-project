@@ -184,8 +184,9 @@ def FPINTDB :       T8InstOp8<0xA1,
 			   "fpint", []>;
 
 
-// Comparison (TODO: These instructions also have the "casting property" that
-// the length of FAreg is set to the length of FBreg)
+// Floating point comparisons
+
+
 def FPEQSN :      T8InstOp8<0x95,
     	 	  (outs OReg:$cc),
 		  (ins FPReg:$lhs, FPReg:$rhs),
