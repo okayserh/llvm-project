@@ -305,57 +305,70 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   SDValue Dest = Op.getOperand(2);
   SDLoc DL(Op);
   SDValue CC;
-  //  bool Inverted = false;
+  bool bSwap = false;
 
   printf ("#### LowerBRCOND\n");
 
   SDValue NewCond;
   if (Cond.getOpcode() == ISD::SETCC) {
-    // For SETCC use "inverse" comparison
+
     CondCodeSDNode *CCNode = cast<CondCodeSDNode>(Cond.getOperand(2));
-
     ISD::CondCode invCC = getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ());
+    ISD::CondCode origCC = CCNode->get ();
 
-    // CCNode->get().dump ();
-    printf ("### Cond Code %i\n", (int)CCNode->get());
-    printf ("### Cond Code %i\n", (int)getSetCCInverse (CCNode->get(),
-							Cond.getOperand(2).getValueType ()));
-
-    switch (invCC)
+    switch (origCC)
       {
-	// If the inverted condition is in the range of implemented
-	// operators, use it
+	// The LLVM function "getSetCCInverse" provides inverse comparisons
+	// which may not always be suitable for the integer comparisons.
+	// Hence the following table provides inversions based on the resulting
+	// assembler code.
       case ISD::SETEQ:
-      case ISD::SETNE:
-      case ISD::SETLT:
-      case ISD::SETLE:
-      case ISD::SETGT:
-      case ISD::SETGE:
-
-      case ISD::SETUEQ:
-      case ISD::SETUNE:
-      case ISD::SETUGE:
-      case ISD::SETUGT:
-      case ISD::SETULE:
-      case ISD::SETULT:
-
-	NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
-				 Cond.getOperand(0),
-				 Cond.getOperand(1),
-				 getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ()));
+	invCC = ISD::SETNE;
 	break;
-
+      case ISD::SETNE:
+	invCC = ISD::SETEQ;
+	break;
+      case ISD::SETLT:
+	invCC = ISD::SETGE;
+	break;
+      case ISD::SETLE:
+	invCC = ISD::SETGT;
+	break;
+      case ISD::SETGT:
+	invCC = ISD::SETLE;
+	break;
+      case ISD::SETGE:
+	invCC = ISD::SETLT;
+	break;
+      case ISD::SETUEQ:
+	invCC = ISD::SETUNE;
+	break;
+      case ISD::SETUNE:
+	invCC = ISD::SETUEQ;
+	break;
+      case ISD::SETUGE:
+	invCC = ISD::SETULT;
+	break;
+      case ISD::SETUGT:
+	invCC = ISD::SETULE;
+	break;
+      case ISD::SETULE:
+	invCC = ISD::SETUGT;
+	break;
+      case ISD::SETULT:
+	invCC = ISD::SETUGE;
+	break;
 	// Otherwise use the original condition and introduce a negation
+
       default:
-	printf ("### Use Negation %i\n", (int)CCNode->get());
-	
-	NewCond = DAG.getSetCC (DL, Cond.getValueType (),
-				Cond.getValue(0),
-				DAG.getConstant(0, DL, MVT::i32),
-				ISD::CondCode::SETEQ);
+	printf ("### Unsupported condition code!!!\n");
 	break;
       }
-      
+
+    NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
+			    Cond.getOperand(0),
+			    Cond.getOperand(1),
+			    invCC);
   } else {
 
     printf ("#### LowerBRCOND Negation Case\n");

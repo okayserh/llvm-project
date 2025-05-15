@@ -71,8 +71,6 @@ if.end:                                           ; preds = %if.then, %entry
 ; CHECK: ldl 4
 ; CHECK: ldiff
 ; CHECK: rev
-; CHECK: eqc 0
-; CHECK: eqc 0
 ; CHECK: cj .LBB1_2
 ; CHECK: ldl 2
 ; CHECK: stl 1
@@ -162,8 +160,6 @@ if.end:                                           ; preds = %if.then, %entry
 ; CHECK: ldl 3
 ; CHECK: ldiff
 ; CHECK: rev
-; CHECK: eqc 0
-; CHECK: eqc 0
 ; CHECK: cj .LBB3_2
 ; CHECK: ldl 2
 ; CHECK: stl 1
