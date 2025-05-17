@@ -367,53 +367,6 @@ static bool hasOneNonDBGUse(unsigned Reg, MachineInstr *Def,
 }
 
 
-/// A single-use def in the same block with no intervening memory or register
-/// dependencies; move the def down and nest it with the current instruction.
-static MachineInstr *moveForSingleUse(unsigned Reg, MachineOperand &Op,
-                                      MachineInstr *Def, MachineBasicBlock &MBB,
-                                      MachineInstr *Insert, LiveIntervals &LIS,
-                                      T8xxMachineFunctionInfo &MFI,
-                                      MachineRegisterInfo &MRI) {
-  LLVM_DEBUG(dbgs() << "Move for single use: "; Def->dump());
-
-  T8xxDebugValueManager DefDIs(Def);
-  DefDIs.sink(Insert);
-  //  LIS.handleMove(*Def);
-
-  if (MRI.hasOneDef(Reg) && MRI.hasOneNonDBGUse(Reg)) {
-    // No one else is using this register for anything so we can just stackify
-    // it in place.
-    //    MFI.stackifyVReg(MRI, Reg);
-    printf ("Reg Stackified %u\n", Reg);
-  } else {
-    // The register may have unrelated uses or defs; create a new register for
-    // just our one def and use so that we can stackify it.
-    Register NewReg = MRI.createVirtualRegister(MRI.getRegClass(Reg));
-    Op.setReg(NewReg);
-    //    DefDIs.updateReg(NewReg);
-
-    /*
-    // Tell LiveIntervals about the new register.
-    LIS.createAndComputeVirtRegInterval(NewReg);
-
-    // Tell LiveIntervals about the changes to the old register.
-    LiveInterval &LI = LIS.getInterval(Reg);
-    LI.removeSegment(LIS.getInstructionIndex(*Def).getRegSlot(),
-    LIS.getInstructionIndex(*Op.getParent()).getRegSlot(), */
-                         /*RemoveDeadValNo=*/  /*true);
-*/
-
-    // TODO:
-    //MFI.stackifyVReg(MRI, NewReg);
-
-    LLVM_DEBUG(dbgs() << " - Replaced register: "; Def->dump());
-  }
-
-  //  imposeStackOrdering(Def);
-  return Def;
-}
-
-
 static MachineInstr *getPrevNonDebugInst(MachineInstr *MI) {
   for (auto *I = MI->getPrevNode(); I; I = I->getPrevNode())
     if (!I->isDebugInstr())
@@ -543,7 +496,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	  /*
 	  printf ("### Splice\n");
 	  MI->dump ();
-	  printf ("### Def Instr.\n");	  
+	  printf ("### Def Instr.\n");
 	  DefI->dump ();
 	  */
 
@@ -556,11 +509,11 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	    printf ("### Instruction sequence already OK\n");
 	  else
 	    {
-	      // Specifically only address the COPY $areg instruction! 
+	      // Specifically only address the COPY $areg instruction!
 	      if ((DefI->getOpcode () == T8xx::COPY) &&
 		  (DefI->getOperand (1).isReg ()) &&
 		  (DefI->getOperand (1).getReg () == T8xx::AREG))
-		{		  
+		{
 		  // If the results of the copy is needed at some other place,
 		  // the return value is stored in a temporary variable
 		  printf ("### Copy instruction\n");
@@ -568,20 +521,20 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 
 		  Register RegClone = MRI.cloneVirtualRegister (Reg);
 		  Use->setReg (RegClone);
-		  
+
 		  // TODO: Just to see if this works. Might be rather inefficient to have this
 		  // after each newly created virtual register
 		  VRM.grow ();
-	      
+
 		  // Store temporary variable after defining instruction
 		  if (VRM.isAssignedReg (Reg))
 		    VRM.assignVirt2StackSlot (Reg);
-		  
+
 		  MachineBasicBlock::iterator MBBI = *DefI;
-		  
+
 		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
 		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-		  
+
 		  // Create new virtual register for clone
 		  DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).
 		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
@@ -619,7 +572,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	      BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDLP),RegFPStack).
 		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	      // Load single when register is single precision
-	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)		
+	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
 		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
 		  addReg(RegFPStack);
 	      // Load double when register is double precision
@@ -700,7 +653,14 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 	  if (DefI)
 	    {
-	      int SubE = getDepth (DefI, MRI, LIS, RC->getID ());
+	      // When the register was already assigned to a temporary
+	      // stack slot, the depth does not need to be analysed.
+
+	      // TODO: Verify for floating points regs
+	      int SubE = 1;
+	      if (VRM.isAssignedReg(Reg))
+		 SubE = getDepth (DefI, MRI, LIS, RC->getID ());
+
 	      if (RC->getID () == T8xx::ORegRegClassID)
 		OpDepth.push_back (std::make_pair(SubE, I));
 	      if (RC->getID () == T8xx::LRegRegClassID)
@@ -899,7 +859,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      RegJoin = MRI.createVirtualRegister (&T8xx::LRegRegClass);
 
 	      VRM.grow ();
-	      
+
 	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::JOIN),RegJoin)
 		.addReg (Reg1)
 		.addReg (Reg2);
@@ -944,6 +904,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 		  Register RegFPStack;
 		  RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
 
+		  VRM.grow ();
+		  
 		  // TODO: Evaluate whether something needs to be done regarding the newly introduced
 		  // integer variable?
 		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
@@ -987,7 +949,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 
 		  // Load single when register is singe precision
-		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)		
+		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
 		    BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
 		      addReg(RegFPStack);
 
@@ -995,6 +957,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
 		    BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPLDNLDB),RegClone).
 		      addReg(RegFPStack);
+
+		  VRM.grow ();
 		}
 	    }
 	      break;
@@ -1102,7 +1066,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 			Register RegClone = MRI.cloneVirtualRegister (Reg);
 			Def->setReg (RegClone);
-
 			VRM.grow ();
 
 			MachineBasicBlock::iterator MBBI = Insert;
@@ -1127,7 +1090,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 			    // For floating point numbers, an additional i32 register
 			    // is needed to address the stack
 			    Register RegFPStack;
-			    if ((MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID) || 
+			    if ((MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID) ||
 				(MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID))
 			      {
 				RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);

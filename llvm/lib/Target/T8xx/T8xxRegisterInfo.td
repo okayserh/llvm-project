@@ -34,6 +34,9 @@ def FCREG : T8xxReg<2, "FCREG">, DwarfRegNum<[24]>;
 def ABREG : T8xxReg<6, "ABREG">, DwarfRegNum<[25]>;
 //def BCREG : T8xxReg<7, "BCREG">, DwarfRegNum<[26]>;
 
+// Floating Point Error Flag (1 Bit register)
+def FPERRREG : T8xxReg<8, "FPERR">, DwarfRegNum<[27]>;
+
 
 // Register classes.
 
@@ -60,3 +63,6 @@ def DFPReg:  RegisterClass<"T8xx", [f64], 32,
      	                  (add FPReg)>;
 
 
+// Special class for the floating point error flag
+def FPEReg:  RegisterClass<"T8xx", [i1], 1,
+    	     	          (add FPERRREG)>;

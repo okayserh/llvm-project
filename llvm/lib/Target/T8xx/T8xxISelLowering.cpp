@@ -142,10 +142,20 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
       setTruncStoreAction(MVT::f64, MVT::f16, Expand);
       setTruncStoreAction(MVT::f32, MVT::bf16, Expand);
       setTruncStoreAction(MVT::f64, MVT::bf16, Expand);
+
+      // Condition codes
+      setOperationAction(ISD::SETCC, MVT::f32, Custom);
+      setOperationAction(ISD::SETCC, MVT::f64, Custom);
+
+      setOperationAction(ISD::BR_CC, MVT::f32, Expand);
+      setOperationAction(ISD::BR_CC, MVT::f64, Expand);
     }
   
   // Nodes that require custom lowering
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
+
+  // TODO: Test code to check what this does?
+  setOperationAction(ISD::ConstantPool, MVT::i32, Custom);
 
   setOperationAction(ISD::BRCOND, MVT::Other, Custom);
 
@@ -220,9 +230,15 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     return LowerSELECT(Op, DAG);
   case ISD::BRCOND:
     return LowerBRCOND(Op, DAG);
+
   case ISD::GlobalAddress:
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
+
+  case ISD::ConstantPool:
+    printf ("####### Lower ConstantPool  #########\n");
+    return LowerConstantPool(Op, DAG);
+
     /*
   case ISD::FMUL:
     printf ("####### Lower FMUL  #########\n");
@@ -290,9 +306,15 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
   SDLoc DL(Op);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
 
-  // Currently nothing to do. The unsigned integer comparisons
-  // have been implemented as patterns in the instruction definition
-  
+  if (Op0.getValueType ().isFloatingPoint ())
+    {
+      // TODO: Quick hack to see if it catches floating point comparisons
+      SDValue NewCond;
+      NewCond = DAG.getSetCC (DL, Op.getValueType (),
+			      Op0, Op1, ISD::SETOGT);
+      return (NewCond);
+    }
+
   return (Op);
 }
 
@@ -305,70 +327,76 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   SDValue Dest = Op.getOperand(2);
   SDLoc DL(Op);
   SDValue CC;
-  bool bSwap = false;
 
   printf ("#### LowerBRCOND\n");
 
   SDValue NewCond;
   if (Cond.getOpcode() == ISD::SETCC) {
 
-    CondCodeSDNode *CCNode = cast<CondCodeSDNode>(Cond.getOperand(2));
-    ISD::CondCode invCC = getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ());
-    ISD::CondCode origCC = CCNode->get ();
-
-    switch (origCC)
+    if (Cond.getOperand(0).getValueType().isFloatingPoint())
       {
-	// The LLVM function "getSetCCInverse" provides inverse comparisons
-	// which may not always be suitable for the integer comparisons.
-	// Hence the following table provides inversions based on the resulting
-	// assembler code.
-      case ISD::SETEQ:
-	invCC = ISD::SETNE;
-	break;
-      case ISD::SETNE:
-	invCC = ISD::SETEQ;
-	break;
-      case ISD::SETLT:
-	invCC = ISD::SETGE;
-	break;
-      case ISD::SETLE:
-	invCC = ISD::SETGT;
-	break;
-      case ISD::SETGT:
-	invCC = ISD::SETLE;
-	break;
-      case ISD::SETGE:
-	invCC = ISD::SETLT;
-	break;
-      case ISD::SETUEQ:
-	invCC = ISD::SETUNE;
-	break;
-      case ISD::SETUNE:
-	invCC = ISD::SETUEQ;
-	break;
-      case ISD::SETUGE:
-	invCC = ISD::SETULT;
-	break;
-      case ISD::SETUGT:
-	invCC = ISD::SETULE;
-	break;
-      case ISD::SETULE:
-	invCC = ISD::SETUGT;
-	break;
-      case ISD::SETULT:
-	invCC = ISD::SETUGE;
-	break;
-	// Otherwise use the original condition and introduce a negation
-
-      default:
-	printf ("### Unsupported condition code!!!\n");
-	break;
+	NewCond = Cond;
       }
+    else
+      {
+	CondCodeSDNode *CCNode = cast<CondCodeSDNode>(Cond.getOperand(2));
+	ISD::CondCode invCC = getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ());
+	ISD::CondCode origCC = CCNode->get ();
 
-    NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
-			    Cond.getOperand(0),
-			    Cond.getOperand(1),
-			    invCC);
+	switch (origCC)
+	  {
+	    // The LLVM function "getSetCCInverse" provides inverse comparisons
+	    // which may not always be suitable for the integer comparisons.
+	    // Hence the following table provides inversions based on the resulting
+	    // assembler code.
+	  case ISD::SETEQ:
+	    invCC = ISD::SETNE;
+	    break;
+	  case ISD::SETNE:
+	    invCC = ISD::SETEQ;
+	    break;
+	  case ISD::SETLT:
+	    invCC = ISD::SETGE;
+	    break;
+	  case ISD::SETLE:
+	    invCC = ISD::SETGT;
+	    break;
+	  case ISD::SETGT:
+	    invCC = ISD::SETLE;
+	    break;
+	  case ISD::SETGE:
+	    invCC = ISD::SETLT;
+	    break;
+	  case ISD::SETUEQ:
+	    invCC = ISD::SETUNE;
+	    break;
+	  case ISD::SETUNE:
+	    invCC = ISD::SETUEQ;
+	    break;
+	  case ISD::SETUGE:
+	    invCC = ISD::SETULT;
+	    break;
+	  case ISD::SETUGT:
+	    invCC = ISD::SETULE;
+	    break;
+	  case ISD::SETULE:
+	    invCC = ISD::SETUGT;
+	    break;
+	  case ISD::SETULT:
+	    invCC = ISD::SETUGE;
+	    break;
+	    // Otherwise use the original condition and introduce a negation
+	    
+	  default:
+	    printf ("### Unsupported condition code!!!\n");
+	    break;
+	  }
+	
+	NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
+				Cond.getOperand(0),
+				Cond.getOperand(1),
+				invCC);
+      }
   } else {
 
     printf ("#### LowerBRCOND Negation Case\n");
@@ -436,6 +464,21 @@ SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) co
       SDValue PtrOff = DAG.getIntPtrConstant(Offset, SDLoc(Op));
       Result = DAG.getNode(ISD::ADD, SDLoc(Op), MVT::i32, Result, PtrOff);
     }
+
+  return Result;
+}
+
+
+SDValue T8xxTargetLowering::LowerConstantPool(SDValue Op, SelectionDAG& DAG) const
+{
+  SDValue Result;
+  ConstantPoolSDNode *CP = cast<ConstantPoolSDNode>(Op.getNode());
+
+  // TODO: Just a first try to see how things work.
+  // Ideally a later version should be able to build position independent code as well
+  // as code for a fixed address.
+  Result = DAG.getTargetConstantPool(CP->getConstVal(), CP->getValueType(0),
+				     CP->getAlign(), CP->getOffset(), T8xxMCExpr::VK_T8xx_GLOBAL);
 
   return Result;
 }

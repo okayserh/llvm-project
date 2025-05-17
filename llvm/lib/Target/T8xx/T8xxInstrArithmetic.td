@@ -229,7 +229,21 @@ def FPGTDB :      T8InstOp8<0x94,
 	 let DecoderNamespace = "FPDB";
 }
 
+// Tests for Nan, not finite and orderability
+def FPORDERED :   T8InstOp8<0x92,
+			    (outs OReg:$ord, FPReg:$tst_out1, FPReg:$tst_out2),
+			    (ins FPReg:$tst_in1, FPReg:$tst_in2),  // Needs two FPReg, but does not "consume" them from FP-stack
+			    "fpordered", []>;
 
+def FPNAN :       T8InstOp8<0x91,
+			    (outs OReg:$nan, FPReg:$tst_out),
+			    (ins FPReg:$tst_in),  // Needs one FPReg, but does not "consume" it from FP-stack
+			    "fpnan", []>;
+
+def FPNOTFINITE : T8InstOp8<0x93,
+			    (outs OReg:$inf, FPReg:$tst_out),
+			    (ins FPReg:$tst_in),  // Needs one FPReg, but does not "consume" it from FP-stack
+			    "fpnotfinite", []>;
 
 /* Other comparisons will be created by patterns */
 def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETONE),
@@ -248,22 +262,6 @@ def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE),
 // Indexed Load/Store
 def FPLDNLDBI :  T8InstOp8<0x82, (outs), (ins),  "fpldnldbi", []>;
 def FPLDNLSNI :  T8InstOp8<0x86, (outs), (ins),  "fpldnlsni", []>;
-
-// Tests for Nan, not finite and orderability
-def FPNAN :       T8InstOp8<0x91,
-			    (outs OReg:$nan),
-			    (ins),  // Needs one FPReg, but does not "consume" it from FP-stack
-			    "fpnan", []>;
-
-def FPORDERED :   T8InstOp8<0x92,
-			    (outs OReg:$ord),
-			    (ins),  // Needs two FPReg, but does not "consume" them from FP-stack
-			    "fpordered", []>;
-
-def FPNOTFINITE : T8InstOp8<0x93,
-			    (outs OReg:$inf),
-			    (ins),  // Needs one FPReg, but does not "consume" it from FP-stack
-			    "fpnotfinite", []>;
 
 def FPB32TOR64 :  T8InstOp8<0x9A, (outs), (ins),  "fpb32tor64", []>;
 def FPTESTERR :   T8InstOp8<0x9C, (outs), (ins),  "fptesterr", []>;
