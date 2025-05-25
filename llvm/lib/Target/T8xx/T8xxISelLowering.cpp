@@ -335,6 +335,7 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 
     if (Cond.getOperand(0).getValueType().isFloatingPoint())
       {
+	// TODO: Just some code to make llc run through CC.ll
 	NewCond = Cond;
       }
     else
@@ -883,7 +884,9 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
 
     const unsigned Offset = VA.getLocMemOffset();
 
-    const int FI = MF.getFrameInfo().CreateFixedObject(4, Offset, true);
+    const uint64_t SizeInBits = VA.getValVT().getSizeInBits();
+
+    const int FI = MF.getFrameInfo().CreateFixedObject(SizeInBits / 8, Offset, true);
     EVT PtrTy = getPointerTy(DAG.getDataLayout());
     SDValue FIPtr = DAG.getFrameIndex(FI, PtrTy);
 

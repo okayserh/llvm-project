@@ -19,17 +19,18 @@ def CC_T8xx32 : CallingConv<[
 //  CCIfType<[i32], CCAssignToReg<[R1, R2, R3]>>,
 
   // Alternatively, they are assigned to the stack in 4-byte aligned units.
+  // Note: CCAsignToStack <int size, int align>
   CCIfType<[i32], CCAssignToStack<4, 4>>,
-  CCIfType<[i64], CCAssignToStack<4, 4>>,
+  CCIfType<[i64], CCAssignToStack<8, 4>>,
 
   CCIfType<[f32], CCAssignToStack<4, 4>>,
 
-  CCIfType<[f64], CCAssignToStack<4, 4>>
+  CCIfType<[f64], CCAssignToStack<8, 4>>
 ]>;
 
 def RetCC_T8xx32 : CallingConv<[
   CCIfType<[i32], CCAssignToReg<[AREG]>>,
-  CCIfType<[i64], CCAssignToStack<4, 4>>,
+  CCIfType<[i64], CCAssignToStack<8, 4>>,
 
   CCIfType<[f32], CCAssignToReg<[FAREG]>>,
 

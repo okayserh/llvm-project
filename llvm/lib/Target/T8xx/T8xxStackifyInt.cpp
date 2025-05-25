@@ -259,18 +259,6 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
 }
 
 
-
-static bool isSafeToMove(const MachineOperand *Def, const MachineOperand *Use,
-                         const MachineInstr *Insert,
-                         const T8xxMachineFunctionInfo &MFI,
-                         const MachineRegisterInfo &MRI) {
-
-  // TODO: Implement the functionality here
-  // For initial test, just assume that the block can be moved
-  return true;
-}
-
-
 // Test whether Def is safe and profitable to rematerialize.
 static bool shouldRematerialize(const MachineInstr &Def,
                                 const T8xxInstrInfo *TII) {
@@ -491,95 +479,48 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 
   if (!Reg.isPhysical())
     {
-      if (VRM.isAssignedReg (Reg))
-	{
-	  /*
-	  printf ("### Splice\n");
-	  MI->dump ();
-	  printf ("### Def Instr.\n");
-	  DefI->dump ();
-	  */
-
-	  MachineBasicBlock::iterator ItDef = *DefI;
-	  MachineBasicBlock::iterator ItMi = *MI;
-
-	  // If the instructions are already in the right sequence,
-	  // no splice is required
-	  if (std::next(ItDef) == ItMi)
-	    printf ("### Instruction sequence already OK\n");
-	  else
-	    {
-	      // Specifically only address the COPY $areg instruction!
-	      if ((DefI->getOpcode () == T8xx::COPY) &&
-		  (DefI->getOperand (1).isReg ()) &&
-		  (DefI->getOperand (1).getReg () == T8xx::AREG))
-		{
-		  // If the results of the copy is needed at some other place,
-		  // the return value is stored in a temporary variable
-		  printf ("### Copy instruction\n");
-		  DebugLoc DL = DefI->getDebugLoc();
-
-		  Register RegClone = MRI.cloneVirtualRegister (Reg);
-		  Use->setReg (RegClone);
-
-		  // TODO: Just to see if this works. Might be rather inefficient to have this
-		  // after each newly created virtual register
-		  VRM.grow ();
-
-		  // Store temporary variable after defining instruction
-		  if (VRM.isAssignedReg (Reg))
-		    VRM.assignVirt2StackSlot (Reg);
-
-		  MachineBasicBlock::iterator MBBI = *DefI;
-
-		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
-		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-		  // Create new virtual register for clone
-		  DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).
-		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-		}
-
-	      // Shift defining instruction in front of consuming instruction
-	      MBB->splice (MI, DefI->getParent (), DefI);
-	    }
-	}
+      MachineBasicBlock::iterator ItDef = *DefI;
+      MachineBasicBlock::iterator ItMi = *MI;
+	  
+      // If the instructions are already in the right sequence,
+      // no splice is required
+      if (std::next(ItDef) == ItMi)
+	printf ("### Instruction sequence already OK\n");
       else
 	{
-	  DebugLoc DL = MI->getDebugLoc();
-
-	  // Create new virtual register for clone
-	  Register RegClone = MRI.cloneVirtualRegister (Reg);
-	  Use->setReg (RegClone);
-
-	  // Introduce new virtual register for stack location
-	  Register RegFPStack;
-	  if ((MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID) ||
-	      (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID))
+	  // Specifically only address the COPY $areg instruction!
+	  if ((DefI->getOpcode () == T8xx::COPY) &&
+	      (DefI->getOperand (1).isReg ()) &&
+	      (DefI->getOperand (1).getReg () == T8xx::AREG))
 	    {
-	      RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
-	    }
-
-	  VRM.grow ();
-
-	  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::ORegRegClassID)
-	    {
+	      // If the results of the copy is needed at some other place,
+	      // the return value is stored in a temporary variable
+	      printf ("### Copy instruction\n");
+	      DebugLoc DL = DefI->getDebugLoc();
+	      
+	      Register RegClone = MRI.cloneVirtualRegister (Reg);
+	      Use->setReg (RegClone);
+	      
+	      // TODO: Just to see if this works. Might be rather inefficient to have this
+	      // after each newly created virtual register
+	      VRM.grow ();
+	      
+	      // Store temporary variable after defining instruction
+	      if (VRM.isAssignedReg (Reg))
+		VRM.assignVirt2StackSlot (Reg);
+	      
+	      MachineBasicBlock::iterator MBBI = *DefI;
+	      
+	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
+		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	      
+	      // Create new virtual register for clone
 	      DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).
 		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
-	  else
-	    {
-	      BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDLP),RegFPStack).
-		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	      // Load single when register is single precision
-	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
-		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
-		  addReg(RegFPStack);
-	      // Load double when register is double precision
-	      if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
-		DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::FPLDNLDB),RegClone).
-		  addReg(RegFPStack);
-	    }
+	  
+	  // Shift defining instruction in front of consuming instruction
+	  MBB->splice (MI, DefI->getParent (), DefI);
 	}
     }
 
@@ -974,6 +915,161 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 }
 
 
+enum StackAction
+  {
+    None,
+    MoveInst,
+    CloneInst,
+    DefTemp
+  };
+
+typedef struct StackInfos_s
+{
+  int defs,
+    nondbg_uses,
+    oreg_depth,
+    fpreg_depth;
+
+  StackAction action;
+  SmallVector<Register, 4> RegClones;
+} StackInfos;
+
+
+
+void insertTempStore (MachineBasicBlock::instr_iterator def,
+		      MachineRegisterInfo &MRI,
+		      VirtRegMap &VRM,
+		      Register VirtOrig,
+		      Register VirtNew)
+{
+  DebugLoc DL = def->getDebugLoc();
+  MachineBasicBlock *MBB = def->getParent ();
+  MachineFunction *MF = MBB->getParent ();
+  MIMetadata MIMD = MIMetadata(*def);
+  const auto *TII = MF->getSubtarget<T8xxSubtarget>().getInstrInfo();
+
+  bool isFP = false;
+  unsigned OpCode = 0;
+  
+  switch (MRI.getRegClassOrNull (VirtOrig)->getID ())
+    {
+    case T8xx::ORegRegClassID:
+      OpCode = T8xx::STL;
+      break;
+    case T8xx::FPRegRegClassID:
+      isFP = true;
+      OpCode = T8xx::FPSTNLSN;
+      break;
+    case T8xx::DFPRegRegClassID:
+      isFP = true;
+      OpCode = T8xx::FPSTNLDB;
+      break;
+    default:
+      printf ("Unknow register class\n");
+    }
+
+  Register RegFPStack;
+  if (isFP)
+    RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
+
+  if (++def == MBB->end ())
+    {
+      if (isFP)
+	{
+	  BuildMI(MBB, MIMD, TII->get(T8xx::LDLP),RegFPStack).
+	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
+	    addImm(0);
+
+	  BuildMI(MBB, MIMD, TII->get(OpCode)).
+	    addReg(VirtNew).
+	    addReg(RegFPStack);
+	}
+      else
+	{
+	  BuildMI(MBB, MIMD, TII->get(OpCode)).
+	    addReg(VirtNew).
+	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
+	    addImm(0);
+	}
+    }
+  else
+    {
+      if (isFP)
+	{
+	  BuildMI(*MBB, *def, DL, TII->get(T8xx::LDLP),RegFPStack).
+	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
+	    addImm(0);
+
+	  BuildMI(*MBB, *def, DL, TII->get(OpCode)).
+	    addReg(VirtNew).
+	    addReg(RegFPStack);
+	}
+      else
+	{
+	  BuildMI(*MBB, *def, DL, TII->get(T8xx::STL)).
+	    addReg(VirtNew).
+	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
+	    addImm(0);
+	}
+    }
+  
+}
+
+void insertTempLoad (MachineBasicBlock::instr_iterator use,
+		     MachineRegisterInfo &MRI,
+		     VirtRegMap &VRM,
+		     Register VirtOrig,
+		     Register VirtNew)
+{
+  DebugLoc DL = use->getDebugLoc();
+  MachineBasicBlock *MBB = use->getParent ();
+  MachineFunction *MF = MBB->getParent ();
+  const auto *TII = MF->getSubtarget<T8xxSubtarget>().getInstrInfo();
+
+  switch (MRI.getRegClassOrNull (VirtOrig)->getID ())
+    {
+    case T8xx::ORegRegClassID:
+      {
+	BuildMI(*MBB, *use, DL, TII->get(T8xx::LDL), VirtNew).
+	  addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0);
+      }
+      break;
+
+    case T8xx::FPRegRegClassID:
+      {
+	// For floating point numbers, an additional i32 register
+	// is needed to address the stack
+	Register RegFPStack;
+	RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
+
+	BuildMI(*MBB, *use, DL, TII->get(T8xx::LDLP),RegFPStack).
+	  addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0);
+
+	BuildMI(*MBB, *use, DL, TII->get(T8xx::FPLDNLSN), VirtNew).
+	  addReg(RegFPStack);
+      }
+      break;
+
+    case T8xx::DFPRegRegClassID:
+      {
+	// For floating point numbers, an additional i32 register
+	// is needed to address the stack
+	Register RegFPStack;
+	RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
+
+	BuildMI(*MBB, *use, DL, TII->get(T8xx::LDLP),RegFPStack).
+	  addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0);
+
+	BuildMI(*MBB, *use, DL, TII->get(T8xx::FPLDNLDB), VirtNew).
+	  addReg(RegFPStack);
+      }
+      break;
+    default:
+      printf ("Unknow register class\n");
+    }
+}
+		      
+
 /// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
 /// register references into FP stack references.
 ///
@@ -1008,6 +1104,247 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   // order isn't significant, but we may want to change this in the future.
   std::map<Register, int> map_mult_def;
 
+
+  // Test to see whether the algorithm can be structured differently.
+  std::vector<StackInfos> stack_info (MRI.getNumVirtRegs ());
+
+  for (unsigned int i = 0, e = MRI.getNumVirtRegs (); i != e; ++i)
+    {
+      unsigned VirtReg = Register::index2VirtReg (i);
+      printf ("I %i   Reg %u\n", i, VirtReg);
+      
+      // Depth is initialized with -1 (for "not calculated yet")
+      stack_info[i].oreg_depth = -1;
+      stack_info[i].fpreg_depth = -1;
+      stack_info[i].action = None;
+
+      // Definitions of a register
+      MachineRegisterInfo::def_instr_iterator def_iter = MRI.def_instr_begin(VirtReg);
+      for (; def_iter != MRI.def_instr_end(); ++def_iter)
+	{
+	  def_iter->dump ();
+	  stack_info[i].defs++;
+	}
+
+      printf ("Uses\n");
+      // Uses of a register
+      /*
+      MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
+      for (; use_iter != MRI.use_instr_nodbg_end(); ++use_iter)
+	{
+	  use_iter->dump ();
+	  stack_info[i].nondbg_uses++;
+	}
+      */
+      // Walk by operators, since a variable might be uses twice in the same instruction!
+      MachineRegisterInfo::use_iterator use_iter = MRI.use_begin(VirtReg);
+      for (; use_iter != MRI.use_end(); ++use_iter)
+	{
+	  use_iter->dump ();
+	  stack_info[i].nondbg_uses++;
+	}
+
+      // More than one def -> Introduce temporary variable on stack
+      // One def ->
+      //    More than one use -> Simple instruction -> clone
+      //                      -> Complex instruction -> temp variable on stack
+      //    One use -> Move instruction
+      if (stack_info[i].defs > 1)
+	stack_info[i].action = DefTemp;
+      else
+	{
+	  if (stack_info[i].defs > 0)
+	    {
+	      if (stack_info[i].nondbg_uses > 1)
+		{
+		  def_iter = MRI.def_instr_begin (VirtReg);
+		  switch (def_iter->getOpcode ())
+		    {
+		    case T8xx::LDC :
+		    case T8xx::LDLP :
+		      stack_info[i].action = CloneInst;
+		      break;
+		    default:
+		      stack_info[i].action = DefTemp;
+		    }
+		}
+	      else
+		stack_info[i].action = MoveInst;
+	    }
+	}
+    }
+
+  // Do the floating point and integer operations simultaneously
+  unsigned int origNumVirtRegs = MRI.getNumVirtRegs ();
+  for (unsigned int i = 0, e = origNumVirtRegs; i != e; ++i)
+    {
+      unsigned VirtReg = Register::index2VirtReg (i);
+      std::vector<std::pair<MachineOperand *, Register>> vreg_replace;
+
+      // Introduce a temporary variable on the stack (the Transputer equivalent of a register)
+      if (stack_info[i].action == DefTemp)
+	{
+	  // Allocate stack slot for virtual register
+	  if (VRM.isAssignedReg (VirtReg))
+	    VRM.assignVirt2StackSlot (VirtReg);
+
+	  // Uses of a register are filled with appropriate load instructions first
+	  MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
+
+	  for (; use_iter != MRI.use_instr_nodbg_end(); ++use_iter)
+	    {
+	      // Replace register in using instruction with newly created virtual register
+	      const iterator_range<MachineInstr::mop_iterator> &Range_uses = use_iter->uses();
+	      MachineBasicBlock::instr_iterator MBBI(*use_iter);
+
+	      // A using instruction may use a virtual reg multiple times.
+	      // Create a load instruction and new virtual register for each use
+	      for (MachineOperand *op_use = Range_uses.begin(); op_use != Range_uses.end (); ++op_use)
+		{
+		  if (op_use->isReg() && (op_use->getReg() == VirtReg))
+		    {
+		      // Create new virtual register and replace in the using instruction
+		      Register VirtNew = MRI.createVirtualRegister (MRI.getRegClassOrNull (VirtReg));
+		      vreg_replace.push_back (std::make_pair (op_use, VirtNew));
+		      insertTempLoad (MBBI, MRI, VRM, VirtReg, VirtNew);
+		    }
+		}
+	    }
+
+	  // Definitions of a register
+	  MachineRegisterInfo::def_instr_iterator def_iter = MRI.def_instr_begin(VirtReg);
+	  for (; def_iter != MRI.def_instr_end(); ++def_iter)
+	    {
+	      // The first definition reuses the virtual register
+	      // For the second definition introduce a new virtual register
+	      Register VirtNew;
+	      if (def_iter == MRI.def_instr_begin(VirtReg))
+		VirtNew = VirtReg;
+	      else
+		{
+		  VirtNew = MRI.createVirtualRegister (MRI.getRegClassOrNull (VirtReg));
+
+		  // Replace register in using instruction with newly created virtual register
+		  const iterator_range<MachineInstr::mop_iterator> &Range_defs = def_iter->defs();
+		  for (MachineOperand *op_def = Range_defs.begin(); op_def != Range_defs.end (); ++op_def)
+		    {
+		      if (op_def->isReg() && (op_def->getReg() == VirtReg))
+			vreg_replace.push_back (std::make_pair (op_def, VirtNew));
+		    }
+		}
+	      
+	      MachineBasicBlock::instr_iterator MBBI(*def_iter);
+	      insertTempStore (MBBI, MRI, VRM, VirtReg, VirtNew);
+	    }
+	}
+
+      // Clone simple instruction
+      if (stack_info[i].action == CloneInst)
+	{
+	  // Find definition of virtual register
+	  MachineRegisterInfo::def_instr_iterator def_iter = MRI.def_instr_begin(VirtReg);
+	  
+	  // A cloned definition is copied in front of the using instructions
+	  MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
+	  ++use_iter;  // The first use gets the original virtual register
+	  
+	  for (; use_iter != MRI.use_instr_nodbg_end(); ++use_iter)
+	    {
+	      MachineBasicBlock *MBB = use_iter->getParent ();
+	      MachineBasicBlock::instr_iterator MBBI_use(*use_iter);
+	      MachineBasicBlock::instr_iterator MBBI_def(*def_iter);
+	      
+	      // Clone instruction
+	      MachineInstr &MI_Clone = MF.cloneMachineInstrBundle(*MBB, MBBI_use, *MBBI_def);
+	      
+	      // Create new virtual register and replace in cloned definition
+	      const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI_Clone.defs();
+	      Register VirtNew = MRI.createVirtualRegister (MRI.getRegClassOrNull (VirtReg));
+	      Range_defs.begin()->setReg(VirtNew);
+	      
+	      // Replace register in using instruction with newly created virtual register
+	      const iterator_range<MachineInstr::mop_iterator> &Range_uses = use_iter->uses();
+	      for (MachineOperand *op_use = Range_uses.begin(); op_use != Range_uses.end (); ++op_use)
+		{
+		  if (op_use->isReg() && (op_use->getReg() == VirtReg))
+		    vreg_replace.push_back (std::make_pair (op_use, VirtNew));
+		}
+	    }
+	}
+
+      // Run through operands and replace registers with newly created virtual registers
+      for (auto vi = vreg_replace.begin (); vi != vreg_replace.end (); ++vi)
+	vi->first->setReg (vi->second);
+    }      
+
+  VRM.grow ();
+
+  // Note: After the floating point substitution every virtual register should be used at maximum one time
+  // If a floating point register is loaded from a stack position, a new virtual register has been defined.
+  
+  printf ("After Reg Substitution\n");
+  for (MachineBasicBlock &MBB : MF) {
+    MBB.dump ();
+  }
+  printf ("##########################\n");
+
+
+  // For debugging, count uses and defs again.
+  std::vector<StackInfos> stack_info_new (MRI.getNumVirtRegs ());
+  for (unsigned int i = 0, e = MRI.getNumVirtRegs (); i != e; ++i)
+    {
+      unsigned VirtReg = Register::index2VirtReg (i);
+      printf ("I %i   Reg %u\n", i, VirtReg);
+      
+      // Depth is initialized with -1 (for "not calculated yet")
+      stack_info_new[i].oreg_depth = -1;
+      stack_info_new[i].fpreg_depth = -1;
+      stack_info_new[i].action = None;
+
+      printf ("Uses\n");
+      // Uses of a register
+      MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
+      for (; use_iter != MRI.use_instr_nodbg_end(); ++use_iter)
+	{
+	  use_iter->dump ();
+	  stack_info_new[i].nondbg_uses++;
+	}
+
+      // Definitions of a register
+      if (stack_info_new[i].nondbg_uses == 0)
+	{
+	  // If a virtual register definition has no uses, remove it
+	  MachineRegisterInfo::def_instr_iterator def_iter = MRI.def_instr_begin(VirtReg);
+	  if (def_iter != MRI.def_instr_end())
+	    {
+	      MachineBasicBlock::instr_iterator MBBI_def(*def_iter);
+	      MachineBasicBlock *MBB = def_iter->getParent ();
+	      MBB->erase (MBBI_def);
+	    }
+	}
+      else
+	{
+	  MachineRegisterInfo::def_instr_iterator def_iter = MRI.def_instr_begin(VirtReg);
+	  for (; def_iter != MRI.def_instr_end(); ++def_iter)
+	    {
+	      def_iter->dump ();
+	      stack_info_new[i].defs++;
+	    }
+	}
+    }
+
+  // Debug info
+  for (unsigned int i = 0, e = MRI.getNumVirtRegs(); i != e; ++i)
+    {
+      printf ("I %i  Defs %i  Uses %i  OReg Depth %i  FPReg Depth %i\n", i,
+	      stack_info_new[i].defs, stack_info_new[i].nondbg_uses,
+	      stack_info_new[i].oreg_depth, stack_info_new[i].fpreg_depth);
+    }
+
+  // Reordering to get right sequence in operand stack
+  // TODO:
+
+  // Old/Real code  
   for (MachineBasicBlock &MBB : MF) {
 
     // Don't use a range-based for loop, because we modify the list as we're
@@ -1018,124 +1355,6 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     // need "stackification".
     std::vector<MachineInstr *> proc_instr,
       proc_fp_instr;
-
-    // First go through instructions and find those, which are used multiple times
-    for (auto MII = MBB.rbegin(); MII != MBB.rend(); ++MII)
-      {
-	MachineInstr *Insert = &*MII;
-
-	// Don't nest anything inside an inline asm, because we don't have
-	// constraints for $push inputs.
-	if (Insert->isInlineAsm())
-	  continue;
-
-	// Ignore debugging intrinsics.
-	if (Insert->isDebugValue())
-	  continue;
-
-	// Decide what to do with instructions
-	// Single Use -> always move (needed for register stack)
-	// Multiple Use:
-	//    Trivial -> Clone
-	//    Non Trivial -> Create temporary variable on stack and use that variable
-
-	const iterator_range<MachineInstr::mop_iterator> &Range_defs = Insert->defs();
-
-	// Analyse how often a definition is used
-	if (Range_defs.begin () != Range_defs.end ())
-	  {
-	    int count = 0;
-	    for (auto DI = Range_defs.begin (); DI != Range_defs.end (); ++DI)
-	      ++count;
-
-	    if ((count < 2) && (Range_defs.begin ()->isReg()))
-	      {
-		MachineOperand *Def = Range_defs.begin();
-		Register Reg = Range_defs.begin ()->getReg();
-
-		if (!Reg.isPhysical())
-		  {
-
-		    // Deal with the case of more than one definition (result of PHI replacement)
-		    if (!MRI.hasOneDef (Reg) || (map_mult_def.find (Reg) != map_mult_def.end ()))
-		      {
-			// Store temporary variable after defining instruction
-			if (VRM.isAssignedReg (Reg))
-			  VRM.assignVirt2StackSlot (Reg);
-			DebugLoc DL = Insert->getDebugLoc();
-
-			Register RegClone = MRI.cloneVirtualRegister (Reg);
-			Def->setReg (RegClone);
-			VRM.grow ();
-
-			MachineBasicBlock::iterator MBBI = Insert;
-			++MBBI;
-			BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-			// Make a note for later usage
-			if (map_mult_def.find (Reg) == map_mult_def.end ())
-			  map_mult_def[Reg] = 1;
-		      }
-		    else
-		      {
-			if (!MRI.hasOneNonDBGUse(Reg))
-			  {
-			    // Define new virtual register for the temporary storage
-			    // (i.e. the result is stored on the stack location and
-			    // the loaded into that stack location before the actual
-			    // usage)
-			    Register RegClone = MRI.cloneVirtualRegister (Reg);
-			    Def->setReg (RegClone);
-
-			    // For floating point numbers, an additional i32 register
-			    // is needed to address the stack
-			    Register RegFPStack;
-			    if ((MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID) ||
-				(MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID))
-			      {
-				RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
-			      }
-
-			    // TODO: Just to see if this works. Might be rather inefficient to have this
-			    // after each newly created virtual register
-			    VRM.grow ();
-
-			    // Store temporary variable after defining instruction
-			    if (VRM.isAssignedReg (Reg))
-			      VRM.assignVirt2StackSlot (Reg);
-			    DebugLoc DL = Insert->getDebugLoc();
-
-			    MachineBasicBlock::iterator MBBI = Insert;
-			    ++MBBI;
-
-			    if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::ORegRegClassID)
-			      {
-				BuildMI(MBB, MBBI, DL, TII->get(T8xx::STL)).addReg(RegClone).
-				  addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-			      }
-			    else
-			      {
-				BuildMI(MBB, MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
-				  addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-				if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
-				  BuildMI(MBB, MBBI, DL, TII->get(T8xx::FPSTNLSN)).
-				    addReg(RegClone).addReg(RegFPStack);
-
-				if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
-				  BuildMI(MBB, MBBI, DL, TII->get(T8xx::FPSTNLDB)).
-				    addReg(RegClone).addReg(RegFPStack);
-			      }
-			  }
-		      }
-		  }
-	      }
-	  }
-
-      }
-
-    MBB.dump ();
-    VRM.dump ();
 
     // Now do the recursive repositioning of the instructions to
     // have the proper stack ordering before the actual instructions
@@ -1208,6 +1427,17 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  }
       }  // MachineInstruction
 
+
+    // Now reorder instructions (floating point first)
+    for (auto PI = proc_fp_instr.begin (); PI != proc_fp_instr.end (); ++PI)
+      {
+	MBB.dump ();
+	printf ("Reorder FP\n");
+	(*PI)->dump ();
+	reorderRecursive (MF, *PI, MRI, LIS, VRM, outvec);
+	printf ("Reorder End\n");
+      }
+    MBB.dump ();
 
     // Now reorder instructions
     for (auto PI = proc_instr.begin (); PI != proc_instr.end (); ++PI)
@@ -1329,28 +1559,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
   } // MachineBasicBlock
 
-
-  /*
-  for (unsigned i = 0, e = MRI.getNumVirtRegs(); i != e; ++i) {
-    Register Reg = Register::index2VirtReg(i);
-    if (!VRM.isAssignedReg(Reg))
-      {
-	dbgs() << printReg(Reg, TRI) << "\n";
-
-	// This one does some extra checks!?
-	//MachineInstr *DefI = getVRegDef(Reg, Insert, MRI, LIS);
-	MachineInstr *DefI = MRI.getUniqueVRegDef(Reg);
-	DefI->dump ();
-      }
-  }
-  */
-
-  /*
-  */
-
-
   printf ("############ Register Map\n");
-//  VRM.dump ();
 
   //  return Changed;
   return false;
