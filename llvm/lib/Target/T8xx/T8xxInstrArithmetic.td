@@ -185,36 +185,34 @@ def FPINTDB :       T8InstOp8<0xA1,
 
 
 // Floating point comparisons
-
-
+// Since these comparisons don't check for NaN, they declare the
+// "Don't care operations".
 def FPEQSN :      T8InstOp8<0x95,
     	 	  (outs OReg:$cc),
 		  (ins FPReg:$lhs, FPReg:$rhs),
 		  "fpeq",
 		  [(set i32:$cc,
-		  (i32 (setcc f32:$lhs, f32:$rhs, SETOEQ)))]>
+		  (i32 (setcc f32:$lhs, f32:$rhs, SETEQ)))]>
 {
 	 let DecoderNamespace = "FPSN";
 }
-
 
 def FPEQDB :      T8InstOp8<0x95,
     	 	  (outs OReg:$cc),
 		  (ins DFPReg:$lhs, DFPReg:$rhs),
 		  "fpeq",
 		  [(set i32:$cc,
-		  (i32 (setcc f64:$lhs, f64:$rhs, SETOEQ)))]>
+		  (i32 (setcc f64:$lhs, f64:$rhs, SETEQ)))]>
 {
 	 let DecoderNamespace = "FPDB";
 }
-
 
 def FPGTSN :      T8InstOp8<0x94,
     	 	  (outs OReg:$cc),
 		  (ins FPReg:$lhs, FPReg:$rhs),
 		  "fpgt",
 		  [(set i32:$cc,
-		  (i32 (setcc f32:$lhs, f32:$rhs, SETOGT)))]>
+		  (i32 (setcc f32:$lhs, f32:$rhs, SETGT)))]>
 {
 	 let DecoderNamespace = "FPSN";
 }
@@ -224,16 +222,74 @@ def FPGTDB :      T8InstOp8<0x94,
 		  (ins DFPReg:$lhs, DFPReg:$rhs),
 		  "fpgt",
 		  [(set i32:$cc,
-		  (i32 (setcc f64:$lhs, f64:$rhs, SETOGT)))]>
+		  (i32 (setcc f64:$lhs, f64:$rhs, SETGT)))]>
 {
 	 let DecoderNamespace = "FPDB";
 }
 
+
+// Pseudo instructions for comparisons
+class T8PseudoCompareSN<CondCode condnode> :
+      T8Inst<(outs OReg:$cc),
+       	     (ins FPReg:$lhs, FPReg:$rhs),
+	      "",
+	     [(set i32:$cc,
+	      (i32 (setcc f32:$lhs, f32:$rhs, condnode)))]>
+{
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+}
+
+class T8PseudoCompareDB<CondCode condnode> :
+      T8Inst<(outs OReg:$cc),
+       	     (ins DFPReg:$lhs, DFPReg:$rhs),
+	      "",
+	     [(set i32:$cc,
+	      (i32 (setcc f64:$lhs, f64:$rhs, condnode)))]>
+{
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+}
+
+multiclass T8PseudoCmpOp<CondCode condnode>
+{
+	def NAME#DB :      T8PseudoCompareDB<condnode>;
+	def NAME#SN :      T8PseudoCompareSN<condnode>;
+}
+
+defm FPOGT : T8PseudoCmpOp<SETOGT>;
+defm FPOLE : T8PseudoCmpOp<SETOLE>;
+defm FPOEQ : T8PseudoCmpOp<SETOEQ>;
+defm FPONE : T8PseudoCmpOp<SETONE>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOLT),
+           (FPOGTSN $rhs, $lhs)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOLT),
+           (FPOGTDB $rhs, $lhs)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOGE),
+           (FPOLESN $rhs, $lhs)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE),
+           (FPOLEDB $rhs, $lhs)>;
+
 // Tests for Nan, not finite and orderability
-def FPORDERED :   T8InstOp8<0x92,
+def FPORDEREDSN :   T8InstOp8<0x92,
 			    (outs OReg:$ord, FPReg:$tst_out1, FPReg:$tst_out2),
 			    (ins FPReg:$tst_in1, FPReg:$tst_in2),  // Needs two FPReg, but does not "consume" them from FP-stack
-			    "fpordered", []>;
+			    "fpordered", []>
+{
+	 let DecoderNamespace = "FPSN";
+}
+
+
+def FPORDEREDDB :   T8InstOp8<0x92,
+			    (outs OReg:$ord, DFPReg:$tst_out1, DFPReg:$tst_out2),
+			    (ins DFPReg:$tst_in1, DFPReg:$tst_in2),  // Needs two FPReg, but does not "consume" them from FP-stack
+			    "fpordered", []>
+{
+	 let DecoderNamespace = "FPDB";
+}
+
 
 def FPNAN :       T8InstOp8<0x91,
 			    (outs OReg:$nan, FPReg:$tst_out),

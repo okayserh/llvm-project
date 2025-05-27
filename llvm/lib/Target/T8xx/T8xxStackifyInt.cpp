@@ -1126,16 +1126,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  stack_info[i].defs++;
 	}
 
-      printf ("Uses\n");
       // Uses of a register
-      /*
-      MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
-      for (; use_iter != MRI.use_instr_nodbg_end(); ++use_iter)
-	{
-	  use_iter->dump ();
-	  stack_info[i].nondbg_uses++;
-	}
-      */
       // Walk by operators, since a variable might be uses twice in the same instruction!
       MachineRegisterInfo::use_iterator use_iter = MRI.use_begin(VirtReg);
       for (; use_iter != MRI.use_end(); ++use_iter)

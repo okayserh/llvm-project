@@ -61,6 +61,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "REV";
   case T8xxISD::JOIN:
     return "JOIN";
+  case T8xxISD::FP_SETCC:
+    return "FP_SETCC";
   }
 }
 
@@ -149,6 +151,12 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
       setOperationAction(ISD::BR_CC, MVT::f32, Expand);
       setOperationAction(ISD::BR_CC, MVT::f64, Expand);
+
+      // Seems to be required, but does not work, yet
+      /*
+      setOperationAction(ISD::ConstantPool, MVT::f32, Custom);
+      setOperationAction(ISD::ConstantPool, MVT::f64, Custom);
+      */
     }
   
   // Nodes that require custom lowering
@@ -306,15 +314,24 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
   SDLoc DL(Op);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
 
+  /*
   if (Op0.getValueType ().isFloatingPoint ())
     {
+      switch (CC)
+	{
+	case ISD::SETEQ:
+	case ISD::SETGT:
+	  return (Op);
+	}
+
       // TODO: Quick hack to see if it catches floating point comparisons
       SDValue NewCond;
       NewCond = DAG.getSetCC (DL, Op.getValueType (),
-			      Op0, Op1, ISD::SETOGT);
+			      Op0, Op1, ISD::SETOLT);
       return (NewCond);
     }
-
+  */
+    
   return (Op);
 }
 
@@ -335,8 +352,18 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 
     if (Cond.getOperand(0).getValueType().isFloatingPoint())
       {
+	CondCodeSDNode *CCNode = cast<CondCodeSDNode>(Cond.getOperand(2));
+	ISD::CondCode invCC = getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ());
+	ISD::CondCode origCC = CCNode->get ();
+
+	NewCond = DAG.getSetCC (DL, Cond.getValueType (),
+				Cond.getOperand(0),
+				Cond.getOperand(1),
+				invCC);
+	/*
 	// TODO: Just some code to make llc run through CC.ll
 	NewCond = Cond;
+	*/
       }
     else
       {
@@ -393,7 +420,7 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 	    break;
 	  }
 	
-	NewCond = DAG.getSetCC (DL, Cond.getOperand(0).getValueType (),
+	NewCond = DAG.getSetCC (DL, Cond.getValueType (),
 				Cond.getOperand(0),
 				Cond.getOperand(1),
 				invCC);
@@ -481,6 +508,9 @@ SDValue T8xxTargetLowering::LowerConstantPool(SDValue Op, SelectionDAG& DAG) con
   Result = DAG.getTargetConstantPool(CP->getConstVal(), CP->getValueType(0),
 				     CP->getAlign(), CP->getOffset(), T8xxMCExpr::VK_T8xx_GLOBAL);
 
+  EVT VT = Op.getValueType();
+  Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
+  
   return Result;
 }
 
@@ -541,7 +571,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   // Areg != 0 -> Areg' = Breg
   //              Breg' = Creg
   //              Creg' = undefined
-  //              Iptr' = ByteIndex
+  //              Iptr' = NextInst
 
   // Create the conditional branch instruction.
   BuildMI(MBB, DL, TII->get(T8xx::CJ)).addReg(MI.getOperand(1).getReg()).addMBB(SinkMBB);
@@ -607,6 +637,119 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
 }
 
 
+
+
+// This function creates nodes to replicate a select function
+// in the DAG
+
+MachineBasicBlock *
+T8xxTargetLowering::EmitLoweredFPSetCC(MachineInstr &MI,
+				       MachineBasicBlock *MBB) const {
+  const TargetInstrInfo *TII = Subtarget->getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+
+  printf ("EmitLoweredFPSetCC\n");
+  MI.dump ();
+
+  // To "insert" a SELECT_CC instruction, we actually have to insert the
+  // diamond control-flow pattern.  The incoming instruction knows the
+  // destination vreg to set, the condition code register to branch on, the
+  // true/false values to select between, and a branch opcode to use.
+  const BasicBlock *BB = MBB->getBasicBlock();
+  MachineFunction::iterator It = ++MBB->getIterator();
+
+  //  ThisMBB:
+  //  ...
+  //   TrueVal = ...
+  //   cmp ccX, r1, r2
+  //   bcc Copy1MBB
+  //   fallthrough --> Copy0MBB
+  MachineBasicBlock *ThisMBB = MBB;
+  MachineFunction *F = MBB->getParent();
+
+  MachineBasicBlock *Copy0MBB = F->CreateMachineBasicBlock(BB);
+  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(BB);
+  F->insert(It, Copy0MBB);
+  F->insert(It, SinkMBB);
+
+  // Set the call frame size on entry to the new basic blocks.
+  unsigned CallFrameSize = TII->getCallFrameSizeAt(MI);
+  Copy0MBB->setCallFrameSize(CallFrameSize);
+  SinkMBB->setCallFrameSize(CallFrameSize);
+
+  // Transfer the remainder of MBB and its successor edges to SinkMBB.
+  // SinkMBB = bb.2
+  SinkMBB->splice(SinkMBB->begin(), MBB,
+                  std::next(MachineBasicBlock::iterator(MI)), MBB->end());
+  SinkMBB->transferSuccessorsAndUpdatePHIs(MBB);
+
+  MBB->addSuccessor(Copy0MBB);
+  MBB->addSuccessor(SinkMBB);
+
+  // Note:
+  // cj, conditional jump
+  // Areg = 0  -> Areg' = Areg
+  //              Breg' = Breg
+  //              Creg' = Creg
+  //              Iptr' = ByteIndex NextInst Oreg0
+  // Areg != 0 -> Areg' = Breg
+  //              Breg' = Creg
+  //              Creg' = undefined
+  //              Iptr' = NextInst
+
+  // Create the conditional branch instruction.
+  MachineRegisterInfo &MRI = F->getRegInfo();
+  // In Thumb mode S must not be specified if source register is the SP or
+  // PC and if destination register is the SP, so restrict register class
+  Register IsOrderedReg = MRI.createVirtualRegister(&T8xx::ORegRegClass);
+  Register Op1Reg = MRI.cloneVirtualRegister(MI.getOperand(1).getReg());
+  Register Op2Reg = MRI.cloneVirtualRegister(MI.getOperand(2).getReg());
+
+  BuildMI(MBB, DL, TII->get(T8xx::FPORDEREDSN),IsOrderedReg)
+    .addDef(Op1Reg)
+    .addDef(Op2Reg)
+    .addReg(MI.getOperand(1).getReg())
+    .addReg(MI.getOperand(2).getReg());
+  BuildMI(MBB, DL, TII->get(T8xx::CJ)).addReg(IsOrderedReg).addMBB(SinkMBB);
+  
+  //  Copy0MBB:
+  //   %FalseValue = ...
+  //   # fallthrough to SinkMBB
+  Copy0MBB->addSuccessor(SinkMBB);
+
+  // At this place, it has been established, that the FP registers are ordered!
+  Register CondReg = MRI.createVirtualRegister(&T8xx::ORegRegClass);
+  BuildMI(Copy0MBB, DL, TII->get(T8xx::FPGTSN),CondReg)
+    .addReg(Op1Reg)
+    .addReg(Op2Reg);
+  
+  //  SinkMBB:
+  //   %Result = phi [ %FalseValue, Copy0MBB ], [ %TrueValue, ThisMBB ]
+  //  ...
+  MachineBasicBlock::iterator MIItBegin = MachineBasicBlock::iterator(MI);
+  MachineBasicBlock::iterator MIItEnd =
+      std::next(MachineBasicBlock::iterator(MI));
+  MachineBasicBlock::iterator SinkInsertionPoint = SinkMBB->begin();
+
+  Register DestReg = MI.getOperand(0).getReg();
+  MachineInstrBuilder MIB;
+  
+  MIB =
+    BuildMI(*SinkMBB, SinkInsertionPoint, DL, TII->get(T8xx::PHI), DestReg)
+    .addReg(CondReg)
+    .addMBB(Copy0MBB)
+    .addReg(IsOrderedReg)
+    .addMBB(ThisMBB);
+  
+  // Now remove the pseudo code instruction
+  for (MachineBasicBlock::iterator MIIt = MIItBegin; MIIt != MIItEnd;)
+    (MIIt++)->eraseFromParent();
+
+  return SinkMBB;
+}
+
+
+
 MachineBasicBlock *
 T8xxTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
 						MachineBasicBlock *MBB) const
@@ -614,13 +757,11 @@ T8xxTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   switch (MI.getOpcode()) {
   default:
     llvm_unreachable("Unexpected instr type to insert");
-  case T8xx::CMOV32:  //TODO: Need an pseudo instruction definition in the target description
+  case T8xx::CMOV32:
     return EmitLoweredSelect(MI, MBB);
   }
 
 }
-
-
 
 
 

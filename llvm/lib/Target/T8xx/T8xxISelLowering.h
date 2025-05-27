@@ -35,7 +35,8 @@ namespace llvm {
     BRNCOND,
     LDIFF,
     REV,
-    JOIN
+    JOIN,
+    FP_SETCC
   };
   }
 
@@ -97,6 +98,9 @@ namespace llvm {
     SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
 
     MachineBasicBlock *EmitLoweredSelect(MachineInstr &I,
+					 MachineBasicBlock *MBB) const;
+    
+    MachineBasicBlock *EmitLoweredFPSetCC(MachineInstr &I,
 					 MachineBasicBlock *MBB) const;
     
     // Inline assembly

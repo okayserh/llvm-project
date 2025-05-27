@@ -458,6 +458,87 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
+    // Floating point comparisons
+  case T8xx::FPOGTSN:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::CJ)).addReg(T8xx::AREG).addImm(2);
+      BuildMI (MBB, MI, DL, get(T8xx::FPGTSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+  case T8xx::FPOGTDB:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDDB), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::CJ)).addReg(T8xx::AREG).addImm(2);
+      BuildMI (MBB, MI, DL, get(T8xx::FPGTDB), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+
+  case T8xx::FPOLESN:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::CJ)).addReg(T8xx::AREG).addImm(3);
+      BuildMI (MBB, MI, DL, get(T8xx::FPGTSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+  case T8xx::FPOLEDB:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDDB), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::CJ)).addReg(T8xx::AREG).addImm(3);
+      BuildMI (MBB, MI, DL, get(T8xx::FPGTDB), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+
+  case T8xx::FPOEQSN:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::CJ)).addReg(T8xx::AREG).addImm(2);
+      BuildMI (MBB, MI, DL, get(T8xx::FPEQSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+  case T8xx::FPOEQDB:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDDB), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::CJ)).addReg(T8xx::AREG).addImm(2);
+      BuildMI (MBB, MI, DL, get(T8xx::FPEQDB), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+   
+  case T8xx::FPONESN:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::CJ)).addReg(T8xx::AREG).addImm(3);
+      BuildMI (MBB, MI, DL, get(T8xx::FPEQSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+  case T8xx::FPONEDB:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDDB), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::CJ)).addReg(T8xx::AREG).addImm(3);
+      BuildMI (MBB, MI, DL, get(T8xx::FPEQDB), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
+      BuildMI (MBB, MI, DL, get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+   
   case T8xx::CALL:
     {
       for (unsigned int i = 0; i < MI.getNumOperands (); ++i)

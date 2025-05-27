@@ -614,6 +614,9 @@ def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
 
 def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC $addr)]>;
 
+// TODO: Test for constant pool
+def : Pattern<(i32 (load_sym tconstpool:$addr)),  [(LDC $addr)]>;
+
 //===----------------------------------------------------------------------===//
 // Branch Instructions
 //===----------------------------------------------------------------------===//
