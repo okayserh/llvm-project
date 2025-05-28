@@ -134,7 +134,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   int Offset = 0;
   if (FI < 0)
     // FI < 0   -> fixed stack objects (i.e. call parameters)
-    Offset = MFI.getStackSize () - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm() ;
+    Offset = MFI.getStackSize () + MFI.getObjectOffset(FI) + ImmOp.getImm();
   else
     // FI >= 0  -> stack frame objects (i.e. function variables and temporary stack objects)
     Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
@@ -161,7 +161,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 	.addReg(T8xx::WPTR)
 	.addImm(WPtrOffset / 4);
 
-      Offset = fixed_obj_size - (MFI.getObjectOffset(FI) + 4) + ImmOp.getImm();
+      Offset = MFI.getObjectOffset(FI);
 
       // LDLP -> TODO
       if (MI.getOpcode() == T8xx::LDLP)

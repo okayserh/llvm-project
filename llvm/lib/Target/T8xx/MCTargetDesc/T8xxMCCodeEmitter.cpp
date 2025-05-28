@@ -244,8 +244,6 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
                      SmallVectorImpl<MCFixup> &Fixups,
                      const MCSubtargetInfo &STI) const {
   const MCOperand &MO = MI.getOperand(OpNo);
-  const MCExpr *Expr = MO.getExpr();
-  const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr);
 
   printf ("FIXUP: getCallTargetOpValue\n");
 
@@ -256,6 +254,8 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
   // just some bitshifting happens (in case of the AVR microcontroller).
 
   if (MO.isExpr()) {
+    const MCExpr *Expr = MO.getExpr();
+    const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr);
     printf ("FIXUP: Expression\n");
     Fixups.push_back(
 		     MCFixup::create(0, MO.getExpr(), MCFixupKind(T8xx::fixup_t8xx_jump), MI.getLoc()));
@@ -265,8 +265,13 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
   assert(MO.isImm());
   printf ("No FIXUP: Immediate\n");
 
+  if (MO.isImm())
+    return MO.getImm();
+
+  /* TODO: Unclear what this was supposed to do.
   MCFixupKind Kind = MCFixupKind(SExpr->getFixupKind());
   Fixups.push_back(MCFixup::create(0, Expr, Kind));
+  */
   return 0;
 }
 

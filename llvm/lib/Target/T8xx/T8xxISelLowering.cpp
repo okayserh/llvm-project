@@ -852,7 +852,9 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     if (Arg.getValueType ().isFloatingPoint ())
       {
 	// The conversion of a byte offset to an index is carried out later in expandPostRAPPseude
-	SDValue Off = DAG.getSignedConstant(-4 -VA.getLocMemOffset(), Loc,
+	int WPtrOff = (-NumBytes);
+	WPtrOff += VA.getLocMemOffset();
+	SDValue Off = DAG.getSignedConstant(WPtrOff, Loc,
 					    getPointerTy(DAG.getDataLayout()));
 
 	SDValue StackPtr = DAG.getRegister(T8xx::WPTR, MVT::i32);
@@ -862,7 +864,9 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       }
     else
       {
-	SDValue Off = DAG.getSignedConstant(-1 - (VA.getLocMemOffset() / 4), Loc,
+	int WPtrOff = (-NumBytes);
+	WPtrOff += VA.getLocMemOffset();
+	SDValue Off = DAG.getSignedConstant(WPtrOff / 4, Loc,
 					getPointerTy(DAG.getDataLayout()));
 
 	SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
