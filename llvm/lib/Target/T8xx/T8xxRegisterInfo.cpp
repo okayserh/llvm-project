@@ -104,7 +104,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineOperand &ImmOp = MI.getOperand(ImmOpIdx);
 
   // Get the size of parameters on the stack
-  // TODO: Replace the hardcoded 4 with the properly obtained value
   unsigned fixed_obj_size = 0;
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
     fixed_obj_size += alignTo (MFI.getObjectSize (i), TFL->getStackAlign ());
@@ -134,15 +133,14 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   int Offset = 0;
   if (FI < 0)
     // FI < 0   -> fixed stack objects (i.e. call parameters)
-    Offset = MFI.getStackSize () + MFI.getObjectOffset(FI) + ImmOp.getImm();
+    Offset = (MFI.getStackSize () - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
   else
     // FI >= 0  -> stack frame objects (i.e. function variables and temporary stack objects)
     Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
-  
+
   // Add offset for WPTR Loc 0 (used internally)
   // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
   Offset += MFI.getOffsetAdjustment ();
-  printf ("MFI.offsetAdjustment %li\n", MFI.getOffsetAdjustment ());
   
   printf ("eliminateFrameIndex  FI: %i Offset: %li Size: %li StackSize %li  ImmOp %li  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
 

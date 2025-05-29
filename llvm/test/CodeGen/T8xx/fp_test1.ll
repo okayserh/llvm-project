@@ -23,24 +23,26 @@ entry:
 ; CHECK-LABEL: fp_test1:
 ; CHECK: stl 0
 ; CHECK: ajw -8
-; CHECK: ldlp 6
-; CHECK: fpldnlsn
-; CHECK: ldlp 4
-; CHECK: fpstnlsn
-; CHECK: ldlp 4
-; CHECK: fpldnlsn
 ; CHECK: ldlp 7
-; CHECK: fpldnlmulsn
+; CHECK: fpldnlsn
 ; CHECK: ldlp 3
 ; CHECK: fpstnlsn
 ; CHECK: ldlp 3
+; CHECK: fpldnlsn
+; CHECK: ldlp 6
+; CHECK: fpldnlmulsn
+; CHECK: ldlp 4
+; CHECK: fpstnlsn
+; CHECK: ldlp 4
 ; CHECK: fpldnlsn
 ; CHECK: ldlp 1
 ; CHECK: fpstnlsn
-; CHECK: ldlp 4
-; CHECK: fpldnlsn
 ; CHECK: ldlp 3
 ; CHECK: fpldnlsn
+; CHECK: ldlp 4
+; CHECK: fpldnlsn
+; CHECK: fpordered
+; CHECK: cj 3
 ; CHECK: fpgt
 ; CHECK: eqc 0
 ; CHECK: j .LBB0_1

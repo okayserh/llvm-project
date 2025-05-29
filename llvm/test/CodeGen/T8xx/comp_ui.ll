@@ -25,14 +25,15 @@ if.end:                                           ; preds = %if.then, %entry
 ; CHECK: ajw -4
 ; CHECK: ldc 0
 ; CHECK: stl 1
-; CHECK: ldl 2
 ; CHECK: ldl 3
+; CHECK: ldl 2
 ; CHECK: diff
 ; CHECK: eqc 0
 ; CHECK: cj .LBB0_2
 ; CHECK: ldc 1
 ; CHECK: stl 1
 ; CHECK-LABEL: .LBB0_2:
+; CHECK: ldl 1
 ; CHECK: ajw 4
 ; CHECK: ldl 0
 ; CHECK: gcall
@@ -61,22 +62,20 @@ if.end:                                           ; preds = %if.then, %entry
   ret i32 %2
 ; CHECK-LABEL: test_ge:
 ; CHECK: stl 0
-; CHECK: ajw -5
-; CHECK: ldc 1
-; CHECK: stl 2
+; CHECK: ajw -4
 ; CHECK: ldc 0
 ; CHECK: stl 1
-; CHECK: ldl 2
+; CHECK: ldc 1
 ; CHECK: ldl 3
-; CHECK: ldl 4
+; CHECK: ldl 2
 ; CHECK: ldiff
 ; CHECK: rev
 ; CHECK: cj .LBB1_2
-; CHECK: ldl 2
+; CHECK: ldc 1
 ; CHECK: stl 1
 ; CHECK-LABEL: .LBB1_2:
 ; CHECK: ldl 1
-; CHECK: ajw 5
+; CHECK: ajw 4
 ; CHECK: ldl 0
 ; CHECK: gcall
 }
@@ -105,23 +104,21 @@ if.end:                                           ; preds = %if.then, %entry
 
 ; CHECK-LABEL: test_gt:
 ; CHECK: stl 0
-; CHECK: ajw -5
-; CHECK: ldc 1
-; CHECK: stl 2
+; CHECK: ajw -4
 ; CHECK: ldc 0
 ; CHECK: stl 1
+; CHECK: ldc 1
 ; CHECK: ldl 2
-; CHECK: ldl 4
 ; CHECK: ldl 3
 ; CHECK: ldiff
 ; CHECK: rev
 ; CHECK: eqc 0
 ; CHECK: cj .LBB2_2
-; CHECK: ldl 2
+; CHECK: ldc 1
 ; CHECK: stl 1
 ; CHECK-LABEL: .LBB2_2:
 ; CHECK: ldl 1
-; CHECK: ajw 5
+; CHECK: ajw 4
 ; CHECK: ldl 0
 ; CHECK: gcall
 }
@@ -150,22 +147,20 @@ if.end:                                           ; preds = %if.then, %entry
 
 ; CHECK-LABEL: test_le:
 ; CHECK: stl 0
-; CHECK: ajw -5
-; CHECK: ldc 1
-; CHECK: stl 2
+; CHECK: ajw -4
 ; CHECK: ldc 0
 ; CHECK: stl 1
+; CHECK: ldc 1
 ; CHECK: ldl 2
-; CHECK: ldl 4
 ; CHECK: ldl 3
 ; CHECK: ldiff
 ; CHECK: rev
 ; CHECK: cj .LBB3_2
-; CHECK: ldl 2
+; CHECK: ldc 1
 ; CHECK: stl 1
 ; CHECK-LABEL: .LBB3_2:
 ; CHECK: ldl 1
-; CHECK: ajw 5
+; CHECK: ajw 4
 ; CHECK: ldl 0
 ; CHECK: gcall
 }
@@ -194,23 +189,21 @@ if.end:                                           ; preds = %if.then, %entry
 
 ; CHECK-LABEL: test_lt:
 ; CHECK: stl 0
-; CHECK: ajw -5
-; CHECK: ldc 1
-; CHECK: stl 2
+; CHECK: ajw -4
 ; CHECK: ldc 0
 ; CHECK: stl 1
-; CHECK: ldl 2
+; CHECK: ldc 1
 ; CHECK: ldl 3
-; CHECK: ldl 4
+; CHECK: ldl 2
 ; CHECK: ldiff
 ; CHECK: rev
 ; CHECK: eqc 0
 ; CHECK: cj .LBB4_2
-; CHECK: ldl 2
+; CHECK: ldc 1
 ; CHECK: stl 1
 ; CHECK-LABEL: .LBB4_2:
 ; CHECK: ldl 1
-; CHECK: ajw 5
+; CHECK: ajw 4
 ; CHECK: ldl 0
 ; CHECK: gcall
 }

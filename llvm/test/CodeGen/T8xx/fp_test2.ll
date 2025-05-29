@@ -25,41 +25,43 @@ entry:
   ret i32 %5
 ; CHECK-LABEL: fp_test2:
 ; CHECK: stl 0
-; CHECK: ajw -2
+; CHECK: ajw -3
 ; CHECK: ldlp 0
-; CHECK: adc -44
+; CHECK: adc -48
 ; CHECK: ldc 7
 ; CHECK: not
 ; CHECK: and
 ; CHECK: gajw
 ; CHECK: stl 10
 ; CHECK: ldl 10
+; CHECK: adc 4
 ; CHECK: fpldnldb
-; CHECK: ldlp 7
+; CHECK: ldlp 6
 ; CHECK: fpstnldb
 ; CHECK: ldl 10
-; CHECK: adc 4
 ; CHECK: fpldnlsn
 ; CHECK: fpur32tor64
-; CHECK: ldlp 7
+; CHECK: ldlp 6
 ; CHECK: fpldnldb
 ; CHECK: fpmul
 ; CHECK: fpur64tor32
-; CHECK: ldlp 6 
+; CHECK: ldlp 8 
 ; CHECK: fpstnlsn
-; CHECK: ldlp 7
+; CHECK: ldlp 6
 ; CHECK: fpldnldb
 ; CHECK: ldlp 2
 ; CHECK: fpstnldb
-; CHECK: ldlp 6
+; CHECK: ldlp 8
 ; CHECK: fpldnlsn
 ; CHECK: ldlp 4
 ; CHECK: fpstnlsn
-; CHECK: ldlp 7
-; CHECK: fpldnldb
 ; CHECK: ldlp 6
+; CHECK: fpldnldb
+; CHECK: ldlp 8
 ; CHECK: fpldnlsn
 ; CHECK: fpur32tor64
+; CHECK: fpordered
+; CHECK: cj 3
 ; CHECK: fpgt
 ; CHECK: eqc 0
 ; CHECK: j .LBB0_1
@@ -75,7 +77,7 @@ entry:
 ; CHECK: ldl 10
 ; CHECK: gajw
 ; CHECK: rev
-; CHECK: ajw 2
+; CHECK: ajw 3
 ; CHECK: ldl 0
 ; CHECK: gcall
 }

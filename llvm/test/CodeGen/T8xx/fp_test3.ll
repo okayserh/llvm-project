@@ -16,13 +16,13 @@ entry:
 ; CHECK-LABEL: fp_test3:
 ; CHECK: stl 0
 ; CHECK: ajw -5
-; CHECK: ldlp 3
+; CHECK: ldlp 4
 ; CHECK: fpldnlsn
 ; CHECK: ldlp 2
 ; CHECK: fpstnlsn
 ; CHECK: ldlp 2
 ; CHECK: fpldnlsn
-; CHECK: ldlp 4
+; CHECK: ldlp 3
 ; CHECK: fpldnlmulsn
 ; CHECK: ldlp 2
 ; CHECK: fpldnlsn

@@ -31,28 +31,28 @@ define dso_local i32 @test21a(i32 noundef %0, i32 noundef %1, i32 noundef %2, i3
 ; CHECK-LABEL: test21a:
 ; CHECK: stl 0
 ; CHECK: ajw -12
-; CHECK: ldl 11
-; CHECK: stl 7
-; CHECK: ldl 7
-; CHECK: ldl 10
-; CHECK: mul
-; CHECK: stl 6
-; CHECK: ldl 6
-; CHECK: stl 1
-; CHECK: ldl 6
+; CHECK: ldl 8
+; CHECK: stl 4
+; CHECK: ldl 4
 ; CHECK: ldl 9
 ; CHECK: mul
 ; CHECK: stl 5
 ; CHECK: ldl 5
-; CHECK: stl 2
+; CHECK: stl 1
 ; CHECK: ldl 5
-; CHECK: ldl 8
+; CHECK: ldl 10
 ; CHECK: mul
-; CHECK: stl 4
-; CHECK: ldl 4
-; CHECK: stl 3
-; CHECK: ldl 4
+; CHECK: stl 6
+; CHECK: ldl 6
+; CHECK: stl 2
+; CHECK: ldl 6
+; CHECK: ldl 11
+; CHECK: mul
+; CHECK: stl 7
 ; CHECK: ldl 7
+; CHECK: stl 3
+; CHECK: ldl 7
+; CHECK: ldl 4
 ; CHECK: mul
 ; CHECK: ajw 12
 ; CHECK: ldl 0
@@ -78,22 +78,22 @@ define dso_local i32 @test21b(i32 noundef %0) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -5
 ; CHECK: ldl 4
-; CHECK: stl 3
-; CHECK: ldl 3
-; CHECK: stl 4294967292
-; CHECK: ldl 3
-; CHECK: stl 4294967293
-; CHECK: ldl 3
-; CHECK: stl 4294967294
-; CHECK: ldl 3
+; CHECK: stl 2
+; CHECK: ldl 2
 ; CHECK: stl 4294967295
+; CHECK: ldl 2
+; CHECK: stl 4294967294
+; CHECK: ldl 2
+; CHECK: stl 4294967293
+; CHECK: ldl 2
+; CHECK: stl 4294967292
 ; CHECK: ldc test21a
 ; CHECK: gcall
 ; CHECK: rev
-; CHECK: stl 2
-; CHECK: ldl 2
+; CHECK: stl 3
+; CHECK: ldl 3
 ; CHECK: stl 1
-; CHECK: ldl 2
+; CHECK: ldl 3
 ; CHECK: ldc 5
 ; CHECK: mul
 ; CHECK: ajw 5

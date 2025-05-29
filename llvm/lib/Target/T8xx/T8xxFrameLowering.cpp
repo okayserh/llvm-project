@@ -31,11 +31,11 @@ using namespace llvm;
 
 // Current stack implementation at T8xx
 // |                                  |  Higher address
-// |----------------------------------|  
+// |----------------------------------|
 // |                                  |
 // | IPtr when function was called    |  WPtr+0 (WPtr at function entry and exit)
 // |                                  |
-// |----------------------------------|  
+// |----------------------------------|
 // |                                  |
 // | arguments passed on the stack    |
 // |                                  |  WPtr+n+1
@@ -69,7 +69,6 @@ DisableLeafProc("disable-t8xx-leaf-proc",
                 cl::Hidden);
 
 T8xxFrameLowering::T8xxFrameLowering(const T8xxSubtarget &ST)
-//  : TargetFrameLowering(TargetFrameLowering::StackGrowsDown,  // StackDir
   : TargetFrameLowering(TargetFrameLowering::StackGrowsUp,  // StackDir
 			Align(4),  // StackAlignment
 			0,      // LocalAreaOffset
@@ -104,7 +103,7 @@ void T8xxFrameLowering::spillFPBP(MachineFunction &MF) const
 {
   MachineFrameInfo &MFI = MF.getFrameInfo();
   T8xxMachineFunctionInfo *TMFI = MF.getInfo<T8xxMachineFunctionInfo> ();
-  
+
   if (MFI.shouldRealignStack ())
     TMFI->setWPtrSlot (MFI.CreateSpillStackObject (4, Align(4)));
 }
@@ -113,28 +112,28 @@ void T8xxFrameLowering::spillFPBP(MachineFunction &MF) const
 void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
   printf ("emitPrologue\n");
-  
+
   MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
-  
+
   // Debugging output. Print current frame info
   MFI.dump (MF);
 
   // Dynamic stack realignment
   Align MaxAlign = MFI.getMaxAlign();
-  
+
   printf ("Requested Alignment %li\n", MaxAlign.value ());
 
   // Compute the stack size, to determine if we need a prologue at all.
-  uint64_t FixedStackSize = computeParameterSize (MF);  
+  uint64_t FixedStackSize = computeParameterSize (MF);
   uint64_t StackSize = MFI.getStackSize ();
   uint64_t OffsetAdj = MaxAlign.value ();
 
   printf ("Fixed Stack %li   Stack %li   OffsetAdj %li\n", FixedStackSize, StackSize, OffsetAdj);
-  
+
   if ((FixedStackSize + StackSize) == 0) {
     return;
   }
@@ -149,9 +148,9 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   // TODO: The current approach is rather wasteful with stack space.
   // Maybe the required stack slot 0 can be already included in the
   // calculation of the aligned workspace pointer?
-  
+
   MFI.setOffsetAdjustment (MaxAlign.value ());
-  
+
   // Adjust the stack pointer.
 
   // Save the return address on old stack position 0
@@ -239,7 +238,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   DebugLoc dl = MBBI->getDebugLoc();
   T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
 
-  uint64_t FixedStackSize = computeParameterSize (MF);  
+  uint64_t FixedStackSize = computeParameterSize (MF);
   uint64_t StackSize = MFI.getStackSize ();
   uint64_t OffsetAdj = MFI.getOffsetAdjustment ();
 
@@ -249,9 +248,9 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 
   // The backend has to take care that the requested alignment is met
   // https://groups.google.com/g/llvm-dev/c/U3r-kxd1Loc?pli=1
-  
+
   // Dynamic stack realignment
-  Align MaxAlign = MFI.getMaxAlign();  
+  Align MaxAlign = MFI.getMaxAlign();
   printf ("Requested Alignment %li\n", MaxAlign.value ());
 
   // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
@@ -273,7 +272,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::REV), T8xx::AREG)
 	.addReg(T8xx::ABREG)
         .setMIFlag(MachineInstr::FrameSetup);
-      
+
       // Finally adjust by parameter space
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
 	.addImm(FixedStackSize / 4)
@@ -287,7 +286,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 	.addImm((StackSize + OffsetAdj) / 4)
         .setMIFlag(MachineInstr::FrameSetup);
     }
-      
+
   printf ("emitEpilogue End\n");
 }
 

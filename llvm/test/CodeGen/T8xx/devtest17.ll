@@ -35,39 +35,33 @@ define dso_local i32 @test17(i16 noundef signext %0) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -1
 ; CHECK: ldlp 0
-; CHECK: adc -96
+; CHECK: adc -84
 ; CHECK: ldc 15
 ; CHECK: not
 ; CHECK: and
 ; CHECK: gajw
-; CHECK: stl 20
-; CHECK: ldl 20
-; CHECK: ldnl 0
-; CHECK: stl 18
-; CHECK: ldlp 1
 ; CHECK: stl 17
-; CHECK: ldl 18
 ; CHECK: ldl 17
-; CHECK: sb
-; CHECK: ldc 8
-; CHECK: stl 16
-; CHECK: ldc 1
-; CHECK: stl 15
-; CHECK: ldl 17
-; CHECK: ldl 15
-; CHECK: or
+; CHECK: ldnl 0
+; CHECK: stl 13
+; CHECK: ldlp 1
 ; CHECK: stl 14
-; CHECK: ldl 18
-; CHECK: ldl 16
-; CHECK: shr
+; CHECK: ldl 13
 ; CHECK: ldl 14
 ; CHECK: sb
-; CHECK: ldc 0
-; CHECK: stl 13
+; CHECK: ldl 14
+; CHECK: ldc 1
+; CHECK: or
+; CHECK: stl 15
 ; CHECK: ldl 13
+; CHECK: ldc 8
+; CHECK: shr
+; CHECK: ldl 15
+; CHECK: sb
+; CHECK: ldc 0
 ; CHECK-LABEL: .LBB0_1:
 ; CHECK: stl 12
-; CHECK: ldl 16
+; CHECK: ldc 8
 ; CHECK: ldl 12
 ; CHECK: gt
 ; CHECK: cj .LBB0_3
@@ -77,31 +71,30 @@ define dso_local i32 @test17(i16 noundef signext %0) #0 {
 ; CHECK: ldlp 4
 ; CHECK: rev
 ; CHECK: add
-; CHECK: stl 19
-; CHECK: ldl 19
+; CHECK: stl 16
 ; CHECK: ldc 44
-; CHECK: rev
+; CHECK: ldl 16
 ; CHECK: sb
-; CHECK: ldl 19
-; CHECK: ldl 15
+; CHECK: ldl 16
+; CHECK: ldc 1
 ; CHECK: or
-; CHECK: ldl 13
+; CHECK: ldc 0
 ; CHECK: rev
 ; CHECK: sb
 ; CHECK: ldl 12
 ; CHECK: adc 1
 ; CHECK: j .LBB0_1
 ; CHECK-LABEL: .LBB0_3:
-; CHECK: ldl 14
+; CHECK: ldl 15
 ; CHECK: lb
 ; CHECK: ldc 128
 ; CHECK: xword
-; CHECK: ldl 16
+; CHECK: ldc 8
 ; CHECK: shl
-; CHECK: ldl 17
+; CHECK: ldl 14
 ; CHECK: lb
 ; CHECK: or
-; CHECK: ldl 20
+; CHECK: ldl 17
 ; CHECK: gajw
 ; CHECK: rev
 ; CHECK: ajw 1

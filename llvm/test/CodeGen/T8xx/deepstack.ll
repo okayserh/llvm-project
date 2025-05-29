@@ -2,20 +2,20 @@
 
 define dso_local i32 @deepstack(i32 noundef %a, ptr noundef %b, i32 noundef %c) #0 {
 ; CHECK-LABEL: deepstack:
-; CHECK: ldl 9
-; CHECK: stl 5
 ; CHECK: ldl 7
+; CHECK: stl 2
+; CHECK: ldl 9
 ; CHECK: stl 4
 ; CHECK: ldl 8
 ; CHECK: stl 3
-; CHECK: ldl 5
+; CHECK: ldl 2
 ; CHECK: ldl 3
 ; CHECK: ldnl 0
 ; CHECK: add
 ; CHECK: ldl 4
 ; CHECK: add
 ; CHECK: stl 6
-; CHECK: ldl 5
+; CHECK: ldl 2
 ; CHECK: ldl 4
 ; CHECK: mul
 ; CHECK: ldc 2
@@ -23,7 +23,7 @@ define dso_local i32 @deepstack(i32 noundef %a, ptr noundef %b, i32 noundef %c) 
 ; CHECK: ldl 3
 ; CHECK: add
 ; CHECK: ldnl 0
-; CHECK: ldl 5
+; CHECK: ldl 2
 ; CHECK: mul
 ; CHECK: ldl 4
 ; CHECK: ldl 3
@@ -33,7 +33,7 @@ define dso_local i32 @deepstack(i32 noundef %a, ptr noundef %b, i32 noundef %c) 
 ; CHECK: add
 ; CHECK: ldl 6
 ; CHECK: div
-; CHECK: stl 2
+; CHECK: stl 5
 
 entry:
   %a.addr = alloca i32, align 4

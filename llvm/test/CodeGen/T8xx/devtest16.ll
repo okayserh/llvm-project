@@ -31,50 +31,46 @@ define dso_local i32 @test16(i32 noundef %0, i32 noundef %1) #0 {
   ret i32 %23
 ; CHECK-LABEL: test16:
 ; CHECK: stl 0
-; CHECK: ajw -11
-; CHECK: ldl 10
-; CHECK: stl 8
-; CHECK: ldc 16
-; CHECK: stl 7
-; CHECK: ldl 8
+; CHECK: ajw -9
+; CHECK: ldl 7
+; CHECK: stl 4
+; CHECK: ldl 4
 ; CHECK: ldc 17
 ; CHECK: shl
-; CHECK: ldl 7
+; CHECK: ldc 16
 ; CHECK: sra
-; CHECK: ldl 9 
+; CHECK: ldl 8
 ; CHECK: add
-; CHECK: stl 6
-; CHECK: ldlp 1
 ; CHECK: stl 5
-; CHECK: ldl 6
+; CHECK: ldlp 1
+; CHECK: stl 6
+; CHECK: ldl 5
 ; CHECK: ldc 8
 ; CHECK: shr
-; CHECK: ldl 5
+; CHECK: ldl 6
 ; CHECK: ldc 1
 ; CHECK: or
 ; CHECK: sb
-; CHECK: ldl 6
 ; CHECK: ldl 5
-; CHECK: sb
 ; CHECK: ldl 6
+; CHECK: sb
+; CHECK: ldl 5
 ; CHECK: ldlp 3
 ; CHECK: sb
-; CHECK: ldc 24
-; CHECK: stl 4
-; CHECK: ldl 6
-; CHECK: ldl 7
+; CHECK: ldl 5
+; CHECK: ldc 16
 ; CHECK: shl
-; CHECK: ldl 7
+; CHECK: ldc 16
 ; CHECK: sra
 ; CHECK: stl 2
-; CHECK: ldl 6
-; CHECK: ldl 4
+; CHECK: ldl 5
+; CHECK: ldc 24
 ; CHECK: shl
-; CHECK: ldl 4
+; CHECK: ldc 24
 ; CHECK: sra
-; CHECK: ldl 8
+; CHECK: ldl 4
 ; CHECK: mul
-; CHECK: ajw 11
+; CHECK: ajw 9
 ; CHECK: ldl 0
 ; CHECK: gcall
 }

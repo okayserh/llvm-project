@@ -6,8 +6,8 @@ define i32 @test1(i32 %a, i32 %b) {
 ; CHECK-LABEL: test1:
 ; CHECK: stl 0
 ; CHECK: ajw -3
-; CHECK: ldl 2
 ; CHECK: ldl 1
+; CHECK: ldl 2
 ; CHECK: add
 ; CHECK: ajw 3
 ; CHECK: ldl 0
