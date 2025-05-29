@@ -49,6 +49,12 @@ namespace llvm {
     //  DAG node.
     const char *getTargetNodeName(unsigned Opcode) const override;
 
+    /// ReplaceNodeResults - Replace the results of node with an illegal result
+    /// type with new values built out of custom code.
+    ///
+    void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue>&Results,
+                            SelectionDAG &DAG) const override;
+
     // TODO: Check if there are cases, where this might not be true
     virtual bool isIntDivCheap(EVT VT, AttributeList Attr) const override { return true; }
     

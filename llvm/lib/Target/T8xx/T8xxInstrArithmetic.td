@@ -337,22 +337,33 @@ def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUNE),
 
 
 // Tests for Nan, not finite and orderability
+// Note: Needs two FPReg, but does not "consume" them from FP-stack
+// To have this working with the stackifiction, assume the registers are consumed.
 def FPORDEREDSN :   T8InstOp8<0x92,
-			    (outs OReg:$ord, FPReg:$tst_out1, FPReg:$tst_out2),
-			    (ins FPReg:$tst_in1, FPReg:$tst_in2),  // Needs two FPReg, but does not "consume" them from FP-stack
-			    "fpordered", []>
+	    (outs OReg:$cc),
+	    (ins FPReg:$lhs, FPReg:$rhs),
+	    "fpordered",
+	    [(set i32:$cc,
+	      (i32 (setcc f32:$lhs, f32:$rhs, SETO)))]>
 {
 	 let DecoderNamespace = "FPSN";
 }
 
-
 def FPORDEREDDB :   T8InstOp8<0x92,
-			    (outs OReg:$ord, DFPReg:$tst_out1, DFPReg:$tst_out2),
-			    (ins DFPReg:$tst_in1, DFPReg:$tst_in2),  // Needs two FPReg, but does not "consume" them from FP-stack
-			    "fpordered", []>
+	    (outs OReg:$cc),
+	    (ins DFPReg:$lhs, DFPReg:$rhs),
+	    "fpordered",
+	    [(set i32:$cc,
+	      (i32 (setcc f64:$lhs, f64:$rhs, SETO)))]>
 {
 	 let DecoderNamespace = "FPDB";
 }
+
+// Check for unordered is just the inverse
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUO),
+           (EQC (FPORDEREDSN $lhs, $rhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUO),
+           (EQC (FPORDEREDDB $lhs, $rhs), 0)>;
 
 
 def FPNAN :       T8InstOp8<0x91,

@@ -134,18 +134,6 @@ def MxJoin : SDNode<"T8xxISD::JOIN", MxStackJoin>;
 // instruction selection into a branch sequence.
 //===----------------------------------------------------------------------===//
 
-/*
-let usesCustomInserter = 1, Uses = [CCR] in
-class MxCMove<MxType TYPE>
-    : MxPseudo<(outs TYPE.ROp:$dst), (ins TYPE.ROp:$t, TYPE.ROp:$f, i8imm:$cond),
-               [(set TYPE.VT:$dst,
-                     (TYPE.VT (MxCmov TYPE.VT:$t, TYPE.VT:$f, imm:$cond, CCR)))]>;
-
-def CMOV8d  : MxCMove<MxType8d>;
-def CMOV16d : MxCMove<MxType16d>;
-def CMOV32r : MxCMove<MxType32r>;
-*/
-
 
 def CMOV32 : T8Inst<(outs OReg:$dst),
     		    (ins OReg:$ccr, OReg:$t, OReg:$f),
@@ -157,11 +145,6 @@ def CMOV32 : T8Inst<(outs OReg:$dst),
     let isPseudo = 1;
   }
 
-
-// TODO: Create a regular pseudo T8xx instruction
-
-
-// Taken from LEG, matched by ComplexPattern ADDRri
 
 // The parameter MIOperandInfo defines the contribution for the
 // MIOperandInfo. It is a register and an immediate.
@@ -299,10 +282,6 @@ def MUL : T8BinaryOp8<0x53, "mul", mul>;
 def SHL : T8BinaryOp8<0x41, "shl", shl>;
 def SHR : T8BinaryOp8<0x40, "shr", srl>;
 
-// TODO: DIV and REM may need to have switched operands!!!
-// Transputer: BREG / AREG
-// LLVM:  OP1 / OP2
-
 def DIV : T8BinaryOp8<0x2C, "div", sdiv>;
 def REM : T8BinaryOp8<0x1F, "rem", srem>;
 
@@ -338,7 +317,6 @@ def LDL : T8InstImm<0x7,
 		"ldl $addr",
 		[(set i32:$val, (load ADDRri:$addr))]>;
 
-
 // Load i32 from global address
 def LDNL : T8InstImm<0x3,
 		(outs OReg:$val),
@@ -347,15 +325,6 @@ def LDNL : T8InstImm<0x3,
 		[(set i32:$val, (load ADDRrr:$addr))]>
 {
 }
-
-
-/*
-defm LDRzi8mem :  T8LoadMem<"ldl $addr \n\tlb \n", zextloadi8>;
-defm LDRzi16mem :  T8LoadMem<"ldl $addr \n\tldnl 0 \n\tldc #FFFF \n\tand \n", zextloadi16>;
-
-defm LDRsi8mem :  T8LoadMem<"ldl $addr \n\tlb \n\tldc #128 \n\txword \n", sextloadi8>;
-defm LDRsi16mem :  T8LoadMem<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
-*/
 
 // Load i8 from global address
 def LB : T8InstOp4<0x1,
@@ -418,14 +387,12 @@ def STNL : T8InstImm<0xE,
 		}
 
 // Store i8 to global address
-// Note: previously STRi8regop
 def SB : T8InstOp8<0x3B,
 		(outs),
        	 	(ins OReg:$val, MemSrc:$addr),
 		"sb",
 		[(truncstorei8 i32:$val, ADDRr:$addr)]> {
 		}
-
 
 /* Pattern to introduce an LEA in order to get the Framepointer
  into a operand register */

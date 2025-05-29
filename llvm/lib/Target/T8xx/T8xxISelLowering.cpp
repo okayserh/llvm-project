@@ -99,9 +99,6 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   
   computeRegisterProperties(Subtarget->getRegisterInfo());
 
-  // Was used in LEG architecture. Unclear what it does ...
-  //  setSchedulingPreference (Sched::Source);
-
   for (auto VT : MVT::integer_valuetypes()) {
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
@@ -110,29 +107,17 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   // We don't accept any truncstore of integer registers.
   //  setTruncStoreAction(MVT::i32, MVT::i16, Custom);
-
-
   // setTruncStoreAction(MVT::i64, MVT::i16, Expand);
   //setTruncStoreAction(MVT::i64, MVT::i8, Expand);
 
-  // Temporary disabled
-  //setTruncStoreAction(MVT::i32, MVT::i8, Custom);
-
-  //  setTruncStoreAction(MVT::i16, MVT::i8, Expand);
-
-  //  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
+  setTruncStoreAction(MVT::i32, MVT::i8, Legal);
 
   setMinFunctionAlignment(Align(4));
 
   // TODO: Test ...
   if (Subtarget->useFPU ())
     {
-      /*
-      setOperationAction(ISD::FMUL, MVT::f32, Custom);
-      setOperationAction(ISD::FMUL, MVT::f64, Custom);
-      */
-      
-      // ARM does not have floating-point extending loads.
+      // Transputer does not have floating-point extending loads.
       for (MVT VT : MVT::fp_valuetypes()) {
 	setLoadExtAction(ISD::EXTLOAD, VT, MVT::f32, Expand);
 	setLoadExtAction(ISD::EXTLOAD, VT, MVT::f16, Expand);
@@ -151,12 +136,6 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
       setOperationAction(ISD::BR_CC, MVT::f32, Expand);
       setOperationAction(ISD::BR_CC, MVT::f64, Expand);
-
-      // Seems to be required, but does not work, yet
-      /*
-      setOperationAction(ISD::ConstantPool, MVT::f32, Custom);
-      setOperationAction(ISD::ConstantPool, MVT::f64, Custom);
-      */
     }
   
   // Nodes that require custom lowering
@@ -171,8 +150,14 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BR_CC, MVT::i16, Expand);
   setOperationAction(ISD::BR_CC, MVT::i32, Expand);
 
-  setOperationAction(ISD::SELECT, MVT::i8, Custom);
-  setOperationAction(ISD::SELECT, MVT::i16, Custom);
+  // Note, the Custom code only provides functionality
+  // for i32 values. For the other value types, use
+  // "Promote" to indicate that those types need
+  // to be promoted to i32.
+  // If not configured this way, the test PowerPC/testComparesieqsc.ll
+  // failed!
+  setOperationAction(ISD::SELECT, MVT::i8, Promote);
+  setOperationAction(ISD::SELECT, MVT::i16, Promote);
   setOperationAction(ISD::SELECT, MVT::i32, Custom);
 
   setOperationAction(ISD::SELECT_CC, MVT::i8, Expand);
@@ -220,6 +205,15 @@ bool T8xxTargetLowering::useSoftFloat() const {
   return Subtarget->useSoftFloat();
 }
 
+
+void T8xxTargetLowering::ReplaceNodeResults(SDNode *N,
+                                           SmallVectorImpl<SDValue>&Results,
+                                           SelectionDAG &DAG) const {
+  // TODO: See whether this needs to be implemented
+  N->dump ();
+  llvm_unreachable("ReplaceNodeResults not implemented for this target!");
+}
+    
 
 SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   printf ("### Lower Operation ### %i\n", Op.getOpcode ());
@@ -360,10 +354,6 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 				Cond.getOperand(0),
 				Cond.getOperand(1),
 				invCC);
-	/*
-	// TODO: Just some code to make llc run through CC.ll
-	NewCond = Cond;
-	*/
       }
     else
       {
