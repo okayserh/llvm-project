@@ -477,7 +477,7 @@ def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETGE),
            (EQC (GT $rhs, $lhs), 0)>;
 
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLE),
-           (EQC (DIFF $lhs, $rhs), 0)>;
+           (EQC (GT $lhs, $rhs), 0)>;
 
 def LDIFF :   T8InstOp8<0x4F,
     	      (outs LReg:$dst),

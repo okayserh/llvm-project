@@ -187,6 +187,15 @@ def FPINTDB :       T8InstOp8<0xA1,
 // Floating point comparisons
 // Since these comparisons don't check for NaN, they declare the
 // "Don't care operations".
+/*
+  SETEQ,     Real instruction
+  SETGT,     Real instruction
+  SETGE,     Pattern (A >= B  ->   ! B > A)
+  SETLT,     Pattern (A < B   ->     B > A)
+  SETLE,     Pattern (A <= B  ->   ! A > B)  
+  SETNE,     Pattern (A != B  ->   ! A = B)
+*/
+
 def FPEQSN :      T8InstOp8<0x95,
     	 	  (outs OReg:$cc),
 		  (ins FPReg:$lhs, FPReg:$rhs),
@@ -226,6 +235,27 @@ def FPGTDB :      T8InstOp8<0x94,
 {
 	 let DecoderNamespace = "FPDB";
 }
+
+// Other "don't care" comparisons will be created by patterns
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETNE),
+           (EQC (FPEQSN $lhs, $rhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETNE),
+           (EQC (FPEQDB $lhs, $rhs), 0)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETGE),
+           (EQC (FPGTSN $rhs, $lhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETGE),
+           (EQC (FPGTDB $rhs, $lhs), 0)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETLT),
+           (FPGTSN $rhs, $lhs)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETLT),
+           (FPGTDB $rhs, $lhs)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETLE),
+           (EQC (FPGTSN $lhs, $rhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETLE),
+           (EQC (FPGTDB $lhs, $rhs), 0)>;
 
 
 // Pseudo instructions for comparisons
@@ -272,6 +302,40 @@ def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOGE),
 def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE),
            (FPOLEDB $rhs, $lhs)>;
 
+
+// Pattern fors the unordered variants. These are created from
+// the ordered variants by Morgans rule.
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUEQ),
+           (EQC (FPONESN $lhs, $rhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUEQ),
+           (EQC (FPONEDB $lhs, $rhs), 0)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUGT),
+           (EQC (FPOGTSN $rhs, $lhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUGT),
+           (EQC (FPOGTDB $rhs, $lhs), 0)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUGE),
+           (EQC (FPOGTSN $lhs, $rhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUGE),
+           (EQC (FPOGTDB $lhs, $rhs), 0)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETULT),
+           (EQC (FPOGTSN $lhs, $rhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETULT),
+           (EQC (FPOGTDB $lhs, $rhs), 0)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETULE),
+           (EQC (FPOGTSN $rhs, $lhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETULE),
+           (EQC (FPOGTDB $rhs, $lhs), 0)>;
+
+def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUNE),
+           (EQC (FPOEQSN $lhs, $rhs), 0)>;
+def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUNE),
+           (EQC (FPOEQDB $lhs, $rhs), 0)>;
+
+
 // Tests for Nan, not finite and orderability
 def FPORDEREDSN :   T8InstOp8<0x92,
 			    (outs OReg:$ord, FPReg:$tst_out1, FPReg:$tst_out2),
@@ -300,20 +364,6 @@ def FPNOTFINITE : T8InstOp8<0x93,
 			    (outs OReg:$inf, FPReg:$tst_out),
 			    (ins FPReg:$tst_in),  // Needs one FPReg, but does not "consume" it from FP-stack
 			    "fpnotfinite", []>;
-
-/* Other comparisons will be created by patterns */
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETONE),
-           (EQC (FPEQSN $rhs, $lhs), 0)>;
-
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETONE),
-           (EQC (FPEQDB $rhs, $lhs), 0)>;
-
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOGE),
-           (EQC (FPGTSN $rhs, $lhs), 0)>;
-
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE),
-           (EQC (FPGTDB $rhs, $lhs), 0)>;
-
 
 // Indexed Load/Store
 def FPLDNLDBI :  T8InstOp8<0x82, (outs), (ins),  "fpldnldbi", []>;
