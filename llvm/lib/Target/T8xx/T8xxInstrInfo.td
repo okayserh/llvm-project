@@ -584,6 +584,9 @@ def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC $addr)]>;
 // TODO: Test for constant pool
 def : Pattern<(i32 (load_sym tconstpool:$addr)),  [(LDC $addr)]>;
 
+def : Pattern<(i32 (load_sym tjumptable:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (load_sym tblockaddress:$addr)),  [(LDC $addr)]>;
+
 //===----------------------------------------------------------------------===//
 // Branch Instructions
 //===----------------------------------------------------------------------===//
@@ -616,6 +619,25 @@ def JUMP  : T8InstImm<0x0,
 		   let isBarrier = 1;
 		   }
 }
+
+
+
+// TODO: Test to figure out how the indirect branch works
+/*
+def BRIND  : T8Inst<(outs),
+		   (ins OReg:$target),
+                   "brind",
+                   [(brind i32:$target)]>
+{
+   let isTerminator = 1;
+   let isBranch = 1;
+   let isBarrier = 1;
+   let isCodeGenOnly = 1;
+   let isPseudo = 1;
+}
+*/
+def : Pat<(brind (i32 OReg:$target)),
+           (GCALL $target)>;
 
 
 //===----------------------------------------------------------------------===//

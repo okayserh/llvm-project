@@ -102,6 +102,8 @@ namespace llvm {
 
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerJumpTable(SDValue Op, SelectionDAG& DAG) const;
+    SDValue LowerBlockAddress(SDValue Op, SelectionDAG& DAG) const;
 
     MachineBasicBlock *EmitLoweredSelect(MachineInstr &I,
 					 MachineBasicBlock *MBB) const;

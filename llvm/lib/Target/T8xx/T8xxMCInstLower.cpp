@@ -48,6 +48,10 @@ static MCOperand LowerSymbolOperand(const MachineInstr *MI,
     Symbol = AP.GetBlockAddressSymbol(MO.getBlockAddress());
     break;
 
+  case MachineOperand::MO_JumpTableIndex:
+    Symbol = AP.GetJTISymbol(MO.getIndex());
+    break;
+
   case MachineOperand::MO_ExternalSymbol:
     Symbol = AP.GetExternalSymbolSymbol(MO.getSymbolName());
     break;
@@ -80,6 +84,7 @@ static MCOperand LowerOperand(const MachineInstr *MI,
   case MachineOperand::MO_MachineBasicBlock:
   case MachineOperand::MO_GlobalAddress:
   case MachineOperand::MO_BlockAddress:
+  case MachineOperand::MO_JumpTableIndex:
   case MachineOperand::MO_ExternalSymbol:
   case MachineOperand::MO_ConstantPoolIndex:
     return LowerSymbolOperand(MI, MO, AP);

@@ -142,13 +142,18 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
   // TODO: Test code to check what this does?
-  setOperationAction(ISD::ConstantPool, MVT::i32, Custom);
+  setOperationAction(ISD::BlockAddress,       MVT::i32,   Custom);
+  setOperationAction(ISD::GlobalTLSAddress,   MVT::i32,   Custom);
+  setOperationAction(ISD::JumpTable,          MVT::i32, Custom);
+  setOperationAction(ISD::ConstantPool,       MVT::i32, Custom);
 
   setOperationAction(ISD::BRCOND, MVT::Other, Custom);
 
   setOperationAction(ISD::BR_CC, MVT::i8, Expand);
   setOperationAction(ISD::BR_CC, MVT::i16, Expand);
   setOperationAction(ISD::BR_CC, MVT::i32, Expand);
+
+  setOperationAction(ISD::BR_JT, MVT::Other, Expand);
 
   // Note, the Custom code only provides functionality
   // for i32 values. For the other value types, use
@@ -237,53 +242,25 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     printf ("####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
 
+    //TODO: These four may need reevaluation
   case ISD::ConstantPool:
     printf ("####### Lower ConstantPool  #########\n");
     return LowerConstantPool(Op, DAG);
 
-    /*
-  case ISD::FMUL:
-    printf ("####### Lower FMUL  #########\n");
-    return LowerFMUL(Op, DAG);
-    */
+  case ISD::JumpTable:
+    printf ("####### Lower JumpTable  #########\n");
+    return LowerJumpTable(Op, DAG);
+
+  case ISD::BlockAddress:
+    printf ("####### Lower BlockAddress  #########\n");
+    return LowerBlockAddress(Op, DAG);
+
+  case ISD::GlobalTLSAddress:
+    printf ("####### Lower GlobalTLSAddress  #########\n");
+    return LowerGlobalAddress(Op, DAG);
+
   }
 }
-
-
-/*
-SDValue T8xxTargetLowering::LowerFMUL(SDValue Op, SelectionDAG &DAG) const
-{
-  // First test ...
-  SDValue Op0 = Op.getOperand(0);
-  SDValue Op1 = Op.getOperand(1);
-  SDLoc DL(Op);
-  //  SDValue Op2 = Op.getOperand(2);
-
-  // Create zero "extension" nodes
-
-  if (Op0.getOpcode () == ISD::FP_EXTEND)
-    {
-      printf ("LowerFMUL: FP_EXTEND\n");
-      SDValue Op0_F32 = Op.getOperand(0).getOperand(0);
-      
-      SDValue MUL = DAG.getNode(T8xxISD::DS_FMUL, DL, DAG.getVTList(MVT::f64),
-				Op0_F32, Op1);
-      return (MUL);
-    }
-  
-  if (Op1.getOpcode () == ISD::FP_EXTEND)
-    {
-      printf ("LowerFMUL: FP_EXTEND\n");
-      SDValue Op1_F32 = Op.getOperand(1).getOperand(0);
-
-      SDValue MUL = DAG.getNode(T8xxISD::DS_FMUL, DL, DAG.getVTList(MVT::f64),
-				Op1_F32, Op0);
-      return (MUL);
-    }
-
-  return (Op);
-}
-*/
 
 
 SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
@@ -497,6 +474,41 @@ SDValue T8xxTargetLowering::LowerConstantPool(SDValue Op, SelectionDAG& DAG) con
   // as code for a fixed address.
   Result = DAG.getTargetConstantPool(CP->getConstVal(), CP->getValueType(0),
 				     CP->getAlign(), CP->getOffset(), T8xxMCExpr::VK_T8xx_GLOBAL);
+
+  EVT VT = Op.getValueType();
+  Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
+  
+  return Result;
+}
+
+
+SDValue T8xxTargetLowering::LowerJumpTable(SDValue Op, SelectionDAG& DAG) const
+{
+  SDValue Result;
+  JumpTableSDNode *CP = cast<JumpTableSDNode>(Op.getNode());
+
+  // TODO: Just a first try to see how things work.
+  // Ideally a later version should be able to build position independent code as well
+  // as code for a fixed address.
+  Result = DAG.getTargetJumpTable(CP->getIndex(), CP->getValueType(0), T8xxMCExpr::VK_T8xx_GLOBAL);
+
+  EVT VT = Op.getValueType();
+  Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
+  
+  return Result;
+}
+
+
+SDValue T8xxTargetLowering::LowerBlockAddress(SDValue Op, SelectionDAG& DAG) const
+{
+  SDValue Result;
+  BlockAddressSDNode *CP = cast<BlockAddressSDNode>(Op.getNode());
+
+  // TODO: Just a first try to see how things work.
+  // Ideally a later version should be able to build position independent code as well
+  // as code for a fixed address.
+  Result = DAG.getTargetBlockAddress(CP->getBlockAddress(), CP->getValueType(0),
+				     CP->getOffset (), T8xxMCExpr::VK_T8xx_GLOBAL);
 
   EVT VT = Op.getValueType();
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
