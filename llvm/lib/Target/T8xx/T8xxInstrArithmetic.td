@@ -160,19 +160,48 @@ def FPUR32TOR64  : T8InstFPU4<0x7, (outs DFPReg:$dst), (ins FPReg:$src),
 // Conversion from int to f32 or f64
 def FPI32TOR32 :  T8InstOp8<0x96,
 			    (outs FPReg:$dst),
-			    (ins OReg:$src),
-			    "fpi32tor32", []>;
+			    (ins MemSrc:$addr),
+			    "fpi32tor32",
+			    [(set f32:$dst, (sint_to_fp (i32 (load ADDRr:$addr))))]>;
+
+def : Pat<(sint_to_fp (i32 (load ADDRri:$addr))),
+          (FPI32TOR32 (LDLP ADDRri:$addr) )>;
 
 def FPI32TOR64 :  T8InstOp8<0x98,
 		            (outs DFPReg:$dst),
-			    (ins OReg:$src),
-			    "fpi32tor64", []>;
+			    (ins MemSrc:$addr),
+			    "fpi32tor64",
+			    [(set f64:$dst, (sint_to_fp (i32 (load ADDRr:$addr))))]>;
+
+def : Pat<(sint_to_fp (i32 (load ADDRri:$addr))),
+          (FPI32TOR64 (LDLP ADDRri:$addr) )>;
+
+
+// Conversion from uint to f32 or f64
+def FPB32TOR64 :  T8InstOp8<0x9A,
+                            (outs DFPReg:$dst),
+			    (ins MemSrc:$addr),
+			    "fpb32tor64",
+			    [(set f64:$dst, (uint_to_fp (i32 (load ADDRr:$addr))))]>;
+
+def : Pat<(uint_to_fp (i32 (load ADDRri:$addr))),
+          (FPB32TOR64 (LDLP ADDRri:$addr) )>;
+
+// Conversions to f32 are not natively supported, add a fp conversion to f32
+def : Pat<(uint_to_fp (i32 (load ADDRr:$addr))),
+          (FPUR64TOR32 (FPB32TOR64 (ADDRr:$addr) ) )>;
+
+def : Pat<(uint_to_fp (i32 (load ADDRri:$addr))),
+          (FPUR64TOR32 (FPB32TOR64 (LDLP ADDRri:$addr) ) )>;
+
 
 // Round FAreg to integer according to current rounding mode
 // Result remains in floating point register!
+// "This rounds FAReg, wrt Round.Mode, to a floating point number of the
+// same format with an integer value.
 def FPINTSN :       T8InstOp8<0xA1,
 			   (outs FPReg:$dst),
-			   (ins FPReg:$src),
+			   (ins FPReg:$src, FPRMReg:$rm),
 			   "fpint", []>
 {
  let DecoderNamespace = "FPSN";
@@ -180,8 +209,49 @@ def FPINTSN :       T8InstOp8<0xA1,
 
 def FPINTDB :       T8InstOp8<0xA1,
 			   (outs DFPReg:$dst),
-			   (ins DFPReg:$src),
+			   (ins DFPReg:$src, FPRMReg:$rm),
 			   "fpint", []>;
+
+def FPSTNLI32 :   T8InstOp8<0x9E,
+			(outs),
+			(ins FPReg:$val, MemSrc:$addr),
+			"fpstnli32",
+			[(store (i32 (fp_to_sint f32:$val)), ADDRr:$addr)]>;
+
+// Pseudo instructions to provide code for the conversion from floating
+// point to integer. These are multi instruction sequences on the T8xx.
+def FPR32TOI32 :   T8Inst<(outs OReg:$dst),
+			(ins FPReg:$src),
+			"fpr32toi32",
+			[(set i32:$dst, (fp_to_sint f32:$src))]>
+{
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+}
+
+// The Inmos C compiler generates the same code to convert a
+// floating point number into an unsigned value.
+// Note: Was tested with an example and seems to work.
+def : Pat<(fp_to_uint (f32 FPReg:$src)),
+          (FPR32TOI32 $src)>;
+
+def FPR64TOI32 :   T8Inst<(outs OReg:$dst),
+			(ins DFPReg:$src),
+			"fpr64toi32",
+			[(set i32:$dst, (fp_to_sint f64:$src))]>
+{
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+}
+
+def : Pat<(fp_to_uint (f64 DFPReg:$src)),
+          (FPR64TOI32 $src)>;
+
+
+// "This rounds FAReg, wrt Round.Mode, to a floating point number of the
+// same format with an integer value ---and sets error if this lies outside
+// the INT32 range.---
+def FPRTOI32 :    T8InstOp8<0x9D, (outs), (ins),  "fprtoi32", []>;
 
 
 // Floating point comparisons
@@ -376,14 +446,17 @@ def FPNOTFINITE : T8InstOp8<0x93,
 			    (ins FPReg:$tst_in),  // Needs one FPReg, but does not "consume" it from FP-stack
 			    "fpnotfinite", []>;
 
+// Instructions to set the rounding mode. They modify the rounding mode register
+def FPURP :  	   T8InstFPU4<0x4, (outs FPRMReg:$rm), (ins), "fpurp", []>;
+def FPURM :  	   T8InstFPU4<0x5, (outs FPRMReg:$rm), (ins), "fpurm", []>;
+def FPURZ :  	   T8InstFPU4<0x6, (outs FPRMReg:$rm), (ins), "fpurz", []>;
+def FPURN :        T8InstFPU8<0x22, (outs FPRMReg:$rm), (ins), "fpurn", []>;
+
 // Indexed Load/Store
 def FPLDNLDBI :  T8InstOp8<0x82, (outs), (ins),  "fpldnldbi", []>;
 def FPLDNLSNI :  T8InstOp8<0x86, (outs), (ins),  "fpldnlsni", []>;
 
-def FPB32TOR64 :  T8InstOp8<0x9A, (outs), (ins),  "fpb32tor64", []>;
 def FPTESTERR :   T8InstOp8<0x9C, (outs), (ins),  "fptesterr", []>;
-def FPRTOI32 :    T8InstOp8<0x9D, (outs), (ins),  "fprtoi32", []>;
-def FPSTNLI32 :   T8InstOp8<0x9E, (outs), (ins),  "fpstnli32", []>;
 def FPLDZEROSN :  T8InstOp8<0x9F, (outs), (ins),  "fpldzerosn", []>;
 
 def FPLDZERODB :  T8InstOp8<0xA0, (outs), (ins),  "fpldzerodb", []>;
@@ -399,9 +472,7 @@ def FPREMSTEP :   T8InstOp8<0x90, (outs), (ins), "fpremstep", []>;
 def FPUSQRTFIRST : T8InstFPU4<0x1, (outs), (ins), "fpusqrtfirst", []>;
 def FPUSQRTSTEP :  T8InstFPU4<0x2, (outs), (ins), "fpusqrtstep", []>;
 def FPUSQRTLAST :  T8InstFPU4<0x3, (outs), (ins), "fpusqrtlast", []>;
-def FPURP :  	   T8InstFPU4<0x4, (outs), (ins), "fpurp", []>;
-def FPURM :  	   T8InstFPU4<0x5, (outs), (ins), "fpurm", []>;
-def FPURZ :  	   T8InstFPU4<0x6, (outs), (ins), "fpurz", []>;
+
 def FPUEXPDEC32 :  T8InstFPU4<0x9, (outs), (ins), "fpuexpdec32", []>;
 def FPUEXPINC32 :  T8InstFPU4<0xA, (outs), (ins), "fpuexpinc32", []>;
 def FPUABS :  	   T8InstFPU4<0xB, (outs), (ins), "fpuabs", []>;
@@ -412,7 +483,6 @@ def FPUCHKI64 :    T8InstFPU4<0xF, (outs), (ins), "fpuchki64", []>;
 
 def FPUDIVBY2 :    T8InstFPU8<0x11, (outs), (ins), "fpudivby2", []>;
 def FPUMULBY2 :    T8InstFPU8<0x12, (outs), (ins), "fpumulby2", []>;
-def FPURN :        T8InstFPU8<0x22, (outs), (ins), "fpurn", []>;
 
 def FPCHKERR :     T8InstOp8<0x83,  (outs), (ins), "fpchkerr", []>;
 def FPUSETERR :    T8InstFPU8<0x23, (outs), (ins), "fpuseterr", []>;

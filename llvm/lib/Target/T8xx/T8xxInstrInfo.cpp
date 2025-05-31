@@ -539,6 +539,22 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
    
+  case T8xx::FPR64TOI32:
+  case T8xx::FPR32TOI32:
+    {
+      // Note: Implementation uses WPtr + 0. This position should be kept free by
+      // regular instructions
+      BuildMI (MBB, MI, DL, get(T8xx::FPURZ), T8xx::FPRMREG);
+      BuildMI (MBB, MI, DL, get((MI.getOpcode() == T8xx::FPR32TOI32) ? T8xx::FPINTSN : T8xx::FPINTDB), T8xx::FAREG).
+	addReg(T8xx::FAREG).addReg(T8xx::FPRMREG);
+      BuildMI (MBB, MI, DL, get(T8xx::LDLP), T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
+      BuildMI (MBB, MI, DL, get(T8xx::FPSTNLI32)).addReg(T8xx::FAREG).addReg(T8xx::AREG);
+      BuildMI (MBB, MI, DL, get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+
   case T8xx::CALL:
     {
       for (unsigned int i = 0; i < MI.getNumOperands (); ++i)
