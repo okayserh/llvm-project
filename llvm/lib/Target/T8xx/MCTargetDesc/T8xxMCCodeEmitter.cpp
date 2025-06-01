@@ -101,11 +101,6 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
                                            SmallVectorImpl<MCFixup> &Fixups,
                                            const MCSubtargetInfo &STI) const {
   const MCInstrDesc &Desc = MCII.get(MI.getOpcode());
-  /*
-  uint64_t TSFlags = Desc.TSFlags;
-  if ((TSFlags & ARMII::FormMask) == ARMII::Pseudo)
-    return;
-  */
   
   int Size = Desc.getSize ();  
 
@@ -115,10 +110,11 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
   uint64_t Bits = getBinaryCodeForInstr(MI, Fixups, STI);
 
   // The required prefix instructions will be generated in this method. 
-  printf ("Encoding %u   Site %i\n", Bits, Size);
+  printf ("Encoding %u   Size %i\n", Bits, Size);
   
+  MI.dump ();
+
   // T8xx immediate functions
-  //  if ((Size == 1) && ((Bits & 0xF) == 0))
   if ((Size == 1) && ((Bits & 0xFF) < 0xF0))
     {
       for (auto MO = MI.begin (); MO != MI.end (); ++MO)
@@ -221,6 +217,11 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
     return MO.getImm();
 
   assert(MO.isExpr());
+
+  // Debug code
+  MI.dump ();
+  MO.dump ();
+
   const MCExpr *Expr = MO.getExpr();
   if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr)) {
     MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
@@ -236,7 +237,7 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
   return 0;
 }
 
-// Note: These method names are defines by setting the "EncoderMethod"
+// Note: These method names are defined by setting the "EncoderMethod"
 // (This one is linked to "brtarget", which is used by BRimm2 and Bcc)
 
 unsigned T8xxMCCodeEmitter::

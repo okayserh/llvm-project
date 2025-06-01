@@ -19,7 +19,7 @@
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
-  class AsmPrinter;
+  class T8xxAsmPrinter;
   class FunctionPass;
   class MCInst;
   class MachineInstr;
@@ -29,14 +29,12 @@ namespace llvm {
   FunctionPass *createT8xxISelDag(T8xxTargetMachine &TM);
 
   FunctionPass *createT8xxStackPass();
-  FunctionPass *createT8xxMoveConstPass();
   
   void LowerT8xxMachineInstrToMCInst(const MachineInstr *MI,
                                       MCInst &OutMI,
-                                      AsmPrinter &AP);
+                                      T8xxAsmPrinter &AP);
 
   void initializeT8xxStackPassPass(PassRegistry &);
-  void initializeT8xxMoveConstPassPass(PassRegistry &);
   void initializeT8xxDAGToDAGISelLegacyPass(PassRegistry &);
   
 } // end namespace llvm;

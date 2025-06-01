@@ -11,8 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "MCTargetDesc/T8xxMCExpr.h"
 #include "T8xx.h"
+#include "T8xxAsmPrinter.h"
+#include "MCTargetDesc/T8xxMCExpr.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -26,9 +27,7 @@
 using namespace llvm;
 
 
-static MCOperand LowerSymbolOperand(const MachineInstr *MI,
-                                    const MachineOperand &MO,
-                                    AsmPrinter &AP) {
+MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
 
   T8xxMCExpr::VariantKind Kind =
     (T8xxMCExpr::VariantKind)MO.getTargetFlags();
@@ -41,73 +40,94 @@ static MCOperand LowerSymbolOperand(const MachineInstr *MI,
     break;
 
   case MachineOperand::MO_GlobalAddress:
-    Symbol = AP.getSymbol(MO.getGlobal());
+    Symbol = getSymbol(MO.getGlobal());
     break;
 
   case MachineOperand::MO_BlockAddress:
-    Symbol = AP.GetBlockAddressSymbol(MO.getBlockAddress());
+    Symbol = GetBlockAddressSymbol(MO.getBlockAddress());
     break;
 
   case MachineOperand::MO_JumpTableIndex:
-    Symbol = AP.GetJTISymbol(MO.getIndex());
+    Symbol = GetJTISymbol(MO.getIndex());
     break;
 
   case MachineOperand::MO_ExternalSymbol:
-    Symbol = AP.GetExternalSymbolSymbol(MO.getSymbolName());
+    Symbol = GetExternalSymbolSymbol(MO.getSymbolName());
     break;
 
   case MachineOperand::MO_ConstantPoolIndex:
-    Symbol = AP.GetCPISymbol(MO.getIndex());
+    Symbol = GetCPISymbol(MO.getIndex());
     break;
   }
 
   const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol,
-                                                         AP.OutContext);
+                                                         OutContext);
+
   const T8xxMCExpr *expr = T8xxMCExpr::create(Kind, MCSym,
-                                                AP.OutContext);
+                                                OutContext);
+
   return MCOperand::createExpr(expr);
 }
 
-static MCOperand LowerOperand(const MachineInstr *MI,
-                              const MachineOperand &MO,
-                              AsmPrinter &AP) {
+bool T8xxAsmPrinter::lowerOperand(const MachineOperand &MO,
+				  MCOperand &MCOp) {
   switch(MO.getType()) {
   default: llvm_unreachable("unknown operand type"); break;
   case MachineOperand::MO_Register:
+    //  Ignore all implicit register operands
     if (MO.isImplicit())
-      break;
-    return MCOperand::createReg(MO.getReg());
-
+      return false;
+    MCOp = MCOperand::createReg(MO.getReg());
+    break;
   case MachineOperand::MO_Immediate:
-    return MCOperand::createImm(MO.getImm());
-
+    MCOp = MCOperand::createImm(MO.getImm());
+    break;
   case MachineOperand::MO_MachineBasicBlock:
   case MachineOperand::MO_GlobalAddress:
   case MachineOperand::MO_BlockAddress:
-  case MachineOperand::MO_JumpTableIndex:
   case MachineOperand::MO_ExternalSymbol:
   case MachineOperand::MO_ConstantPoolIndex:
-    return LowerSymbolOperand(MI, MO, AP);
+    MCOp = LowerSymbolOperand(MO);
+    break;
+  case MachineOperand::MO_JumpTableIndex:
+    {
+      // Copied from ARMAsmPrinter::GetSymbolRef
+      MCSymbol *Symbol = GetJTISymbol(MO.getIndex());
 
-  case MachineOperand::MO_RegisterMask:   break;
+      // TODO: Clarify whether to use the T8xxMCExpr variant
+      // or the MCSymbolRefExpr variant (latter being used for ARM backend)
+      /*
+      MCSymbolRefExpr::VariantKind SymbolVariant = MCSymbolRefExpr::VK_T8xx_GLOBAL;
+      const MCExpr *Expr =
+	MCSymbolRefExpr::create(Symbol, SymbolVariant, OutContext);
+      */
 
+      T8xxMCExpr::VariantKind SymbolVariant = T8xxMCExpr::VK_T8xx_GLOBAL;
+      const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol,
+                                                         OutContext);
+      const T8xxMCExpr *Expr = T8xxMCExpr::create(SymbolVariant, MCSym,
+						  OutContext);
+      
+      MCOp = MCOperand::createExpr(Expr);
+    }
+    break;
+
+  case MachineOperand::MO_RegisterMask:
+    return false;
   }
-  return MCOperand();
+  return true;
 }
 
 void llvm::LowerT8xxMachineInstrToMCInst(const MachineInstr *MI,
                                           MCInst &OutMI,
-                                          AsmPrinter &AP)
+                                          T8xxAsmPrinter &AP)
 {
-
   OutMI.setOpcode(MI->getOpcode());
 
-  printf ("LowerT8xxMachineInstr\n");
-  
   for (const MachineOperand &MO : MI->operands()) {
-    MCOperand MCOp = LowerOperand(MI, MO, AP);
-
-    if (MCOp.isValid())
+    MCOperand MCOp;
+    if (AP.lowerOperand(MO, MCOp)) {
       OutMI.addOperand(MCOp);
+    }
   }
 }

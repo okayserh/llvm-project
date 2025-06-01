@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "T8xxAsmPrinter.h"
 #include "MCTargetDesc/T8xxInstPrinter.h"
 #include "MCTargetDesc/T8xxMCExpr.h"
 #include "MCTargetDesc/T8xxTargetStreamer.h"
@@ -35,42 +36,11 @@ using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"
 
-namespace {
-  class T8xxAsmPrinter : public AsmPrinter {
-    T8xxTargetStreamer &getTargetStreamer() {
-      return static_cast<T8xxTargetStreamer &>(
-          *OutStreamer->getTargetStreamer());
-    }
-  public:
-    explicit T8xxAsmPrinter(TargetMachine &TM,
-                             std::unique_ptr<MCStreamer> Streamer)
-      : AsmPrinter(TM, std::move(Streamer)) {}
-
-    StringRef getPassName() const override { return "T8xx Assembly Printer"; }
-
-    void printOperand(const MachineInstr *MI, int opNum, raw_ostream &OS);
-    void printMemOperand(const MachineInstr *MI, int opNum, raw_ostream &OS,
-                         const char *Modifier = nullptr);
-
-    // Taken from LEG machine (TODO)
-    void printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
-			     raw_ostream &O);
-
-    void emitInstruction(const MachineInstr *MI) override;
-
-    static const char *getRegisterName(unsigned RegNo) {
-      return T8xxInstPrinter::getRegisterName(RegNo);
-    }
-
-    bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
-                         const char *ExtraCode, raw_ostream &O) override;
-    bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
-                               const char *ExtraCode, raw_ostream &O) override;
-
-  };
-} // end of anonymous namespace
-
-
+T8xxAsmPrinter::T8xxAsmPrinter(TargetMachine &TM,
+			       std::unique_ptr<MCStreamer> Streamer)
+  : AsmPrinter(TM, std::move(Streamer))
+{
+}
 
 void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
   T8xx_MC::verifyInstructionPredicates(MI->getOpcode(),
@@ -95,7 +65,11 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
 
   switch (MO.getType()) {
   case MachineOperand::MO_Register:
-    O << "%" << StringRef(getRegisterName(MO.getReg())).lower();
+    {
+      Register Reg = MO.getReg ();
+      assert(Reg.isPhysical());
+      O << "%" << StringRef(T8xxInstPrinter::getRegisterName(Reg)).lower();
+    }
     break;
 
   case MachineOperand::MO_Immediate:
