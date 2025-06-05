@@ -22,6 +22,9 @@ public:
 
   void Initialize(MCContext &Ctx, const TargetMachine &TM) override;
 
+  bool shouldPutJumpTableInFunctionSection(bool UsesLabelDifference,
+                                           const Function &F) const override;
+
   const MCExpr *getTTypeGlobalReference(const GlobalValue *GV,
                                         unsigned Encoding,
                                         const TargetMachine &TM,

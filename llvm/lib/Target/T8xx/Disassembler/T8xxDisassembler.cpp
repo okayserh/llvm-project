@@ -83,36 +83,12 @@ static DecodeStatus decodeImm(MCInst &Inst, unsigned Insn, uint64_t Address,
   unsigned opc = fieldFromInstruction(Insn, 4, 4);
   unsigned imm = fieldFromInstruction(Insn, 0, 4);
 
-  //  printf ("OPC %i  IMM %i\n", opc, imm);
-  
   switch (opc)
     {
     case 0x0:  // J
-    case 0xA:  // CJ
+    case 0x9:  // CALL
       Inst.addOperand(MCOperand::createImm(imm));
       break;
-    case 0x4:  // LDC
-      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
-      Inst.addOperand(MCOperand::createImm(imm));
-      break;
-    case 0x8:  // ADC
-      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
-      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
-      Inst.addOperand(MCOperand::createImm(imm));
-      break;
-
-    case 0xb: // AJW
-      Inst.addOperand(MCOperand::createImm(imm * 4));
-      break;
-
-    case 0x3:  // LDNL
-      Inst.addOperand(MCOperand::createImm(imm * 4));
-      break;
-      
-    case 0xe:  // STNL
-      Inst.addOperand(MCOperand::createImm(imm * 4));
-      break;
-      
     case 0x1: // LDLP
     case 0x7: // LDL
     case 0xD: // STL
@@ -120,6 +96,35 @@ static DecodeStatus decodeImm(MCInst &Inst, unsigned Insn, uint64_t Address,
       Inst.addOperand(MCOperand::createReg(T8xx::WPTR));
       Inst.addOperand(MCOperand::createImm(imm * 4));
       break;
+    case 0x3:  // LDNL
+    case 0x5:  // LDNLP
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createImm(imm * 4));
+      break;
+    case 0x4:  // LDC
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createImm(imm));
+      break;
+    case 0xC:  // EQC
+    case 0x8:  // ADC
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createImm(imm));
+      break;
+    case 0xA:  // CJ
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createImm(imm));
+      break;
+    case 0xB: // AJW
+      Inst.addOperand(MCOperand::createImm(imm * 4));
+      break;
+    case 0xE:  // STNL
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createReg(T8xx::AREG));
+      Inst.addOperand(MCOperand::createImm(imm * 4));
+      break;
+      // Note: 0xF is the "OP" instruction, which encodes additional instructions
     }
 
   return MCDisassembler::Success;
@@ -172,10 +177,15 @@ DecodeStatus T8xxDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
   */
 
   // Collect nfix / pfix instructions
+  uint32_t ORegBuf = 0;
   unsigned int i = 0;
   while (((Bytes[i] >> 4) == 0x6) ||
 	 ((Bytes[i] >> 4) == 0x2))
     {
+      ORegBuf |= (Bytes[i] & 0xF);
+      if ((Bytes[i] >> 4) == 0x6)
+	ORegBuf = ~ORegBuf;
+      ORegBuf <<= 4;
       //      printf ("P/NFIX %i\n", i);
       ++i;
     }
@@ -186,18 +196,59 @@ DecodeStatus T8xxDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
   Size = i;
 
   //  printf ("Insn %i  Address %i   Size %i\n", Insn, Address, Size);
-
-  Result = decodeInstruction(DecoderTableT8xx8, Instr, Insn, Address, this, STI);
-  if (Result == MCDisassembler::Fail)
+  if ((Bytes[i] >> 4) != 0xF)
     {
-      Insn = Insn << 8 + Bytes[i+1];
-      Result = decodeInstruction(DecoderTableT8xx16, Instr, Insn, Address, this, STI);
-      if (Result != MCDisassembler::Fail)
-	Size = i+2;
+      // For the direct instructions, first decode just the 8 bit
+      // direct instruction. Add the pfix/nfix stuff afterwards
+      Result = decodeInstruction(DecoderTableT8xx8, Instr, Insn, Address, this, STI);
+      MCInst::iterator mcopit;
+      for (mcopit = Instr.begin (); mcopit != Instr.end (); ++mcopit)
+	if (mcopit->isImm ())
+	  {
+	    ORegBuf |= (mcopit->getImm () & 0xF);
+	    mcopit->setImm (*((int32_t *)(&ORegBuf)));
+	  }      
+
+      // Check for "fpentry" instructions. Those start with an "LDC"
+      // followed by "fpentry" (2A FB)
+      if ((Instr.getOpcode() == T8xx::LDC) &&
+	  (Bytes[i+1] == 0x2A) &&
+	  (Bytes[i+2] == 0xFB))
+	{
+	  if (Instr.getOperand(1).getImm () > 0xF)
+	    {
+	      Insn = (((uint64_t)Bytes[i-1]) << 24) +
+		(((uint64_t)Bytes[i]) << 16) +
+		(((uint64_t)Bytes[i+1]) << 8) +
+		((uint64_t)Bytes[i+2]);
+	      Result = decodeInstruction(DecoderTableT8xx32, Instr, Insn, Address, this, STI);
+	    }
+	  else
+	    {
+	      Insn = (((uint64_t)Bytes[i]) << 16) +
+		(((uint64_t)Bytes[i+1]) << 8) +
+		((uint64_t)Bytes[i+2]);
+	      Result = decodeInstruction(DecoderTableT8xx24, Instr, Insn, Address, this, STI);
+	    }
+	  Size = i + 3;
+	}
+      else
+	Size = i+1;
     }
   else
     {
-      Size = i+1;
+      if (ORegBuf == 0)
+	{
+	  Result = decodeInstruction(DecoderTableT8xx8, Instr, Insn, Address, this, STI);
+	  Size = i + 1;
+	}
+      else
+	{
+	  Insn = (((uint64_t)Bytes[i-1]) << 8) + ((uint64_t)Bytes[i]);
+	  Result = decodeInstruction(DecoderTableT8xx16, Instr, Insn, Address, this, STI);
+	  if (Result != MCDisassembler::Fail)
+	    Size = i+1;
+	}
     }
 
   return Result;

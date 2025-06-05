@@ -21,6 +21,16 @@ void T8xxELFTargetObjectFile::Initialize(MCContext &Ctx,
   TargetLoweringObjectFileELF::Initialize(Ctx, TM);
 }
 
+
+// Note OKH: This was an attempted fix to the problem that the symbol
+// of the JumpTable is not found in the creation of object files.
+bool T8xxELFTargetObjectFile::shouldPutJumpTableInFunctionSection(bool UsesLabelDifference,
+								  const Function &F) const
+{
+  return (true);
+}
+
+
 const MCExpr *T8xxELFTargetObjectFile::getTTypeGlobalReference(
     const GlobalValue *GV, unsigned Encoding, const TargetMachine &TM,
     MachineModuleInfo *MMI, MCStreamer &Streamer) const {

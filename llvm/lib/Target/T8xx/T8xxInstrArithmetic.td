@@ -281,10 +281,7 @@ def FPEQDB :      T8InstOp8<0x95,
 		  (ins DFPReg:$lhs, DFPReg:$rhs),
 		  "fpeq",
 		  [(set i32:$cc,
-		  (i32 (setcc f64:$lhs, f64:$rhs, SETEQ)))]>
-{
-	 let DecoderNamespace = "FPDB";
-}
+		  (i32 (setcc f64:$lhs, f64:$rhs, SETEQ)))]>;
 
 def FPGTSN :      T8InstOp8<0x94,
     	 	  (outs OReg:$cc),
@@ -301,10 +298,7 @@ def FPGTDB :      T8InstOp8<0x94,
 		  (ins DFPReg:$lhs, DFPReg:$rhs),
 		  "fpgt",
 		  [(set i32:$cc,
-		  (i32 (setcc f64:$lhs, f64:$rhs, SETGT)))]>
-{
-	 let DecoderNamespace = "FPDB";
-}
+		  (i32 (setcc f64:$lhs, f64:$rhs, SETGT)))]>;
 
 // Other "don't care" comparisons will be created by patterns
 def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETNE),
@@ -424,10 +418,7 @@ def FPORDEREDDB :   T8InstOp8<0x92,
 	    (ins DFPReg:$lhs, DFPReg:$rhs),
 	    "fpordered",
 	    [(set i32:$cc,
-	      (i32 (setcc f64:$lhs, f64:$rhs, SETO)))]>
-{
-	 let DecoderNamespace = "FPDB";
-}
+	      (i32 (setcc f64:$lhs, f64:$rhs, SETO)))]>;
 
 // Check for unordered is just the inverse
 def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUO),
