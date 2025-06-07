@@ -65,7 +65,11 @@ def GCALL :   T8InstOp4<0x6,
     	        (outs),
 		(ins MemSrc:$addr),
 		"gcall",
-		[]>;
+		[]>
+{
+	let isCall = 1;
+	let isIndirectBranch = 1;
+}
 
 def LDPI :    T8InstOp8<0x1B,
 		(outs OReg:$dst),

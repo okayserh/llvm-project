@@ -164,6 +164,11 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
       continue;
     }
 
+    // TODO:
+    // Quick fix for Pseudo Inst BRIND
+    if (Opcode == T8xx::BRIND)
+      return true;
+
     // Handle conditional branches.
     // Note: On the T8xx there is only one type of conditional branch
     // Hence no BranchCode is neede
@@ -554,6 +559,15 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return true;
     }
     break;
+
+    // Attempt to fix the jump table problem
+  case T8xx::BRIND:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
+      MBB.erase(MI);      
+    }
+    break;
+
 
   case T8xx::CALL:
     {

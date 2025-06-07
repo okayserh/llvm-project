@@ -577,6 +577,18 @@ def : Pat<(call tglobaladdr:$dst),
 def : Pat<(call texternalsym:$dst),
           (CALL texternalsym:$dst)>;
 
+
+
+/*
+def LOADSYM_JT :  T8Inst<(outs OReg:$dst),
+	              (ins i32imm:$addr),
+	             "loadsym_jt",
+		     [(set i32:$dst, (load_sym tjumptable:$addr))]>
+{
+    let isPseudo = 1;
+}
+*/
+
 def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
 
 def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC $addr)]>;
@@ -599,6 +611,7 @@ def BRimm  : T8Inst<(outs), (ins i32imm:$addr),
 		   let isCodeGenOnly = 1;
 		   let isPseudo = 1;
 		   let isBranch = 1;
+		   let isBarrier = 1;
 }
 
 
@@ -623,7 +636,6 @@ def JUMP  : T8InstImm<0x0,
 
 
 // TODO: Test to figure out how the indirect branch works
-/*
 def BRIND  : T8Inst<(outs),
 		   (ins OReg:$target),
                    "brind",
@@ -635,9 +647,11 @@ def BRIND  : T8Inst<(outs),
    let isCodeGenOnly = 1;
    let isPseudo = 1;
 }
-*/
+
+/*
 def : Pat<(brind (i32 OReg:$target)),
            (GCALL $target)>;
+	   */
 
 
 //===----------------------------------------------------------------------===//

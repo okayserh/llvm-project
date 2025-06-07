@@ -492,8 +492,9 @@ SDValue T8xxTargetLowering::LowerJumpTable(SDValue Op, SelectionDAG& DAG) const
   // as code for a fixed address.
   Result = DAG.getTargetJumpTable(CP->getIndex(), CP->getValueType(0), T8xxMCExpr::VK_T8xx_GLOBAL);
 
-  EVT VT = Op.getValueType();
-  Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
+  EVT VT = getPointerTy(DAG.getDataLayout ());
+  Result = DAG.getNode(T8xxISD::LOAD_SYM,
+		       SDLoc(Op), VT, Result);
   
   return Result;
 }

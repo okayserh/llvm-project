@@ -41,6 +41,8 @@ class LLVM_LIBRARY_VISIBILITY T8xxAsmPrinter : public AsmPrinter {
     void printMemOperand(const MachineInstr *MI, int opNum, raw_ostream &OS,
                          const char *Modifier = nullptr);
 
+    bool isBlockOnlyReachableByFallthrough(const MachineBasicBlock *MBB) const;
+
     // Taken from LEG machine (TODO)
     void printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
 			     raw_ostream &O);

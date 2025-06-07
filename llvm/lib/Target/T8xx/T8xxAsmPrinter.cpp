@@ -123,6 +123,13 @@ void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
 }
 
 
+// TODO: Quick attempt to see whether this produces a reasonable result
+bool T8xxAsmPrinter::isBlockOnlyReachableByFallthrough(const MachineBasicBlock *MBB) const
+{
+  return false;
+}
+
+
 // Print a 'memsrc' operand which is a (Register, Offset) pair.
 void T8xxAsmPrinter::printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
                                          raw_ostream &O) {
