@@ -10,6 +10,7 @@
 #include "MCTargetDesc/T8xxMCTargetDesc.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixupKindInfo.h"
@@ -33,20 +34,51 @@ static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
 
   case T8xx::fixup_t8xx_addr:
   case T8xx::fixup_t8xx_addr_npfix:
-  case T8xx::fixup_t8xx_jump:
     return 0;
+    break;
+
+  case T8xx::fixup_t8xx_jump:
+    return Value - 1;
+    break;
+
+  case T8xx::fixup_t8xx_jump_p8:
+    {
+      int64_t Offset = int64_t(Value);
+      printf ("Kind %u   Value %lu  Offset %li\n", Kind, Value, Offset);
+
+      Offset -= 2;
+      uint32_t imm_dec = (Offset < 0 ? (~Offset) : Offset) & 0xFFFFFFFFu;
+
+      Value = Offset < 0 ? 0x0040 : 0;  // From "pfix" to "nfix"
+      Value |= (imm_dec & 0xF0) >> 4;
+      if (Offset < 0)
+	imm_dec = ~imm_dec;
+      Value |= (imm_dec & 0xF) << 8;
+      printf ("Value %04x\n", Value);
+      
+      return Value;
+    }
   }
 }
 
 /// getFixupKindNumBytes - The number of bytes the fixup may change.
 static unsigned getFixupKindNumBytes(unsigned Kind) {
-    switch (Kind) {
+  switch (Kind) {
   default:
-    return 4;
+    llvm_unreachable("Unknown fixup kind!");
+
+  case T8xx::fixup_t8xx_jump:
+    return 1;
+
+  case T8xx::fixup_t8xx_jump_p8:
+    return 2;
+    
   case FK_Data_1:
     return 1;
   case FK_Data_2:
     return 2;
+  case FK_Data_4:
+    return 4;
   case FK_Data_8:
     return 8;
   }
@@ -84,14 +116,16 @@ namespace {
 
     const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override {
       const static MCFixupKindInfo Infos[T8xx::NumTargetFixupKinds] = {
-        // name                    offset bits  flags
-        { "fixup_t8xx_32",     0,     32,  0 },
-        { "fixup_t8xx_16",     0,     16,  0 },
-        { "fixup_t8xx_addr",      0,     16,  MCFixupKindInfo::FKF_IsPCRel },
-        { "fixup_t8xx_jump",      0,     16,  MCFixupKindInfo::FKF_IsTarget ||
-	  MCFixupKindInfo::FKF_IsPCRel },
+        // name                offset bits  flags
+        { "fixup_t8xx_32",      0,     32,  0 },
+        { "fixup_t8xx_16",      0,     16,  0 },
+        { "fixup_t8xx_addr",    0,     16,  MCFixupKindInfo::FKF_IsPCRel },
+        { "fixup_t8xx_jump",    0,      8,  MCFixupKindInfo::FKF_IsPCRel },
+        { "fixup_t8xx_jump_p8", 0,     16,  MCFixupKindInfo::FKF_IsPCRel },
         { "fixup_t8xx_addr_npfix",      0,     16,  MCFixupKindInfo::FKF_IsPCRel},
       };
+
+      printf ("getFixupKindInfo %i\n", (int)Kind);
 
       // Fixup kinds from .reloc directive are like R_SPARC_NONE. They do
       // not require any extra processing.
@@ -107,6 +141,12 @@ namespace {
       return Infos[Kind - FirstTargetFixupKind];
     }
 
+    //
+    // Note:
+    // This is called from MCAssembler.evaluateFixup. If this target specific
+    // method returns "true", the relocation is presumably left for the linker!
+    //
+    
     bool shouldForceRelocation(const MCAssembler &Asm, const MCFixup &Fixup,
                                const MCValue &Target,
 			       const MCSubtargetInfo *STI) override {
@@ -115,29 +155,106 @@ namespace {
       switch ((T8xx::Fixups)Fixup.getKind()) {
       default:
         return false;
+	/*
       case T8xx::fixup_t8xx_jump:
-	return true;
+	{	  
+	  printf ("fixup_t8xx_jump\n");
+	  if (Target.getSymA ())
+	    {
+	      uint64_t Value = 0;
+	      if (const MCSymbolRefExpr *A = Target.getSymA()) {
+		const MCSymbol &Sym = A->getSymbol();
+		if (Sym.isDefined())
+		  {
+		    printf ("Got offset A\n");
+		    Value += Asm.getSymbolOffset(Sym);
+		  }
+	      }
+	      printf ("Sym A avail, Offset %lu\n", Value);
+	    }
+	  if (Target.getSymB ())
+	    {
+	      uint64_t Value = 0;
+	      if (const MCSymbolRefExpr *B = Target.getSymB()) {
+		const MCSymbol &Sym = B->getSymbol();
+		if (Sym.isDefined())
+		  {
+		    printf ("Got offset B\n");
+		    Value += Asm.getSymbolOffset(Sym);
+		  }
+	      }
+	      printf ("Sym B avail, Offset %lu\n", Value);
+	    }
+	  printf ("end fixup\n");
+	  return false;
+	}
+	*/
       }
     }
 
-    /*
-    /// fixupNeedsRelaxation - Target specific predicate for whether a given
-    /// fixup requires the associated instruction to be relaxed.
-    bool fixupNeedsRelaxation(const MCFixup &Fixup,
-                              uint64_t Value,
-                              const MCRelaxableFragment *DF,
-                              const MCAsmLayout &Layout) const override {
-      // FIXME.
-      llvm_unreachable("fixupNeedsRelaxation() unimplemented");
-      return false;
-    }
+
     void relaxInstruction(MCInst &Inst,
                           const MCSubtargetInfo &STI) const override {
-      // FIXME.
-      llvm_unreachable("relaxInstruction() unimplemented");
+      printf ("relax Instruction\n");
+      switch (Inst.getOpcode ())
+	{
+	case T8xx::CJ:
+	  {
+	    MCInst Res;
+	    Res.setOpcode(T8xx::CJ_P8);
+	    Res.addOperand(MCOperand::createReg(T8xx::AREG));
+	    Res.addOperand(MCOperand::createImm(0));
+	    Inst = std::move(Res);
+	    return;
+	  }
+	  break;
+	case T8xx::JUMP:
+	  {
+	    MCInst Res;
+	    Res.setOpcode(T8xx::JUMP_P8);
+	    //	    Res.addOperand(MCOperand::createImm(0));
+	    Res.addOperand(Inst.getOperand(0));
+	    Inst = std::move(Res);
+	    return;
+	  }
+	  break;
+	}
     }
-    */
+
+
+    bool mayNeedRelaxation(const MCInst &Inst,
+			   const MCSubtargetInfo &STI) const override {
+      printf ("may Need Relaxation\n");
+      switch (Inst.getOpcode ())
+	{
+	case T8xx::CJ:
+	case T8xx::CJ_P8:
+	case T8xx::JUMP:
+	case T8xx::JUMP_P8:
+	  return true;
+	  break;
+	}
+      return false;
+    }
+
     
+    bool fixupNeedsRelaxation(const MCFixup &Fixup,
+                                    uint64_t Value) const override {
+      printf ("Fixup needs relax %i\n", (int)Fixup.getTargetKind ());
+
+      switch (Fixup.getTargetKind()) {
+      case T8xx::fixup_t8xx_jump:
+	int64_t Offset = int64_t(Value);
+	Offset -= 1;  // Correction for instruction itself
+	printf ("Needs relaxation %li\n", Offset);
+	if ((Offset < 0) || (Offset > 15))
+	  return true;
+	break;
+      }
+      return false;
+    }
+
+
     bool writeNopData(raw_ostream &OS, uint64_t Count,
                       const MCSubtargetInfo *STI) const override {
       // Note: Transputer instruction set does not explicity provide
@@ -165,10 +282,14 @@ namespace {
       if (Fixup.getKind() >= FirstLiteralRelocationKind)
         return;
       Value = adjustFixupValue(Fixup.getKind(), Value);
-      if (!Value) return;           // Doesn't change encoding.
+      if (!Value)
+	return;           // Doesn't change encoding.
 
       unsigned NumBytes = getFixupKindNumBytes(Fixup.getKind());
       unsigned Offset = Fixup.getOffset();
+
+      printf ("NumBytes %u  Offset %u\n", NumBytes, Offset);
+
       // For each byte of the fragment that the fixup touches, mask in the bits
       // from the fixup value. The Value has been "split up" into the
       // appropriate bitfields above.

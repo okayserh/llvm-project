@@ -136,6 +136,10 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
       setOperationAction(ISD::BR_CC, MVT::f32, Expand);
       setOperationAction(ISD::BR_CC, MVT::f64, Expand);
+
+      // No native transputer instruction available
+      setOperationAction(ISD::FNEG, MVT::f32, Expand);
+      setOperationAction(ISD::FNEG, MVT::f64, Expand);
     }
   
   // Nodes that require custom lowering
@@ -182,10 +186,79 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SETCC, MVT::i16, Promote);
   setOperationAction(ISD::SETCC, MVT::i32, Custom);
 
+  // Instructions not natively supported by Transputers
+  // TODO: Some of these seem to be available in the T8xx series.
+  setOperationAction(ISD::CTPOP,             MVT::i32, Expand);
+  setOperationAction(ISD::CTTZ,              MVT::i32, Expand);
+  setOperationAction(ISD::CTLZ,              MVT::i32, Expand);
+  setOperationAction(ISD::ROTL,              MVT::i32, Expand);
+  setOperationAction(ISD::BSWAP,             MVT::i32, Expand);
+  setOperationAction(ISD::BITCAST,           MVT::i32, Expand);
+
   // T8xx doesn't have sext_inreg, replace them with shl/sra
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
+
+
+  // ATOMIC Operations seem to "kill" the build.
+  /*
+  setOperationAction(ISD::ATOMIC_FENCE,   MVT::Other,
+                       Subtarget->hasAnyDataBarrier() ? Custom : Expand);
+
+    // Set them all for libcall, which will force libcalls.
+    setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_SWAP, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_ADD, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_SUB, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_AND, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_OR, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_XOR, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_MIN, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_MAX, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i32, LibCall);
+    setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i32, LibCall);
+    // Mark ATOMIC_LOAD and ATOMIC_STORE custom so we can handle the
+    // Unordered/Monotonic case.
+    if (!InsertFencesForAtomic) {
+      setOperationAction(ISD::ATOMIC_LOAD, MVT::i32, Custom);
+      setOperationAction(ISD::ATOMIC_STORE, MVT::i32, Custom);
+    }
+  */  
+
+  // Alternatively?
+  // Cortex-M (besides Cortex-M0) have 32-bit atomics.
+  setMaxAtomicSizeInBitsSupported(32);
+
+
+  /*
+    n LLVM, the "max lock-free size" for atomic operations is primarily determined by the target architecture's capabilities and the TargetMachine/TargetLowering implementations within LLVM. It's not typically a single, easily configurable setting in a user-facing configuration file.
+
+Here's a breakdown of where this information is defined and how it impacts atomic operations:
+
+    Target-Specific Implementation:
+        LLVM's code generation for atomic operations is highly dependent on the specific CPU architecture you're targeting (x86, ARM, MIPS, etc.).
+        Each target's TargetLowering (or similar) implementation defines which atomic operations can be performed natively and lock-free for various data sizes.
+        For instance, an x86 target will likely have native lock-free support for 8-byte (64-bit) atomics, and potentially 16-byte (128-bit) atomics using instructions like LOCK CMPXCHG16B on supported CPUs. Older or simpler architectures might only support smaller lock-free sizes.
+
+    setMaxAtomicSizeInBitsSupported():
+        Within the LLVM codebase, there's a function like setMaxAtomicSizeInBitsSupported() (or similar methods in the TargetLowering classes) that a target backend uses to declare the maximum size (in bits) for which it can generate inline, lock-free atomic instructions.
+
+If an atomic operation is requested for a size larger than what the target natively supports as lock-free, LLVM's AtomicExpandPass will typically expand it into calls to library functions (e.g., __atomic_* libcalls). These library functions then use software-based locking mechanisms (like mutexes) to ensure atomicity, which means they are not lock-free. The default for setMaxAtomicSizeInBitsSupported is often 0, meaning that if a target doesn't explicitly declare support, all atomics might be expanded to libcalls.
+
+Compiler-RT (libatomic):
+
+    For sizes that are not natively lock-free on a given target, LLVM (via Clang and compiler-rt) relies on the libatomic library. This library provides the fallback implementations for atomic operations using mutexes when hardware support is insufficient. You can find the source for these in the LLVM project, typically in compiler-rt/lib/builtins/atomic.c or similar.
+
+In summary, you don't "define" the max lock-free size in a simple configuration file that a user can easily change. It's inherently tied to:
+
+    The LLVM target backend's implementation: Each backend (e.g., X86TargetLowering) specifies what its hardware can do.
+    The specific CPU architecture: Different CPUs have different atomic capabilities.
+    The AtomicExpandPass and compiler-rt: These components handle the fallback to library calls when native lock-free operations are not possible.
+
+If you're developing an LLVM backend for a new architecture, you would implement the necessary logic within your target's TargetLowering class to accurately reflect the lock-free atomic capabilities of that architecture.
+  */
 
   // DIV/REM are legal on T8xx
   setOperationAction(ISD::SREM, MVT::i32, Legal);

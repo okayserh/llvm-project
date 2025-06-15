@@ -27,6 +27,9 @@ namespace llvm {
       /// branches
       fixup_t8xx_jump,
 
+      // Jumps with negative 8 bit offset or positive 8 bit offset
+      fixup_t8xx_jump_p8,
+
       /// fixup_t8xx_addr_npfix - global address to symbol, not needing  = 132
       /// prefix / postfix transputer instruction
       fixup_t8xx_addr_npfix,

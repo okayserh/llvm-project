@@ -55,13 +55,6 @@ using namespace llvm;
 // the function parameters, if needed.
 
 
-// Copied from old version
-inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align,
-                                   uint64_t Skew = 0) {
-  Skew %= Align;
-  return (Value + Align - 1 - Skew) / Align * Align + Skew;
-}
-
 static cl::opt<bool>
 DisableLeafProc("disable-t8xx-leaf-proc",
                 cl::init(false),
@@ -92,7 +85,7 @@ uint64_t T8xxFrameLowering::computeParameterSize(MachineFunction &MF) const
   // Get the size of parameters on the stack
   int64_t fixed_obj_size = 0;
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
-    fixed_obj_size += RoundUpToAlignment (MFI.getObjectSize (i), getStackAlignment ());
+    fixed_obj_size += alignTo (MFI.getObjectSize (i), getStackAlignment ());
 
   return ((uint64_t) fixed_obj_size);
 }
@@ -129,7 +122,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 
   // Compute the stack size, to determine if we need a prologue at all.
   uint64_t FixedStackSize = computeParameterSize (MF);
-  uint64_t StackSize = MFI.getStackSize ();
+  uint64_t StackSize = alignTo (MFI.getStackSize (), getStackAlign ());
   uint64_t OffsetAdj = MaxAlign.value ();
 
   printf ("Fixed Stack %li   Stack %li   OffsetAdj %li\n", FixedStackSize, StackSize, OffsetAdj);
@@ -239,7 +232,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
 
   uint64_t FixedStackSize = computeParameterSize (MF);
-  uint64_t StackSize = MFI.getStackSize ();
+  uint64_t StackSize = alignTo (MFI.getStackSize (), getStackAlign ());
   uint64_t OffsetAdj = MFI.getOffsetAdjustment ();
 
   if ((FixedStackSize + StackSize) == 0) {

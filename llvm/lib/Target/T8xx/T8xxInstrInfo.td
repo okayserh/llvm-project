@@ -309,7 +309,6 @@ defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
 
 
 
-
 // Load i32 from frame index
 def LDL : T8InstImm<0x7,
 		(outs OReg:$val),
@@ -578,6 +577,10 @@ def : Pat<(call texternalsym:$dst),
           (CALL texternalsym:$dst)>;
 
 
+// TODO: Verify whether this works for function pointers
+def : Pat<(call OReg:$target),
+           (GCALL $target)>;
+
 
 /*
 def LOADSYM_JT :  T8Inst<(outs OReg:$dst),
@@ -590,6 +593,7 @@ def LOADSYM_JT :  T8Inst<(outs OReg:$dst),
 */
 
 def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (load_sym tglobaltlsaddr:$addr)),  [(LDC $addr)]>;
 
 def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC $addr)]>;
 
@@ -624,6 +628,18 @@ def CJ    : T8InstImm<0xA,
                 "cj $imm",
 		[(MxBrNotCond i32:$cc, bb:$imm)]>;
 
+def CJ_P8    : T8InstImmP8<0xA,
+		(outs),
+		(ins OReg:$cc, brtarget:$imm),
+                "cj $imm",
+		[]>;
+
+def CJ_N8    : T8InstImmN8<0xA,
+		(outs),
+		(ins OReg:$cc, brtarget:$imm),
+                "cj $imm",
+		[]>;
+
 def JUMP  : T8InstImm<0x0,
 		   (outs),
 		   (ins brtarget:$imm),
@@ -631,8 +647,23 @@ def JUMP  : T8InstImm<0x0,
                    [(br bb:$imm)]> {
 		   let isBarrier = 1;
 		   }
-}
 
+def JUMP_P8  : T8InstImmP8<0x0,
+		   (outs),
+		   (ins brtarget:$imm),
+                   "j $imm",
+                   []> {
+		   let isBarrier = 1;
+		   }
+
+def JUMP_N8  : T8InstImmN8<0x0,
+		   (outs),
+		   (ins brtarget:$imm),
+                   "j $imm",
+                   []> {
+		   let isBarrier = 1;
+		   }
+}
 
 
 // TODO: Test to figure out how the indirect branch works

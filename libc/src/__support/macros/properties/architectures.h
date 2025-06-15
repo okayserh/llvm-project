@@ -65,4 +65,9 @@
 #define LIBC_TARGET_ARCH_IS_ANY_RISCV
 #endif
 
+#if defined(__t8xx__)
+#define LIBC_TARGET_ARCH_IS_T8XX
+#undef __linux__
+#endif
+
 #endif // LLVM_LIBC_SRC___SUPPORT_MACROS_PROPERTIES_ARCHITECTURES_H

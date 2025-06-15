@@ -24,6 +24,8 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 
+#include <iostream>
+
 using namespace llvm;
 
 
@@ -36,7 +38,22 @@ MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
   switch(MO.getType()) {
   default: llvm_unreachable("Unknown type in LowerSymbolOperand");
   case MachineOperand::MO_MachineBasicBlock:
-    Symbol = MO.getMBB()->getSymbol();
+    {
+      Symbol = MO.getMBB()->getSymbol();
+
+      /* When an assembler ".s" file is generated, real labels are generated as well
+	 for ".o" files, no labels are generated.
+      printf ("################\n");
+      if (Symbol->isTemporary ())
+	printf ("Sym is Temp\n");
+      std::string temp;
+      raw_string_ostream ostemp(temp);
+      Symbol->print (ostemp, nullptr);
+      std::cout << temp;
+    
+      printf ("Lower Sym Name %s\n", Symbol->getName().str().c_str());
+      */
+    }
     break;
 
   case MachineOperand::MO_GlobalAddress:
@@ -60,6 +77,12 @@ MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
     break;
   }
 
+  // Attempt to create proper symbols
+  MCSymbolRefExpr::VariantKind Kind2 = MCSymbolRefExpr::VK_None;
+  const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, Kind2, OutContext);
+  return MCOperand::createExpr(Expr);
+
+  /*
   const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol,
                                                          OutContext);
 
@@ -67,6 +90,7 @@ MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
                                                 OutContext);
 
   return MCOperand::createExpr(expr);
+  */
 }
 
 bool T8xxAsmPrinter::lowerOperand(const MachineOperand &MO,

@@ -55,6 +55,8 @@ class T8xxPseudoInst<dag outs, dag ins, string asmstr, list<dag> pattern>
 }
 
 
+// Attempt for immediate instructions. They are defined in multiple flavors
+// for different immediate operand sizes.
 class T8InstImm<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
    : T8Inst8<outs, ins, asmstr, pattern> {
    bits<4> imm;
@@ -63,6 +65,32 @@ class T8InstImm<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> patte
    let Inst{3 - 0} = imm;
 
    let DecoderMethod = "decodeImm";
+}
+
+class T8InstImmP8<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
+   : T8Inst16<outs, ins, asmstr, pattern> {
+   bits<8> imm;
+
+   let Inst{15- 12} = 0x2;
+   let Inst{11-  8} = imm{7-4};
+   let Inst{7 -  4} = opval;
+   let Inst{3 -  0} = imm{3-0};
+
+   let DecoderMethod = "decodeImm";
+   let DecoderNamespace = "PFIX1";
+}
+
+class T8InstImmN8<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
+   : T8Inst16<outs, ins, asmstr, pattern> {
+   bits<8> imm;
+
+   let Inst{15- 12} = 0x6;
+   let Inst{11-  8} = imm{7-4};
+   let Inst{7 -  4} = opval;
+   let Inst{3 -  0} = imm{3-0};
+
+   let DecoderMethod = "decodeImm";
+   let DecoderNamespace = "PFIX1";
 }
 
 

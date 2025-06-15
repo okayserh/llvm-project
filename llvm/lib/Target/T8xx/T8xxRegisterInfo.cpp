@@ -130,10 +130,16 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   first_frame_pos = alignTo (first_frame_pos, MaxAlign);
   printf ("Aligned Objects size = %i\n", first_frame_pos);
 
+  // The fixed stack is positioned "above" the frame. If the stack
+  // has an unaligned size (due to small objects like characters)
+  // the size needs to be aligned.
+  unsigned StackSizeAligned = alignTo (MFI.getStackSize (), TFL->getStackAlign ());
+
   int Offset = 0;
   if (FI < 0)
     // FI < 0   -> fixed stack objects (i.e. call parameters)
-    Offset = (MFI.getStackSize () - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
+    //    Offset = (MFI.getStackSize () - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
+    Offset = (StackSizeAligned - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
   else
     // FI >= 0  -> stack frame objects (i.e. function variables and temporary stack objects)
     Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
