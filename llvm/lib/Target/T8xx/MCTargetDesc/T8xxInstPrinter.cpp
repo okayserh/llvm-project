@@ -67,6 +67,8 @@ void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
   }
 
   if (MO.isImm()) {
+    printf ("printOperand Imm %li\n", MO.getImm ());
+    
     O << (int)MO.getImm();
     return;
   }
@@ -93,7 +95,7 @@ void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
 			      Op1.getReg() == T8xx::BREG)) && "Unsupported register for MemSrc");
       assert(Op2.isImm() && "Offset is not immediate for MemSrc");
 
-      unsigned Offset = Op2.getImm();
+      int Offset = Op2.getImm();
       O << Offset;
     }
   else

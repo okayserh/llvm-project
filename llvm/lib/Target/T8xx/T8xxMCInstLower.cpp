@@ -35,6 +35,8 @@ MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
     (T8xxMCExpr::VariantKind)MO.getTargetFlags();
   const MCSymbol *Symbol = nullptr;
 
+  printf("LowerSymbolOperand Kind %i  Type %i\n", (int)Kind, (int)MO.getType());
+  
   switch(MO.getType()) {
   default: llvm_unreachable("Unknown type in LowerSymbolOperand");
   case MachineOperand::MO_MachineBasicBlock:
@@ -78,19 +80,20 @@ MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
   }
 
   // Attempt to create proper symbols
-  MCSymbolRefExpr::VariantKind Kind2 = MCSymbolRefExpr::VK_None;
-  const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, Kind2, OutContext);
-  return MCOperand::createExpr(Expr);
-
-  /*
-  const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol,
+  if (Kind == T8xxMCExpr::VK_T8xx_None)
+    {
+      MCSymbolRefExpr::VariantKind Kind2 = MCSymbolRefExpr::VK_None;
+      const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, Kind2, OutContext);
+      return MCOperand::createExpr(Expr);
+    }
+  else
+    {
+      const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol,
                                                          OutContext);
-
-  const T8xxMCExpr *expr = T8xxMCExpr::create(Kind, MCSym,
-                                                OutContext);
-
-  return MCOperand::createExpr(expr);
-  */
+      const T8xxMCExpr *expr = T8xxMCExpr::create(Kind, MCSym,
+						  OutContext);
+      return MCOperand::createExpr(expr);
+    }
 }
 
 bool T8xxAsmPrinter::lowerOperand(const MachineOperand &MO,
@@ -111,31 +114,9 @@ bool T8xxAsmPrinter::lowerOperand(const MachineOperand &MO,
   case MachineOperand::MO_BlockAddress:
   case MachineOperand::MO_ExternalSymbol:
   case MachineOperand::MO_ConstantPoolIndex:
+  case MachineOperand::MO_JumpTableIndex:
     MCOp = LowerSymbolOperand(MO);
     break;
-  case MachineOperand::MO_JumpTableIndex:
-    {
-      // Copied from ARMAsmPrinter::GetSymbolRef
-      MCSymbol *Symbol = GetJTISymbol(MO.getIndex());
-
-      // TODO: Clarify whether to use the T8xxMCExpr variant
-      // or the MCSymbolRefExpr variant (latter being used for ARM backend)
-      /*
-      MCSymbolRefExpr::VariantKind SymbolVariant = MCSymbolRefExpr::VK_T8xx_GLOBAL;
-      const MCExpr *Expr =
-	MCSymbolRefExpr::create(Symbol, SymbolVariant, OutContext);
-      */
-
-      T8xxMCExpr::VariantKind SymbolVariant = T8xxMCExpr::VK_T8xx_GLOBAL;
-      const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol,
-                                                         OutContext);
-      const T8xxMCExpr *Expr = T8xxMCExpr::create(SymbolVariant, MCSym,
-						  OutContext);
-      
-      MCOp = MCOperand::createExpr(Expr);
-    }
-    break;
-
   case MachineOperand::MO_RegisterMask:
     return false;
   }

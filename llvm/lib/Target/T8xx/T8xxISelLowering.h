@@ -28,6 +28,7 @@ namespace llvm {
     RET_FLAG,        // Return with a flag operand.
     LOAD_SYM,
     ADD_WPTR,
+    ADD_IPTR,
     STL_PARM,
 
     // T8xx conditional moves.

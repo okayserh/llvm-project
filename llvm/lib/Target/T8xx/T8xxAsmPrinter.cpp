@@ -50,6 +50,9 @@ void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
   do {
     MCInst TmpInst;
     LowerT8xxMachineInstrToMCInst(&*I, TmpInst, *this);
+
+    TmpInst.dump ();
+
     EmitToStreamer(*OutStreamer, TmpInst);
   } while ((++I != E) && I->isInsideBundle()); // Delay slot check.
 }
@@ -73,6 +76,7 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
     break;
 
   case MachineOperand::MO_Immediate:
+    LLVM_DEBUG(dbgs() << "MO Immediate" << MO.getImm ());
     O << MO.getImm();
     break;
   case MachineOperand::MO_MachineBasicBlock:

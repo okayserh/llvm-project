@@ -71,12 +71,6 @@ def GCALL :   T8InstOp4<0x6,
 	let isIndirectBranch = 1;
 }
 
-def LDPI :    T8InstOp8<0x1B,
-		(outs OReg:$dst),
-		(ins OReg:$src),
-		"ldpi",
-		[]>;
-
 // Channel communications
 def IN :      T8InstOp4<0x7, (outs), (ins OReg:$cnt, MemSrc:$chan, MemSrc:$addr), "in", []>;
 def OUT :     T8InstOp4<0xB, (outs), (ins OReg:$cnt, MemSrc:$chan, MemSrc:$addr), "out", []>;

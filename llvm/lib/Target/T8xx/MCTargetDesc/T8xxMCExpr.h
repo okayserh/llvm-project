@@ -24,9 +24,11 @@ class T8xxMCExpr : public MCTargetExpr {
 public:
   enum VariantKind {
     VK_T8xx_None,
-    VK_T8xx_IPTRREL,
-    VK_T8xx_GLOBAL,
-    VK_T8xx_GLOBAL_NPFIX,
+    VK_T8xx_IPTRREL,   // This is for jumps
+    VK_T8xx_SYMREL,    // This is for getting symbols by ldpi
+    VK_T8xx_GLOBAL,    // Global address as 4 Byte element
+    VK_T8xx_GLOBAL_NPFIX,  // Global address, encoded in a
+                       //Sequence of PFIX/NFIX instructions
   };
 
 private:

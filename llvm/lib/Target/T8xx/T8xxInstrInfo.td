@@ -58,6 +58,12 @@ def SDT_AddWptr     : SDTypeProfile<1, 2, [SDTCisPtrTy<0>, SDTCisPtrTy<1>, SDTCi
 
 def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
 
+// Custom add for instruction pointer (Note: To avoid defining a new register class
+// for the instruction pointer, this is designed as a unary pattern
+def SDT_AddIptr     : SDTypeProfile<1, 1, [SDTCisPtrTy<0>, SDTCisPtrTy<1>]>;
+
+def T8xxAddIPTR : SDNode<"T8xxISD::ADD_IPTR", SDT_AddIptr, []>;
+
 
 // A definition of the store instruction to access the parameter
 // stack for function calls.
@@ -228,8 +234,15 @@ def LDC  : T8InstImm<0x4,
 		"ldc $imm",
 		[(set OReg:$dst, imm:$imm)]>;
 
-// Taken from SparcInstrInfo.td
-// "LEA" forms of add (patterns to make tblgen happy)
+// These are used for relaxation
+def LDC_P8    : T8InstImmP8<0x4, (outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
+def LDC_P12   : T8InstImmP12<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
+def LDC_P16   : T8InstImmP16<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
+def LDC_P20   : T8InstImmP20<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
+def LDC_P24   : T8InstImmP24<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
+def LDC_P28   : T8InstImmP28<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
+def LDC_P32   : T8InstImmP32<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
+
 
 // Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
 def LDLP   : T8InstImm<0x1,
@@ -256,6 +269,13 @@ def AddWptrImm : T8Inst<(outs OReg:$dst),
     let isPseudo = 1;
   }
 
+// Instruction used to get addresses relative to the instruction pointer
+// for position independent code.
+def LDPI :    T8InstOp8<0x1B,
+		(outs OReg:$dst),
+		(ins OReg:$src),
+		"ldpi",
+		[(set i32:$dst, (T8xxAddIPTR i32:$src))]>;
 
 class T8BinaryOp4<bits<4> opval, string opstr, SDNode opnode> :
       T8InstOp4<opval,
@@ -576,32 +596,21 @@ def : Pat<(call tglobaladdr:$dst),
 def : Pat<(call texternalsym:$dst),
           (CALL texternalsym:$dst)>;
 
-
 // TODO: Verify whether this works for function pointers
 def : Pat<(call OReg:$target),
            (GCALL $target)>;
 
 
-/*
-def LOADSYM_JT :  T8Inst<(outs OReg:$dst),
-	              (ins i32imm:$addr),
-	             "loadsym_jt",
-		     [(set i32:$dst, (load_sym tjumptable:$addr))]>
-{
-    let isPseudo = 1;
-}
-*/
+def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC_P32 $addr)]>;
+def : Pattern<(i32 (load_sym tglobaltlsaddr:$addr)),  [(LDC_P32 $addr)]>;
 
-def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
-def : Pattern<(i32 (load_sym tglobaltlsaddr:$addr)),  [(LDC $addr)]>;
-
-def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC_P32 $addr)]>;
 
 // TODO: Test for constant pool
-def : Pattern<(i32 (load_sym tconstpool:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (load_sym tconstpool:$addr)),  [(LDC_P32 $addr)]>;
 
-def : Pattern<(i32 (load_sym tjumptable:$addr)),  [(LDC $addr)]>;
-def : Pattern<(i32 (load_sym tblockaddress:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (load_sym tjumptable:$addr)),  [(LDC_P32 $addr)]>;
+def : Pattern<(i32 (load_sym tblockaddress:$addr)),  [(LDC_P32 $addr)]>;
 
 //===----------------------------------------------------------------------===//
 // Branch Instructions
@@ -628,41 +637,32 @@ def CJ    : T8InstImm<0xA,
                 "cj $imm",
 		[(MxBrNotCond i32:$cc, bb:$imm)]>;
 
-def CJ_P8    : T8InstImmP8<0xA,
-		(outs),
-		(ins OReg:$cc, brtarget:$imm),
-                "cj $imm",
-		[]>;
+// These are used for relaxation
+def CJ_P8    : T8InstImmP8<0xA, (outs), (ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
+def CJ_P12   : T8InstImmP12<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
+def CJ_P16   : T8InstImmP16<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
+def CJ_P20   : T8InstImmP20<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
+def CJ_P24   : T8InstImmP24<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
+def CJ_P28   : T8InstImmP28<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
+def CJ_P32   : T8InstImmP32<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
+}
 
-def CJ_N8    : T8InstImmN8<0xA,
-		(outs),
-		(ins OReg:$cc, brtarget:$imm),
-                "cj $imm",
-		[]>;
 
+let isTerminator = 1, isBranch = 1, isBarrier = 1 in {
 def JUMP  : T8InstImm<0x0,
 		   (outs),
 		   (ins brtarget:$imm),
                    "j $imm",
-                   [(br bb:$imm)]> {
-		   let isBarrier = 1;
-		   }
+                   [(br bb:$imm)]>;
 
-def JUMP_P8  : T8InstImmP8<0x0,
-		   (outs),
-		   (ins brtarget:$imm),
-                   "j $imm",
-                   []> {
-		   let isBarrier = 1;
-		   }
-
-def JUMP_N8  : T8InstImmN8<0x0,
-		   (outs),
-		   (ins brtarget:$imm),
-                   "j $imm",
-                   []> {
-		   let isBarrier = 1;
-		   }
+// These are used for relaxation
+def JUMP_P8  : T8InstImmP8<0x0, (outs), (ins brtarget:$imm), "j $imm", []>;
+def JUMP_P12 : T8InstImmP12<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
+def JUMP_P16 : T8InstImmP16<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
+def JUMP_P20 : T8InstImmP20<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
+def JUMP_P24 : T8InstImmP24<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
+def JUMP_P28 : T8InstImmP28<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
+def JUMP_P32 : T8InstImmP32<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
 }
 
 

@@ -49,6 +49,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "LOAD_SYM";
   case T8xxISD::ADD_WPTR:
     return "ADD_WPTR";
+  case T8xxISD::ADD_IPTR:
+    return "ADD_IPTR";
   case T8xxISD::STL_PARM:
     return "STL_PARM";
   case T8xxISD::CMOV:
@@ -546,10 +548,14 @@ SDValue T8xxTargetLowering::LowerConstantPool(SDValue Op, SelectionDAG& DAG) con
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
   Result = DAG.getTargetConstantPool(CP->getConstVal(), CP->getValueType(0),
-				     CP->getAlign(), CP->getOffset(), T8xxMCExpr::VK_T8xx_GLOBAL);
+				     CP->getAlign(), CP->getOffset(), T8xxMCExpr::VK_T8xx_IPTRREL);
 
   EVT VT = Op.getValueType();
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
+  
+  // Add instruction to add instruction pointer to relative address
+  Result = DAG.getNode(T8xxISD::ADD_IPTR,
+		       SDLoc(Op), VT, Result);
   
   return Result;
 }
@@ -563,10 +569,14 @@ SDValue T8xxTargetLowering::LowerJumpTable(SDValue Op, SelectionDAG& DAG) const
   // TODO: Just a first try to see how things work.
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
-  Result = DAG.getTargetJumpTable(CP->getIndex(), CP->getValueType(0), T8xxMCExpr::VK_T8xx_GLOBAL);
+  Result = DAG.getTargetJumpTable(CP->getIndex(), CP->getValueType(0), T8xxMCExpr::VK_T8xx_IPTRREL);
 
   EVT VT = getPointerTy(DAG.getDataLayout ());
   Result = DAG.getNode(T8xxISD::LOAD_SYM,
+		       SDLoc(Op), VT, Result);
+
+  // Add instruction to add instruction pointer to relative address
+  Result = DAG.getNode(T8xxISD::ADD_IPTR,
 		       SDLoc(Op), VT, Result);
   
   return Result;

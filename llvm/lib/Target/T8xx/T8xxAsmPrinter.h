@@ -24,13 +24,6 @@ class MCSymbol;
 
 class LLVM_LIBRARY_VISIBILITY T8xxAsmPrinter : public AsmPrinter {
 
-  /*
-  T8xxTargetStreamer &getTargetStreamer() {
-      return static_cast<T8xxTargetStreamer &>(
-          *OutStreamer->getTargetStreamer());
-    }
-  */
-    
   public:
     explicit T8xxAsmPrinter(TargetMachine &TM,
 			    std::unique_ptr<MCStreamer> Streamer);

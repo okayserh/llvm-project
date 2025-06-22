@@ -40,22 +40,37 @@ void T8xxMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
     OS << ')';
 }
 
+// This method is called from "T8xxAsmPrinter.cpp, printOperand" and can be
+// used to introduce annotations into the resulting assembler code
+// which indicate special symbols for example.
 bool T8xxMCExpr::printVariantKind(raw_ostream &OS, VariantKind Kind)
 {
   switch (Kind) {
-  case VK_T8xx_None:     return false;
-  case VK_T8xx_IPTRREL:  return false;
-  case VK_T8xx_GLOBAL:   return false;
+  case VK_T8xx_None:
+    return false;
+  case VK_T8xx_IPTRREL:
+    OS << "%iptr_jmp(";
+    return true;
+  case VK_T8xx_SYMREL:
+    OS << "%iptr_sym(";
+    return true;
+  case VK_T8xx_GLOBAL:
+    return false;
+  case VK_T8xx_GLOBAL_NPFIX:
+    return false;
   }
   llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");
 }
 
+// This method is used from T8xxAsmParser in method "matchT8xxAsmModifiers"
+// to match modifiers before symbols.
 T8xxMCExpr::VariantKind T8xxMCExpr::parseVariantKind(StringRef name)
 {
   return StringSwitch<T8xxMCExpr::VariantKind>(name)
-    .Case("iptrrel",   VK_T8xx_IPTRREL)
-    .Case("global_pfix",    VK_T8xx_GLOBAL)
-    .Case("global",    VK_T8xx_GLOBAL_NPFIX)
+    .Case("iptr_jmp",   VK_T8xx_IPTRREL)
+    .Case("iptr_sym",   VK_T8xx_SYMREL)
+    .Case("global",     VK_T8xx_GLOBAL_NPFIX)
+    .Case("global_pfix",VK_T8xx_GLOBAL)
     .Default(VK_T8xx_None);
 }
 
@@ -64,9 +79,10 @@ T8xx::Fixups T8xxMCExpr::getFixupKind(T8xxMCExpr::VariantKind Kind) {
 
   switch (Kind) {
   default: llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");
-  case VK_T8xx_IPTRREL:  return T8xx::fixup_t8xx_jump;
-  case VK_T8xx_GLOBAL:   return T8xx::fixup_t8xx_addr;
-  case VK_T8xx_GLOBAL_NPFIX:   return T8xx::fixup_t8xx_addr_npfix;
+  case VK_T8xx_IPTRREL:      return T8xx::fixup_t8xx_jump;
+  case VK_T8xx_SYMREL:       return T8xx::fixup_t8xx_pcrel_sym;
+  case VK_T8xx_GLOBAL:       return T8xx::fixup_t8xx_addr;
+  case VK_T8xx_GLOBAL_NPFIX: return T8xx::fixup_t8xx_addr_npfix;
 
   }
 }

@@ -45,6 +45,8 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
   MCFixupKind Kind = Fixup.getKind();
   if (Kind >= FirstLiteralRelocationKind)
     return Kind - FirstLiteralRelocationKind;
+  
+  printf ("getRelocType %i\n", (int)Kind);
 
   if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Fixup.getValue())) {
     if (SExpr->getKind() == T8xxMCExpr::VK_T8xx_IPTRREL)
@@ -62,9 +64,11 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
 
       // TODO: It seem these fixups are only selected when the "IsPCRel" flag is set. However,
       // some of these relocations are not PC relative. Needs to be ordered properly.
+      //    case T8xx::fixup_t8xx_pcrel_sym: return ELF::R_T8XX_LDPI_SYM;
     case T8xx::fixup_t8xx_jump: return ELF::R_T8XX_JUMP;
-    case T8xx::fixup_t8xx_addr: return ELF::R_T8XX_ADDR;
-    case T8xx::fixup_t8xx_addr_npfix: return ELF::R_T8XX_ADDR_NPFIX;
+
+    case T8xx::fixup_t8xx_pcrel_sym: return ELF::R_T8XX_LDPI_SYM;
+
     }
   }
 
@@ -82,6 +86,8 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
   case FK_Data_8:                return ((Fixup.getOffset() % 8)
                                          ? ELF::R_T8XX_ADDR
                                          : ELF::R_T8XX_ADDR);
+  case T8xx::fixup_t8xx_addr:    return ELF::R_T8XX_ADDR;
+  case T8xx::fixup_t8xx_addr_npfix: return ELF::R_T8XX_ADDR_NPFIX;
   }
 
   return ELF::R_T8XX_NONE;
@@ -107,6 +113,7 @@ bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCValue &/*Val*/,
     case ELF::R_SPARC_GOTDATA_OP_HIX22:
     case ELF::R_SPARC_GOTDATA_OP_LOX10:
       */
+  case ELF::R_T8XX_LDPI_SYM:
   case ELF::R_T8XX_JUMP:
       return true;
   }

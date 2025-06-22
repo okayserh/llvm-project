@@ -82,7 +82,7 @@ public:
 
   // Note: Instructions need to be emitted in little endian order
   // However, the Transputer is generally big endian!!!
-  
+
   void EmitConstant(uint64_t Val, unsigned Size, SmallVectorImpl<char> &CB) const {
     // Output the constant in big endian byte order.
     for (unsigned i = 0; i != Size; ++i) {
@@ -101,8 +101,8 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
                                            SmallVectorImpl<MCFixup> &Fixups,
                                            const MCSubtargetInfo &STI) const {
   const MCInstrDesc &Desc = MCII.get(MI.getOpcode());
-  
-  int Size = Desc.getSize ();  
+
+  int Size = Desc.getSize ();
 
   // [OKH] "getBinaryCodeForInstr" is automatically created and calls either the
   // encoder method (getCallTargetOpValue) or the standard method
@@ -121,12 +121,11 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
   //
   // Note: Currently, the CJ/CALLrel and JUMP instruction use the "getCallTargetOpValue"
   // encoder.
-  // The other instructions are the 15 instruction which take an immediate.
-  
-  // The required prefix instructions will be generated in this method. 
-  printf ("Encoding %lu   Size %i\n", Bits, Size);
-  
-  MI.dump ();
+  // The other instructions are the 15 instructions which take an immediate.
+
+  // The required prefix instructions will be generated in this method.
+  //  printf ("Encoding %lu   Size %i\n", Bits, Size);
+  //  MI.dump ();
 
   // T8xx immediate functions
   if ((Size == 1) && ((Bits & 0xFF) < 0xF0))
@@ -162,7 +161,7 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
 			{
 			  support::endian::write<uint8_t>(CB, static_cast<uint8_t> (0x60 | (imm_res >> (4 * i))),
 							  llvm::endianness::big);
-			  imm_dec = ~imm_dec;			  
+			  imm_dec = ~imm_dec;
 			}
 		      else
 			support::endian::write<uint8_t>(CB, static_cast<uint8_t> (0x20 | (imm_res >> (4 * i))),
@@ -171,7 +170,7 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
 		}
 
 	      Bits |= imm_dec & 0xF;
-	      printf ("Opcode %lu   Imm %li\n", Bits, imm);
+	      //	      printf ("Opcode %lu   Imm %li\n", Bits, imm);
 	    }
 
 	  if (MO->isExpr ())
@@ -188,13 +187,6 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
 
 	      printf ("Opcode %lu, Expression found\n", Bits);
 	      MO->getExpr ()->dump ();
-
-	      // Further Debugging info
-	      if (const MCSymbolRefExpr *SymExp = dyn_cast<MCSymbolRefExpr>(MO->getExpr()))
-		{
-		  printf ("VariantName %s\n", SymExp->getVariantKindName(SymExp->getKind()).str().c_str());
-		}
-
 	    }
 	}
     }
@@ -234,15 +226,41 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
   MO.dump ();
 
   const MCExpr *Expr = MO.getExpr();
+  MCExpr::ExprKind Kind = Expr->getKind ();
+
+  printf ("Expr Kind %i\n", (int)Kind);
+
   if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr)) {
-    MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
-    Fixups.push_back(MCFixup::create(0, Expr, Kind));
-    return 0;
+    const MCExpr *SubExpr = SExpr->getSubExpr ();
+    printf ("T8xx Kind %i Sub Expr Kind %i\n",
+	    (int)SExpr->getKind (),
+	    (int)SubExpr->getKind() );
+    SubExpr->dump ();
+
+    switch (MI.getOpcode ())
+      {
+      default:
+	{
+	  MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
+	  Fixups.push_back(MCFixup::create(0, Expr, Kind));
+	  return 0;
+	}
+      case T8xx::LDC_P8:
+	{
+	  printf ("LDC_P8\n");
+	  MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_pcrel_sym_p8);
+	  Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
+	  return 0;
+	}
+      }
   }
 
   int64_t Res;
   if (Expr->evaluateAsAbsolute(Res))
-    return Res;
+    {
+      printf ("evalAsAbs %li\n", Res);
+      return Res;
+    }
 
   llvm_unreachable("Unhandled expression!");
   return 0;
@@ -264,19 +282,6 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
   assert(MO.isExpr() && "Unexpected branch target type!");
 
   const MCExpr *Expr = MO.getExpr();
-
-  Expr->dump ();
-  printf ("Expr-Kind %i\n", (int)Expr->getKind ());
-  if (Expr->getKind () == MCExpr::SymbolRef)
-    {
-      printf ("Sym Ref\n");
-      const MCSymbolRefExpr *SRE = cast<MCSymbolRefExpr>(Expr);
-      const MCSymbol &Sym = SRE->getSymbol ();
-
-      printf ("SRE Variant %u\n", (unsigned int) SRE->getKind ());
-      printf ("Sym Name %s\n", Sym.getName().str().c_str());
-    }
-
   switch (MI.getOpcode ())
     {
     case T8xx::CJ:
@@ -298,7 +303,6 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
 
   return 0;
 }
-
 
 
 #include "T8xxGenMCCodeEmitter.inc"

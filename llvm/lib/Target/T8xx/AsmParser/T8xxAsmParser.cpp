@@ -89,12 +89,7 @@ class T8xxAsmParser : public MCTargetAsmParser {
   bool matchRegisterName(const AsmToken &Tok, MCRegister &Reg,
                          unsigned &RegKind);
 
-  //  bool matchT8xxAsmModifiers(const MCExpr *&EVal, SMLoc &EndLoc);
-  /*
-  bool is64Bit() const {
-    return getSTI().getTargetTriple().getArch() == Triple::sparcv9;
-  }
-  */
+  bool matchT8xxAsmModifiers(const MCExpr *&EVal, SMLoc &EndLoc);
 
   SMLoc getLoc() const { return getParser().getTok().getLoc(); }
 
@@ -135,7 +130,7 @@ private:
     k_Register,
     k_Immediate,
     k_MemoryReg,
-    k_MemoryImm
+    //    k_MemoryImm
   } Kind;
 
   SMLoc StartLoc, EndLoc;
@@ -177,6 +172,9 @@ public:
   bool isToken() const override { return Kind == k_Token; }
   bool isReg() const override { return Kind == k_Register; }
   bool isImm() const override { return Kind == k_Immediate; }
+
+  // OKH: isMem is probably not needed. It is needed as the base class
+  // provides a pure abstract method
   bool isMem() const override { return isWPtrSrc(); }
   bool isWPtrSrc() const { return Kind == k_MemoryReg; }
 
@@ -209,8 +207,6 @@ public:
     assert((Kind == k_MemoryReg) && "Invalid access!");
     return Mem.Off;
   }
-
-
 
   /// getStartLoc - Get the location of the first token of this operand.
   SMLoc getStartLoc() const override {
@@ -500,6 +496,9 @@ ParseStatus T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
   switch (getLexer().getKind()) {
   default:
     return ParseStatus::NoMatch;
+
+    // TODO: Needs to be tested!!!
+  case AsmToken::Minus:
   case AsmToken::Integer:
     break;
   }
@@ -550,30 +549,6 @@ ParseStatus T8xxAsmParser::parseCallTarget(OperandVector &Operands) {
   return ParseStatus::Success;
 }
 
-ParseStatus
-T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
-
-  ParseStatus Res = MatchOperandParserImpl(Operands, Mnemonic);
-
-  // If there wasn't a custom match, try the generic matcher below. Otherwise,
-  // there was a match, but an error occurred, in which case, just return that
-  // the operand parsing failed.
-  if (Res.isSuccess() || Res.isFailure())
-    return Res;
-
-  // Note: AsmTokens are defined in include/llvm/MC/MCAsmMacro.h
-
-  std::unique_ptr<T8xxOperand> Op;
-
-  Res = parseT8xxAsmOperand(Op, (Mnemonic == "call"));
-  if (!Res.isSuccess() || !Op)
-    return ParseStatus::Failure;
-
-  // Push the parsed operand into the list of operands
-  Operands.push_back(std::move(Op));
-
-  return ParseStatus::Success;
-}
 
 ParseStatus
 T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
@@ -589,20 +564,12 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
   case AsmToken::Percent:
     {
       Parser.Lex(); // Eat the '%'.
-      MCRegister Reg;
-      unsigned RegKind;
-      if (matchRegisterName(Parser.getTok(), Reg, RegKind)) {
-	StringRef name = Parser.getTok().getString();
-	Parser.Lex(); // Eat the identifier token.
-	E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-	Op = T8xxOperand::CreateReg(Reg, RegKind, S, E);
-      }
-      /*
       if (matchT8xxAsmModifiers(EVal, E)) {
 	E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
+	printf ("parseT8xxOperand, Percent\n");
+	EVal->dump ();
 	Op = T8xxOperand::CreateImm(EVal, S, E);
       }
-      */
     }
     break;
 
@@ -617,14 +584,18 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
 
     int64_t Res;
     if (!EVal->evaluateAsAbsolute(Res)) {
-      T8xxMCExpr::VariantKind Kind = T8xxMCExpr::VK_T8xx_IPTRREL;
+      T8xxMCExpr::VariantKind Kind = T8xxMCExpr::VK_T8xx_GLOBAL;
+      printf ("parseT8xxOperand, Identifier\n");
 
+      /* TODO: Define T8xx memory models. For the beginning, a stand-alone model
+	 is used. (i.e. position independent)
       if (getContext().getObjectFileInfo()->isPositionIndependent()) {
         if (isCall)
           Kind = T8xxMCExpr::VK_T8xx_IPTRREL;
         else
           Kind = T8xxMCExpr::VK_T8xx_IPTRREL;
       }
+      */
       EVal = T8xxMCExpr::create(Kind, EVal, getContext());
     }
     Op = T8xxOperand::CreateImm(EVal, S, E);
@@ -633,6 +604,33 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
   return (Op) ? ParseStatus::Success : ParseStatus::Failure;
 }
 
+
+ParseStatus
+T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
+  // Note: This method is TableGenerated and resides in
+  // T8xxGenAsmMatcher.inc.
+  // Thus, this method also looks for instructions, where the "ParserMatchClass"
+  // has been defined. In our case this is the T8xxWPtrSrcAsmOperand.
+  ParseStatus Res = MatchOperandParserImpl(Operands, Mnemonic);
+
+  // If there wasn't a custom match, try the generic matcher below. Otherwise,
+  // there was a match, but an error occurred, in which case, just return that
+  // the operand parsing failed.
+  if (Res.isSuccess() || Res.isFailure())
+    return Res;
+
+  // Note: AsmTokens are defined in include/llvm/MC/MCAsmMacro.h
+  std::unique_ptr<T8xxOperand> Op;
+
+  Res = parseT8xxAsmOperand(Op, (Mnemonic == "call"));
+  if (!Res.isSuccess() || !Op)
+    return ParseStatus::Failure;
+
+  // Push the parsed operand into the list of operands
+  Operands.push_back(std::move(Op));
+
+  return ParseStatus::Success;
+}
 
 bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, MCRegister &RegNo,
                                        unsigned &RegKind) {
@@ -672,6 +670,64 @@ bool T8xxAsmParser::matchRegisterName(const AsmToken &Tok, MCRegister &RegNo,
 }
 
 
+const T8xxMCExpr *
+T8xxAsmParser::adjustPICRelocation(T8xxMCExpr::VariantKind VK,
+                                    const MCExpr *subExpr) {
+  /* TODO: Final memory models to be clarified for T8xx
+  // When in PIC mode, "%lo(...)" and "%hi(...)" behave differently.
+  // If the expression refers contains _GLOBAL_OFFSET_TABLE, it is
+  // actually a %pc10 or %pc22 relocation. Otherwise, they are interpreted
+  // as %got10 or %got22 relocation.
+
+  if (getContext().getObjectFileInfo()->isPositionIndependent()) {
+    switch(VK) {
+    default: break;
+    case SparcMCExpr::VK_Sparc_LO:
+      VK = (hasGOTReference(subExpr) ? SparcMCExpr::VK_Sparc_PC10
+                                     : SparcMCExpr::VK_Sparc_GOT10);
+      break;
+    case SparcMCExpr::VK_Sparc_HI:
+      VK = (hasGOTReference(subExpr) ? SparcMCExpr::VK_Sparc_PC22
+                                     : SparcMCExpr::VK_Sparc_GOT22);
+      break;
+    }
+  }
+  */
+  
+  return T8xxMCExpr::create(VK, subExpr, getContext());
+}
+
+
+bool T8xxAsmParser::matchT8xxAsmModifiers(const MCExpr *&EVal,
+                                            SMLoc &EndLoc) {
+  AsmToken Tok = Parser.getTok();
+  if (!Tok.is(AsmToken::Identifier))
+    return false;
+
+  StringRef name = Tok.getString();
+
+  T8xxMCExpr::VariantKind VK = T8xxMCExpr::parseVariantKind(name);
+  switch (VK) {
+  case T8xxMCExpr::VK_T8xx_None:
+    Error(getLoc(), "invalid operand modifier");
+    return false;
+
+  default:
+    break;
+  }
+
+  Parser.Lex(); // Eat the identifier.
+  if (Parser.getTok().getKind() != AsmToken::LParen)
+    return false;
+
+  Parser.Lex(); // Eat the LParen token.
+  const MCExpr *subExpr;
+  if (Parser.parseParenExpression(subExpr, EndLoc))
+    return false;
+
+  EVal = adjustPICRelocation(VK, subExpr);
+  return true;
+}
 
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxAsmParser() {
