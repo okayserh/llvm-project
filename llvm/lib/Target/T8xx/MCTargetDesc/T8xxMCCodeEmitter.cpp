@@ -237,22 +237,9 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
 	    (int)SubExpr->getKind() );
     SubExpr->dump ();
 
-    switch (MI.getOpcode ())
-      {
-      default:
-	{
-	  MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
-	  Fixups.push_back(MCFixup::create(0, Expr, Kind));
-	  return 0;
-	}
-      case T8xx::LDC_P8:
-	{
-	  printf ("LDC_P8\n");
-	  MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_pcrel_sym_p8);
-	  Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
-	  return 0;
-	}
-      }
+    MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
+    Fixups.push_back(MCFixup::create(0, Expr, Kind));
+    return 0;
   }
 
   int64_t Res;
@@ -282,24 +269,8 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
   assert(MO.isExpr() && "Unexpected branch target type!");
 
   const MCExpr *Expr = MO.getExpr();
-  switch (MI.getOpcode ())
-    {
-    case T8xx::CJ:
-    case T8xx::JUMP:
-      {
-	MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_jump);
-	Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
-      }
-      break;
-
-    case T8xx::CJ_P8:
-    case T8xx::JUMP_P8:
-      {
-	MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_jump_p8);
-	Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
-      }
-      break;
-    }
+  MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_jump);
+  Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
 
   return 0;
 }

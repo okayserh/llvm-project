@@ -295,15 +295,25 @@ static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
   
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n", sym.getVA(ctx), loc, r.addend);
 
+  // Note: Displacement is calculated from beginning of instruction
+  // Must be adjusted by the instruction length for the transputer
   // Note: +4 bit are possible in 1 byte
   // +8 bit 2 bytes
   // -4 bit 2 bytes
   // -8 bit 2 bytes
-  if (isInt<12>(displace))
+  if (isInt<28>(displace - 7))
+    req_bytes = 7;
+  if (isInt<24>(displace - 6))
+    req_bytes = 6;
+  if (isInt<20>(displace - 5))
+    req_bytes = 5;
+  if (isInt<16>(displace - 4))
+    req_bytes = 4;
+  if (isInt<12>(displace - 3))
     req_bytes = 3;
-  if (isInt<8>(displace))
+  if (isInt<8>(displace - 2))
     req_bytes = 2;
-  if ((displace >= 0) && isUInt<4>((uint64_t)displace))
+  if ((displace >= 1) && isUInt<4>((uint64_t)displace - 1))
     req_bytes = 1;
 
   printf ("relaxJump Displace %li\n", displace);

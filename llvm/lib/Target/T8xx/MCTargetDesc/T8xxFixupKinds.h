@@ -26,25 +26,8 @@ namespace llvm {
       /// fixup_t8xx_jump - jump or conditional jump  = 130
       fixup_t8xx_jump,
 
-      /// Jumps with negative offsets or positive offset that do not fit into 4 bits
-      fixup_t8xx_jump_p8,     // 131
-      fixup_t8xx_jump_p12,    // 132
-      fixup_t8xx_jump_p16,    // 133
-      fixup_t8xx_jump_p20,    // 134
-      fixup_t8xx_jump_p24,    // 135
-      fixup_t8xx_jump_p28,    // 136
-      fixup_t8xx_jump_p32,    // 137
-
       /// fixup_t8xx_pcrel_sym load
       fixup_t8xx_pcrel_sym,   // 138
-
-      fixup_t8xx_pcrel_sym_p8,   // 139
-      fixup_t8xx_pcrel_sym_p12,   // 140
-      fixup_t8xx_pcrel_sym_p16,   // 141
-      fixup_t8xx_pcrel_sym_p20,   // 142
-      fixup_t8xx_pcrel_sym_p24,   // 143
-      fixup_t8xx_pcrel_sym_p28,   // 144
-      fixup_t8xx_pcrel_sym_p32,   // 145
 
       // Marker
       LastTargetFixupKind,

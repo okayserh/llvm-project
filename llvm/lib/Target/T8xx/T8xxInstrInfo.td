@@ -234,15 +234,6 @@ def LDC  : T8InstImm<0x4,
 		"ldc $imm",
 		[(set OReg:$dst, imm:$imm)]>;
 
-// These are used for relaxation
-def LDC_P8    : T8InstImmP8<0x4, (outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
-def LDC_P12   : T8InstImmP12<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
-def LDC_P16   : T8InstImmP16<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
-def LDC_P20   : T8InstImmP20<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
-def LDC_P24   : T8InstImmP24<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
-def LDC_P28   : T8InstImmP28<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
-def LDC_P32   : T8InstImmP32<0x4,(outs OReg:$dst), (ins i32imm:$imm), "ldc $imm", []>;
-
 
 // Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
 def LDLP   : T8InstImm<0x1,
@@ -601,16 +592,16 @@ def : Pat<(call OReg:$target),
            (GCALL $target)>;
 
 
-def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC_P32 $addr)]>;
-def : Pattern<(i32 (load_sym tglobaltlsaddr:$addr)),  [(LDC_P32 $addr)]>;
+def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (load_sym tglobaltlsaddr:$addr)),  [(LDC $addr)]>;
 
-def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC_P32 $addr)]>;
+def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC $addr)]>;
 
 // TODO: Test for constant pool
-def : Pattern<(i32 (load_sym tconstpool:$addr)),  [(LDC_P32 $addr)]>;
+def : Pattern<(i32 (load_sym tconstpool:$addr)),  [(LDC $addr)]>;
 
-def : Pattern<(i32 (load_sym tjumptable:$addr)),  [(LDC_P32 $addr)]>;
-def : Pattern<(i32 (load_sym tblockaddress:$addr)),  [(LDC_P32 $addr)]>;
+def : Pattern<(i32 (load_sym tjumptable:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (load_sym tblockaddress:$addr)),  [(LDC $addr)]>;
 
 //===----------------------------------------------------------------------===//
 // Branch Instructions
@@ -636,15 +627,6 @@ def CJ    : T8InstImm<0xA,
 		(ins OReg:$cc, brtarget:$imm),
                 "cj $imm",
 		[(MxBrNotCond i32:$cc, bb:$imm)]>;
-
-// These are used for relaxation
-def CJ_P8    : T8InstImmP8<0xA, (outs), (ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
-def CJ_P12   : T8InstImmP12<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
-def CJ_P16   : T8InstImmP16<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
-def CJ_P20   : T8InstImmP20<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
-def CJ_P24   : T8InstImmP24<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
-def CJ_P28   : T8InstImmP28<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
-def CJ_P32   : T8InstImmP32<0xA,(outs),	(ins OReg:$cc, brtarget:$imm), "cj $imm", []>;
 }
 
 
@@ -654,15 +636,6 @@ def JUMP  : T8InstImm<0x0,
 		   (ins brtarget:$imm),
                    "j $imm",
                    [(br bb:$imm)]>;
-
-// These are used for relaxation
-def JUMP_P8  : T8InstImmP8<0x0, (outs), (ins brtarget:$imm), "j $imm", []>;
-def JUMP_P12 : T8InstImmP12<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
-def JUMP_P16 : T8InstImmP16<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
-def JUMP_P20 : T8InstImmP20<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
-def JUMP_P24 : T8InstImmP24<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
-def JUMP_P28 : T8InstImmP28<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
-def JUMP_P32 : T8InstImmP32<0x0,(outs), (ins brtarget:$imm), "j $imm", []>;
 }
 
 
