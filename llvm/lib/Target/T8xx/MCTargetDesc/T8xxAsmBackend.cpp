@@ -35,6 +35,9 @@ static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
 
   case T8xx::fixup_t8xx_addr:
   case T8xx::fixup_t8xx_addr_npfix:
+  case T8xx::fixup_t8xx_addr_base:
+  case T8xx::fixup_t8xx_addr_add:
+  case T8xx::fixup_t8xx_addr_sub:
     return 0;
     break;
 
@@ -109,6 +112,9 @@ namespace {
         { "fixup_t8xx_addr_npfix",0,    32,  0},
         { "fixup_t8xx_jump",    0,      64,  MCFixupKindInfo::FKF_IsPCRel },
         { "fixup_t8xx_pcrel_sym", 0,    64,  MCFixupKindInfo::FKF_IsPCRel },
+        { "fixup_t8xx_addr_base", 0,    64,  0},
+        { "fixup_t8xx_addr_add", 0,    64,  0},
+        { "fixup_t8xx_addr_sub", 0,    64,  0},
       };
 
       printf ("getFixupKindInfo %i\n", (int)Kind);
@@ -145,6 +151,9 @@ namespace {
       case T8xx::fixup_t8xx_addr:
       case T8xx::fixup_t8xx_addr_npfix:
       case T8xx::fixup_t8xx_pcrel_sym:
+      case T8xx::fixup_t8xx_addr_base:
+      case T8xx::fixup_t8xx_addr_add:
+      case T8xx::fixup_t8xx_addr_sub:
 	return true;
       }
     }

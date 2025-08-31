@@ -65,6 +65,12 @@ public:
                                  SmallVectorImpl<MCFixup> &Fixups,
                                  const MCSubtargetInfo &STI) const;
 
+  // Taken from MipsMCCodeEmitter.h. Method to treat Expression in a unified
+  // way.
+  unsigned getExprOpValue(const MCInst &MI,
+			  const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
+                          const MCSubtargetInfo &STI) const;
+
   /// getMachineOpValue - Return binary encoding of operand. If the machine
   /// operand requires relocation, record the relocation and return zero.
   unsigned getMachineOpValue(const MCInst &MI, const MCOperand &MO,
@@ -175,15 +181,10 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
 
 	  if (MO->isExpr ())
 	    {
-	      // Local symbols are "relaxed". Only global symbols need placeholders
-	      if (MO->getExpr()->getKind() != MCExpr::SymbolRef)
-		{
-		  printf ("Global Symbol\n");
-		  // Add 7 "pfix 0" instructions. These will later be adjusted
-		  // during relocation with proper values.
-		  for (int i = 0; i < 7; ++i)
-		    EmitByte (0x20, CB);
-		}
+	      // Add 7 "pfix 0" instructions. These will later be adjusted
+	      // during relocation with proper values.
+	      for (int i = 0; i < 7; ++i)
+		EmitByte (0x20, CB);
 
 	      printf ("Opcode %lu, Expression found\n", Bits);
 	      MO->getExpr ()->dump ();
@@ -194,6 +195,114 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
   EmitConstant(Bits, Size, CB);
 
   ++MCNumEmitted;  // Keep track of the # of mi's emitted.
+}
+
+
+unsigned T8xxMCCodeEmitter::
+getExprOpValue(const MCInst &MI,
+	       const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
+               const MCSubtargetInfo &STI) const {
+  int64_t Res;
+
+  if (Expr->evaluateAsAbsolute(Res))
+    return Res;
+
+  MCExpr::ExprKind Kind = Expr->getKind();
+  if (Kind == MCExpr::Constant) {
+    return cast<MCConstantExpr>(Expr)->getValue();
+  }
+
+  if (Kind == MCExpr::Binary) {
+    const MCBinaryExpr *BinExpr = cast<MCBinaryExpr>(Expr);
+    printf ("Encountered binary LHS %i   RHS %i\n",
+	    BinExpr->getLHS()->getKind (),
+	    BinExpr->getRHS()->getKind ());
+
+    int64_t Res = 0;
+    if (BinExpr->getLHS()->evaluateAsAbsolute(Res))
+      printf ("LHS Eval %li\n", Res);
+    if (BinExpr->getRHS()->evaluateAsAbsolute(Res))
+      printf ("RHS Eval %li\n", Res);
+    
+    BinExpr->getLHS()->dump();
+    BinExpr->getRHS()->dump();
+
+    switch (BinExpr->getOpcode ())
+      {
+      case MCBinaryExpr::Opcode::Add:
+	{
+	  MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_addr_base);
+	  Fixups.push_back(MCFixup::create(0, BinExpr->getLHS(), Kind, MI.getLoc()));
+	  Kind = MCFixupKind(T8xx::fixup_t8xx_addr_add);
+	  Fixups.push_back(MCFixup::create(0, BinExpr->getRHS(), Kind, MI.getLoc()));
+	}
+	break;
+      case MCBinaryExpr::Opcode::Sub:
+	{
+	  MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_addr_base);
+	  Fixups.push_back(MCFixup::create(0, BinExpr->getLHS(), Kind, MI.getLoc()));
+	  Kind = MCFixupKind(T8xx::fixup_t8xx_addr_sub);
+	  Fixups.push_back(MCFixup::create(0, BinExpr->getRHS(), Kind, MI.getLoc()));
+	}
+	break;
+
+      default:
+	Ctx.reportError(Expr->getLoc(), "unsupported binary expression");
+      }
+    
+
+    /*
+    unsigned Res =
+        getExprOpValue(cast<MCBinaryExpr>(Expr)->getLHS(), Fixups, STI);
+    Res += getExprOpValue(cast<MCBinaryExpr>(Expr)->getRHS(), Fixups, STI);
+    return Res;
+    */
+
+    return 0;
+  }
+
+  if (Kind == MCExpr::Target) {
+    const T8xxMCExpr *T8xxExpr = cast<T8xxMCExpr>(Expr);
+
+    // TODO:
+    /*
+    Mips::Fixups FixupKind = Mips::Fixups(0);
+    switch (MipsExpr->getKind()) {
+    case MipsMCExpr::MEK_None:
+    case MipsMCExpr::MEK_Special:
+      llvm_unreachable("Unhandled fixup kind!");
+      break;
+    case MipsMCExpr::MEK_TPREL_LO:
+      FixupKind = isMicroMips(STI) ? Mips::fixup_MICROMIPS_TLS_TPREL_LO16
+                                   : Mips::fixup_Mips_TPREL_LO;
+      break;
+    case MipsMCExpr::MEK_NEG:
+      FixupKind =
+          isMicroMips(STI) ? Mips::fixup_MICROMIPS_SUB : Mips::fixup_Mips_SUB;
+      break;
+    }
+    Fixups.push_back(MCFixup::create(0, MipsExpr, MCFixupKind(FixupKind)));
+    return 0;
+    */
+    llvm_unreachable("Unhandled expression!");
+  }
+
+  if (Kind == MCExpr::SymbolRef)
+    {
+      const MCSymbolRefExpr *SymRef = cast<MCSymbolRefExpr>(Expr);
+      switch (SymRef->getKind ())
+	{
+	case MCSymbolRefExpr::VariantKind::VK_None:
+	  {
+	    MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_addr);
+	    Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
+	  }
+	  break;
+	default:
+	  Ctx.reportError(Expr->getLoc(), "unhandled symbol type");
+	}
+    }
+  return 0;
 }
 
 
@@ -225,6 +334,8 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
   MI.dump ();
   MO.dump ();
 
+  return getExprOpValue(MI, MO.getExpr(),Fixups, STI);
+  /*
   const MCExpr *Expr = MO.getExpr();
   MCExpr::ExprKind Kind = Expr->getKind ();
 
@@ -248,6 +359,7 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
       printf ("evalAsAbs %li\n", Res);
       return Res;
     }
+  */
 
   llvm_unreachable("Unhandled expression!");
   return 0;
@@ -269,6 +381,7 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
   assert(MO.isExpr() && "Unexpected branch target type!");
 
   const MCExpr *Expr = MO.getExpr();
+
   MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_jump);
   Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
 

@@ -88,6 +88,12 @@ RelExpr T8xx::getRelExpr(RelType type, const Symbol &s,
     return R_ABS;
   case R_T8XX_ADDR_NPFIX:
     return R_ABS;
+  case R_T8XX_ADDR_BASE:
+    return R_ABS;
+  case R_T8XX_ADDR_ADD:
+    return R_ABS;
+  case R_T8XX_ADDR_SUB:
+    return R_ABS;
   case R_T8XX_JUMP:
     return R_PC;
   case R_T8XX_LDPI_SYM:
@@ -156,6 +162,59 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint32_t len, uint8_t opcode)
   loc[indx] = (opcode & 0xF0) | (imm_dec & 0xF);
 }
 
+
+// Note: Displacement is calculated from beginning of instruction
+// Must be adjusted by the instruction length for the transputer
+// Note: +4 bit are possible in 1 byte
+// +8 bit 2 bytes
+// -4 bit 2 bytes
+// -8 bit 2 bytes
+
+// This function is for pc relative instructions, like jumps
+// The instruction length is deducted from the value
+static uint32_t calc_pfix_len_pcrel (const int64_t val)
+{
+  uint32_t req_bytes = 8;
+  if (isInt<28>(val - 7))
+    req_bytes = 7;
+  if (isInt<24>(val - 6))
+    req_bytes = 6;
+  if (isInt<20>(val - 5))
+    req_bytes = 5;
+  if (isInt<16>(val - 4))
+    req_bytes = 4;
+  if (isInt<12>(val - 3))
+    req_bytes = 3;
+  if (isInt<8>(val - 2))
+    req_bytes = 2;
+  if ((val >= 1) && isUInt<4>((uint64_t)val - 1))
+    req_bytes = 1;
+  return (req_bytes);
+}
+
+// This function is for absolute value, like in binary expressions
+// or global addresses
+static uint32_t calc_pfix_len_abs (const int64_t val)
+{
+  uint32_t req_bytes = 8;
+  if (isInt<28>(val))
+    req_bytes = 7;
+  if (isInt<24>(val))
+    req_bytes = 6;
+  if (isInt<20>(val))
+    req_bytes = 5;
+  if (isInt<16>(val))
+    req_bytes = 4;
+  if (isInt<12>(val))
+    req_bytes = 3;
+  if (isInt<8>(val))
+    req_bytes = 2;
+  if ((val >= 1) && isUInt<4>((uint64_t)val))
+    req_bytes = 1;
+  return (req_bytes);
+}
+
+
 void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   printf ("Relocation Type %i  Value %x\n", rel.type, val);
 
@@ -166,9 +225,16 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     // Fill in the prefixes
     for (int i = 0; i < 8; ++i)
       loc[i] = (loc[i] & 0xF0) | ((val >> (7-i)*4) & 0xF);
+    break;
 
-    //    checkUInt(loc, val, 32, rel);
-    //    *loc = val & 0xff;
+  case R_T8XX_ADDR_BASE:
+  case R_T8XX_ADDR_ADD:
+  case R_T8XX_ADDR_SUB:
+    {
+      printf ("relocate: ADDR_BASE,ADD_SUB\n");
+      int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
+      printf ("Rel-Type %i  VAL %lu  SVal %i\n", rel.type, val, sval);
+    }
     break;
 
   case INTERNAL_R_T8XX_JUMP_P4:
@@ -276,13 +342,13 @@ static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc
   */
 }
 
-// Note: The relaxation iteration does adapt symbols and
-// offsets etc. However, these never change anything in the
-// underlying code or structure.
-// Hence, the relaxJump function always assumes an 8 byte
-// instruction, which may be shortened.
 
-static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
+// Note: This is used to relax binary expressions.
+// These are represented by two relocations at the same offset
+// The first one is R_T8XX_ADDR_BASE, the second one either
+// R_T8XX_ADDR_ADD or R_T8XX_ADDR_SUB
+
+static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
   //  const bool rvc = getEFlags(ctx, sec.file) & EF_RISCV_RVC;
   const Symbol &sym = *r.sym;
@@ -293,29 +359,50 @@ static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
 
   uint32_t req_bytes = 8;
   
+  if (r.type == R_T8XX_ADDR_BASE)
+    {
+      sec.relaxAux->writes.push_back((uint32_t) dest);
+      SmallVector<uint32_t>::iterator end_it = sec.relaxAux->writes.end();
+      end_it--;
+      remove = 0;
+    }
+
+  if (r.type == R_T8XX_ADDR_SUB)
+    {
+      SmallVector<uint32_t>::iterator end_it = sec.relaxAux->writes.end();
+      end_it--;
+      uint32_t base = *end_it;
+      printf ("Bin Dest %08x Base %08x Bin Exp %08x\n", dest, base, base - dest);
+      uint32_t req_bytes = calc_pfix_len_abs (displace);
+      remove = 8 - req_bytes;
+
+      // Put the resulting value into the "writes" field.
+      sec.relaxAux->writes.push_back((uint32_t) base - dest);
+      //      sec.relaxAux->relocTypes[i] = (INTERNAL_R_T8XX_JUMP_P4 - 1 + req_bytes);
+      sec.relaxAux->relocTypes[i] = R_T8XX_ADDR_SUB;
+    }
+
+  // Relocation is selected based on required bytes
+  remove = 8 - req_bytes;
+  /*
+  if (req_bytes < 8)
+    sec.relaxAux->relocTypes[i] = (INTERNAL_R_T8XX_JUMP_P4 - 1 + req_bytes);
+  */
+}
+
+
+static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
+                      Relocation &r, uint32_t &remove) {
+  //  const bool rvc = getEFlags(ctx, sec.file) & EF_RISCV_RVC;
+  const Symbol &sym = *r.sym;
+  const uint64_t insnPair = read64le(sec.content().data() + r.offset);
+  const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
+  const uint64_t dest = sym.getVA(ctx) + r.addend;
+  const int64_t displace = dest - loc;
+
+  uint32_t req_bytes = calc_pfix_len_pcrel (displace);
+  
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n", sym.getVA(ctx), loc, r.addend);
-
-  // Note: Displacement is calculated from beginning of instruction
-  // Must be adjusted by the instruction length for the transputer
-  // Note: +4 bit are possible in 1 byte
-  // +8 bit 2 bytes
-  // -4 bit 2 bytes
-  // -8 bit 2 bytes
-  if (isInt<28>(displace - 7))
-    req_bytes = 7;
-  if (isInt<24>(displace - 6))
-    req_bytes = 6;
-  if (isInt<20>(displace - 5))
-    req_bytes = 5;
-  if (isInt<16>(displace - 4))
-    req_bytes = 4;
-  if (isInt<12>(displace - 3))
-    req_bytes = 3;
-  if (isInt<8>(displace - 2))
-    req_bytes = 2;
-  if ((displace >= 1) && isUInt<4>((uint64_t)displace - 1))
-    req_bytes = 1;
-
   printf ("relaxJump Displace %li\n", displace);
   printf ("Current size %li\n", sec.size);
   printf ("INSN %#018"PRIx64"\n", insnPair);
@@ -352,6 +439,13 @@ static bool relax(Ctx &ctx, InputSection &sec) {
     case R_T8XX_JUMP:
       relaxJump(ctx, sec, i, loc, r, remove);
       break;
+
+    case R_T8XX_ADDR_BASE:
+    case R_T8XX_ADDR_ADD:
+    case R_T8XX_ADDR_SUB:
+      relaxBinary(ctx, sec, i, loc, r, remove);
+      break;
+
     }
 
     // For all anchors whose offsets are <= r.offset, they are preceded by
@@ -459,6 +553,22 @@ void T8xx::finalizeRelax(int passes) const {
         // we are in the middle of a 4-byte NOP, and we need to rewrite the NOP
         // sequence.
         int64_t skip = 0;
+
+	// TODO: Here the code for putting in the difference in case of binary
+	// relocations needs to be filled in.
+
+	if (RelType newType = aux.relocTypes[i]) {
+	  switch (newType)
+	    {
+	    case R_T8XX_ADDR_SUB:
+	      {
+		//		printf ("Finalize SUB %i\n", aux.writes[i]);
+	      }
+	      break;
+	    }
+	}	
+
+	
 	/* TODO: See if this may be needed
 	if (RelType newType = aux.relocTypes[i]) {
           switch (newType) {

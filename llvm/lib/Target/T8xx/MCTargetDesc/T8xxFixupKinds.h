@@ -29,6 +29,10 @@ namespace llvm {
       /// fixup_t8xx_pcrel_sym load
       fixup_t8xx_pcrel_sym,   // 138
 
+      fixup_t8xx_addr_base,   // 138
+      fixup_t8xx_addr_add,   // 138
+      fixup_t8xx_addr_sub,   // 138
+
       // Marker
       LastTargetFixupKind,
       NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind

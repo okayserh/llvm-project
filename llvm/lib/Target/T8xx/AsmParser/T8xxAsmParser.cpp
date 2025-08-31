@@ -582,22 +582,18 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
     if (getParser().parseExpression(EVal, E))
       break;
 
+    // TODO: Unclear why a T8xxMCExpr is needed? (Was copied from SPARC Code)
+    // The standard MCExpr should do fine?
+    /*
     int64_t Res;
     if (!EVal->evaluateAsAbsolute(Res)) {
       T8xxMCExpr::VariantKind Kind = T8xxMCExpr::VK_T8xx_GLOBAL;
-      printf ("parseT8xxOperand, Identifier\n");
+      printf ("parseT8xxOperand, Identifier   Expr Kind %i\n", EVal->getKind ());
+      EVal->dump ();
 
-      /* TODO: Define T8xx memory models. For the beginning, a stand-alone model
-	 is used. (i.e. position independent)
-      if (getContext().getObjectFileInfo()->isPositionIndependent()) {
-        if (isCall)
-          Kind = T8xxMCExpr::VK_T8xx_IPTRREL;
-        else
-          Kind = T8xxMCExpr::VK_T8xx_IPTRREL;
-      }
-      */
       EVal = T8xxMCExpr::create(Kind, EVal, getContext());
     }
+    */
     Op = T8xxOperand::CreateImm(EVal, S, E);
     break;
   }
