@@ -118,6 +118,12 @@ bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCValue &/*Val*/,
     case ELF::R_SPARC_GOTDATA_OP_HIX22:
     case ELF::R_SPARC_GOTDATA_OP_LOX10:
       */
+      // Returning true creates a "real" symbol in the ELF object file!
+      // We need this for the binary relocations.
+  case ELF::R_T8XX_ADDR_BASE:
+  case ELF::R_T8XX_ADDR_ADD:
+  case ELF::R_T8XX_ADDR_SUB:
+
   case ELF::R_T8XX_LDPI_SYM:
   case ELF::R_T8XX_JUMP:
       return true;

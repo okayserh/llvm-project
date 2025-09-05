@@ -227,13 +227,18 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       loc[i] = (loc[i] & 0xF0) | ((val >> (7-i)*4) & 0xF);
     break;
 
+    // Base is not relocated. Only the add/sub relocations
   case R_T8XX_ADDR_BASE:
+    break;
+
   case R_T8XX_ADDR_ADD:
   case R_T8XX_ADDR_SUB:
     {
       printf ("relocate: ADDR_BASE,ADD_SUB\n");
-      int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
-      printf ("Rel-Type %i  VAL %lu  SVal %i\n", rel.type, val, sval);
+      int32_t sval = SignExtend32 ((uint32_t)(rel.addend & 0xFFFFFFFF), 32);
+      uint32_t len = calc_pfix_len_abs (rel.addend);
+      printf ("Rel-Type %i  VAL %lu  SVal %i  Len %lu\n", rel.type, val, sval, len);
+      fill_pnfix (loc, sval, len, loc[len-1]);
     }
     break;
 
@@ -354,11 +359,13 @@ static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t lo
   const Symbol &sym = *r.sym;
   const uint64_t insnPair = read64le(sec.content().data() + r.offset);
   const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
-  const uint64_t dest = sym.getVA(ctx) + r.addend;
+  //  const uint64_t dest = sym.getVA(ctx) + r.addend;
+  const uint64_t dest = sym.getVA(ctx, r.addend);
   const int64_t displace = dest - loc;
 
   uint32_t req_bytes = 8;
   
+  printf ("Sym Value %08x   Loc %08x  Add  %08x   Dest %08x\n", sym.getVA(ctx), loc, r.addend, dest);
   if (r.type == R_T8XX_ADDR_BASE)
     {
       sec.relaxAux->writes.push_back((uint32_t) dest);
@@ -382,8 +389,9 @@ static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t lo
       sec.relaxAux->relocTypes[i] = R_T8XX_ADDR_SUB;
     }
 
+  printf ("Remove %i\n", remove);
+  
   // Relocation is selected based on required bytes
-  remove = 8 - req_bytes;
   /*
   if (req_bytes < 8)
     sec.relaxAux->relocTypes[i] = (INTERNAL_R_T8XX_JUMP_P4 - 1 + req_bytes);
@@ -412,6 +420,8 @@ static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
   remove = 8 - req_bytes;
   if (req_bytes < 8)
     sec.relaxAux->relocTypes[i] = (INTERNAL_R_T8XX_JUMP_P4 - 1 + req_bytes);
+
+  sec.relaxAux->writes.push_back(0x0); // Dummy value to keep array indices in sync
 }
 
 
@@ -446,6 +456,8 @@ static bool relax(Ctx &ctx, InputSection &sec) {
       relaxBinary(ctx, sec, i, loc, r, remove);
       break;
 
+    default:
+      aux.writes.push_back (0x0);  // Dummy value to keep array indices in sync
     }
 
     // For all anchors whose offsets are <= r.offset, they are preceded by
@@ -562,7 +574,9 @@ void T8xx::finalizeRelax(int passes) const {
 	    {
 	    case R_T8XX_ADDR_SUB:
 	      {
-		//		printf ("Finalize SUB %i\n", aux.writes[i]);
+		uint32_t len = calc_pfix_len_abs (aux.writes[i]);
+		printf ("Finalize SUB %i   Size %i  Rem %i\n", aux.writes[i], size, remove);
+		rels[i].addend = aux.writes[i];
 	      }
 	      break;
 	    }
