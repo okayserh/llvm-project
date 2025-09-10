@@ -260,11 +260,14 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     break;
 
   case R_T8XX_LDPI_SYM:
-    // TODO: Negative relocations are feasible for the transputer
-    // See if another check should be implemented
-    //    checkUInt(loc, val, 32, rel);
-    //    *loc = (val >> 8) & 0xff;
-
+    {
+      int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
+      uint32_t len = calc_pfix_len_pcrel (val - 2);
+      printf ("LDPI SYM VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
+      fill_pnfix (loc, val - 2 - len, len, loc[len-1]);
+    }
+    
+    /*
     // TODO: Offset for the pfix/nfix instructions before the
     // actual jump instruction. Two additional bytes for the
     // LDPI instruction. Needs to be adapted when the
@@ -274,9 +277,10 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     // Fill in the prefixes
     for (int i = 0; i < 8; ++i)
       loc[i] = (loc[i] & 0xF0) | ((val >> (7-i)*4) & 0xF);
+    */
 
-    //    write32(loc, 0x12345678);
     break;
+
   case R_T8XX_ADDR_NPFIX:
     // Fill in and address, which is not based on prefixe
     // Example is a reference to a place in the data section
@@ -316,35 +320,15 @@ static uint32_t extractBits(uint64_t v, uint32_t begin, uint32_t end) {
 // Relax R_RISCV_CALL/R_RISCV_CALL_PLT auipc+jalr to c.j, c.jal, or jal.
 static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
-  //  const bool rvc = getEFlags(ctx, sec.file) & EF_RISCV_RVC;
   const Symbol &sym = *r.sym;
   const uint64_t insnPair = read64le(sec.content().data() + r.offset);
-  const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
   const uint64_t dest = sym.getVA(ctx) + r.addend;
   const int64_t displace = dest - loc;
 
   printf ("relaxNPFix Displace %li\n", displace);
-
   printf ("Symbol %s\n", toStr(ctx, sym).c_str ());
   printf ("Sym Type %i  bind %i\n", sym.type, sym.binding);
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n\n", sym.getVA(ctx), loc, r.addend);
-
-  /*
-  if (rvc && isInt<12>(displace) && rd == 0) {
-    sec.relaxAux->relocTypes[i] = R_RISCV_RVC_JUMP;
-    sec.relaxAux->writes.push_back(0xa001); // c.j
-    remove = 6;
-  } else if (rvc && isInt<12>(displace) && rd == X_RA &&
-             !ctx.arg.is64) { // RV32C only
-    sec.relaxAux->relocTypes[i] = R_RISCV_RVC_JUMP;
-    sec.relaxAux->writes.push_back(0x2001); // c.jal
-    remove = 6;
-  } else if (isInt<21>(displace)) {
-    sec.relaxAux->relocTypes[i] = R_RISCV_JAL;
-    sec.relaxAux->writes.push_back(0x6f | rd << 7); // jal
-    remove = 4;
-  }
-  */
 }
 
 
@@ -355,17 +339,14 @@ static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc
 
 static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
-  //  const bool rvc = getEFlags(ctx, sec.file) & EF_RISCV_RVC;
   const Symbol &sym = *r.sym;
   const uint64_t insnPair = read64le(sec.content().data() + r.offset);
   const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
-  //  const uint64_t dest = sym.getVA(ctx) + r.addend;
   const uint64_t dest = sym.getVA(ctx, r.addend);
   const int64_t displace = dest - loc;
-
   uint32_t req_bytes = 8;
   
-  printf ("Sym Value %08x   Loc %08x  Add  %08x   Dest %08x\n", sym.getVA(ctx), loc, r.addend, dest);
+  //  printf ("Sym Value %08x   Loc %08x  Add  %08x   Dest %08x\n", sym.getVA(ctx), loc, r.addend, dest);
   if (r.type == R_T8XX_ADDR_BASE)
     {
       sec.relaxAux->writes.push_back((uint32_t) dest);
@@ -374,47 +355,68 @@ static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t lo
       remove = 0;
     }
 
-  if (r.type == R_T8XX_ADDR_SUB)
+  if ((r.type == R_T8XX_ADDR_SUB) ||
+      (r.type == R_T8XX_ADDR_ADD))
     {
       SmallVector<uint32_t>::iterator end_it = sec.relaxAux->writes.end();
       end_it--;
       uint32_t base = *end_it;
-      printf ("Bin Dest %08x Base %08x Bin Exp %08x\n", dest, base, base - dest);
+      //      printf ("Bin Dest %08x Base %08x Bin Exp %08x\n", dest, base, base - dest);
       uint32_t req_bytes = calc_pfix_len_abs (displace);
       remove = 8 - req_bytes;
 
       // Put the resulting value into the "writes" field.
-      sec.relaxAux->writes.push_back((uint32_t) base - dest);
-      //      sec.relaxAux->relocTypes[i] = (INTERNAL_R_T8XX_JUMP_P4 - 1 + req_bytes);
-      sec.relaxAux->relocTypes[i] = R_T8XX_ADDR_SUB;
+      if (r.type == R_T8XX_ADDR_SUB)
+	sec.relaxAux->writes.push_back((uint32_t) base - dest);
+      else
+	sec.relaxAux->writes.push_back((uint32_t) base + dest);
+      sec.relaxAux->relocTypes[i] = r.type;
     }
 
-  printf ("Remove %i\n", remove);
-  
+  //  printf ("Remove %i\n", remove);
+}
+
+
+static void relaxLDPI(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
+                      Relocation &r, uint32_t &remove) {
+  const Symbol &sym = *r.sym;
+  const uint64_t insnPair = read64le(sec.content().data() + r.offset);
+  const uint64_t dest = sym.getVA(ctx) + r.addend;
+  const int64_t displace = dest - loc;
+
+  uint32_t req_bytes = calc_pfix_len_pcrel (displace - 2);
+
+  printf ("Sym Value %08x   Loc %08x    Dest  %08x\n", sym.getVA(ctx), loc, r.addend);
+  printf ("relaxLDPI Displace %li\n", displace);
+  printf ("Current size %li\n", sec.size);
+  printf ("INSN %#018"PRIx64"\n", insnPair);
+  printf ("Symbol %s\n\n", toStr(ctx, sym).c_str ());
+
   // Relocation is selected based on required bytes
-  /*
+  remove = 8 - req_bytes;
   if (req_bytes < 8)
-    sec.relaxAux->relocTypes[i] = (INTERNAL_R_T8XX_JUMP_P4 - 1 + req_bytes);
-  */
+    sec.relaxAux->relocTypes[i] = r.type;
+
+  sec.relaxAux->writes.push_back(0x0); // Dummy value to keep array indices in sync
 }
 
 
 static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
-  //  const bool rvc = getEFlags(ctx, sec.file) & EF_RISCV_RVC;
   const Symbol &sym = *r.sym;
   const uint64_t insnPair = read64le(sec.content().data() + r.offset);
-  const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
   const uint64_t dest = sym.getVA(ctx) + r.addend;
   const int64_t displace = dest - loc;
 
   uint32_t req_bytes = calc_pfix_len_pcrel (displace);
-  
+
+  /*
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n", sym.getVA(ctx), loc, r.addend);
   printf ("relaxJump Displace %li\n", displace);
   printf ("Current size %li\n", sec.size);
   printf ("INSN %#018"PRIx64"\n", insnPair);
   printf ("Symbol %s\n\n", toStr(ctx, sym).c_str ());
+  */
 
   // Relocation is selected based on required bytes
   remove = 8 - req_bytes;
@@ -454,6 +456,10 @@ static bool relax(Ctx &ctx, InputSection &sec) {
     case R_T8XX_ADDR_ADD:
     case R_T8XX_ADDR_SUB:
       relaxBinary(ctx, sec, i, loc, r, remove);
+      break;
+
+    case R_T8XX_LDPI_SYM:
+      relaxLDPI(ctx, sec, i, loc, r, remove);
       break;
 
     default:
@@ -572,6 +578,7 @@ void T8xx::finalizeRelax(int passes) const {
 	if (RelType newType = aux.relocTypes[i]) {
 	  switch (newType)
 	    {
+	    case R_T8XX_ADDR_ADD:
 	    case R_T8XX_ADDR_SUB:
 	      {
 		uint32_t len = calc_pfix_len_abs (aux.writes[i]);

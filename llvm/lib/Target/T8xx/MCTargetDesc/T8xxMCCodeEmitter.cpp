@@ -263,6 +263,31 @@ getExprOpValue(const MCInst &MI,
 
   if (Kind == MCExpr::Target) {
     const T8xxMCExpr *T8xxExpr = cast<T8xxMCExpr>(Expr);
+    T8xx::Fixups FixupKind = T8xx::Fixups (0);
+
+    switch (T8xxExpr->getKind ())
+      {
+      case T8xxMCExpr::VK_T8xx_None:
+	printf ("Target Expr: T8xx_None\n");
+	break;
+      case T8xxMCExpr::VK_T8xx_IPTRREL:
+	printf ("Target Expr: T8xx_IPTRREL\n");
+	break;
+      case T8xxMCExpr::VK_T8xx_SYMREL:
+	{
+	  FixupKind = T8xx::fixup_t8xx_pcrel_sym;
+    	  Fixups.push_back(MCFixup::create(0, T8xxExpr, MCFixupKind(FixupKind), MI.getLoc()));
+	  return (0);
+	  printf ("Target Expr: T8xx_SYMREL\n");
+	}
+	break;
+      case T8xxMCExpr::VK_T8xx_GLOBAL:
+	printf ("Target Expr: T8xx_GLOBAL\n");
+	break;
+      case T8xxMCExpr::VK_T8xx_GLOBAL_NPFIX:
+	printf ("Target Expr: T8xx_GLOBAL_NPFIX\n");
+	break;
+      }
 
     // TODO:
     /*
