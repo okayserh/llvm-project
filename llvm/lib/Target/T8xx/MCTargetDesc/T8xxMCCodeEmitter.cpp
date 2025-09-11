@@ -282,6 +282,11 @@ getExprOpValue(const MCInst &MI,
 	}
 	break;
       case T8xxMCExpr::VK_T8xx_GLOBAL:
+	{
+	  FixupKind = T8xx::fixup_t8xx_addr;
+    	  Fixups.push_back(MCFixup::create(0, T8xxExpr, MCFixupKind(FixupKind), MI.getLoc()));
+	  return (0);
+	}
 	printf ("Target Expr: T8xx_GLOBAL\n");
 	break;
       case T8xxMCExpr::VK_T8xx_GLOBAL_NPFIX:

@@ -63,6 +63,7 @@ public:
 
 // These are internal relocation numbers for GP relaxation. They aren't part
 // of the psABI spec.
+/*
 #define INTERNAL_R_T8XX_JUMP_P4 256
 #define INTERNAL_R_T8XX_JUMP_P8 257
 #define INTERNAL_R_T8XX_JUMP_P12 258
@@ -70,7 +71,7 @@ public:
 #define INTERNAL_R_T8XX_JUMP_P20 260
 #define INTERNAL_R_T8XX_JUMP_P24 261
 #define INTERNAL_R_T8XX_JUMP_P28 262
-
+*/
 
 
 T8xx::T8xx(Ctx &ctx) : TargetInfo(ctx)
@@ -242,17 +243,10 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     }
     break;
 
-  case INTERNAL_R_T8XX_JUMP_P4:
-  case INTERNAL_R_T8XX_JUMP_P8:
-  case INTERNAL_R_T8XX_JUMP_P12:
-  case INTERNAL_R_T8XX_JUMP_P16:
-  case INTERNAL_R_T8XX_JUMP_P20:
-  case INTERNAL_R_T8XX_JUMP_P24:
-  case INTERNAL_R_T8XX_JUMP_P28:
   case R_T8XX_JUMP:
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
-      uint32_t len = (rel.type == R_T8XX_JUMP) ? 8 : (rel.type - INTERNAL_R_T8XX_JUMP_P4 + 1);
+      uint32_t len = calc_pfix_len_pcrel (val);
       printf ("VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
 
       fill_pnfix (loc, sval - len, len, loc[len-1]);
@@ -264,21 +258,9 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_pcrel (val - 2);
       printf ("LDPI SYM VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
-      fill_pnfix (loc, val - 2 - len, len, loc[len-1]);
+      // The "-2" is two bytes for the "ldpi" instruction after the ldc.
+      fill_pnfix (loc, sval - 2 - len, len, loc[len-1]);
     }
-    
-    /*
-    // TODO: Offset for the pfix/nfix instructions before the
-    // actual jump instruction. Two additional bytes for the
-    // LDPI instruction. Needs to be adapted when the
-    // relaxation is operational
-    val -= 10;
-
-    // Fill in the prefixes
-    for (int i = 0; i < 8; ++i)
-      loc[i] = (loc[i] & 0xF0) | ((val >> (7-i)*4) & 0xF);
-    */
-
     break;
 
   case R_T8XX_ADDR_NPFIX:
@@ -418,10 +400,10 @@ static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
   printf ("Symbol %s\n\n", toStr(ctx, sym).c_str ());
   */
 
-  // Relocation is selected based on required bytes
+  // Relocation is kept as it is
   remove = 8 - req_bytes;
   if (req_bytes < 8)
-    sec.relaxAux->relocTypes[i] = (INTERNAL_R_T8XX_JUMP_P4 - 1 + req_bytes);
+    sec.relaxAux->relocTypes[i] = r.type;
 
   sec.relaxAux->writes.push_back(0x0); // Dummy value to keep array indices in sync
 }
