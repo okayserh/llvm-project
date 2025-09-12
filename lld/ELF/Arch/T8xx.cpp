@@ -126,7 +126,7 @@ bool T8xx::needsThunk(RelExpr expr, RelType type, const InputFile *file,
   return false;
 }
 
-static void fill_pnfix (uint8_t *loc, int32_t imm, uint32_t len, uint8_t opcode)
+static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode)
 {
   int indx = 0;
   
@@ -161,6 +161,34 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint32_t len, uint8_t opcode)
     }
 
   loc[indx] = (opcode & 0xF0) | (imm_dec & 0xF);
+
+  // Debug output
+  for (i = 0; i <= indx; ++i)
+    printf ("%02x ", loc[i]);
+  printf ("\n");
+}
+
+
+// This function is for absolute value, like in binary expressions
+// or global addresses
+static uint32_t calc_pfix_len_abs (const int64_t val)
+{
+  uint32_t req_bytes = 8;
+  if (isInt<29>(val))
+    req_bytes = 7;
+  if (isInt<25>(val))
+    req_bytes = 6;
+  if (isInt<21>(val))
+    req_bytes = 5;
+  if (isInt<17>(val))
+    req_bytes = 4;
+  if (isInt<13>(val))
+    req_bytes = 3;
+  if (isInt<9>(val))
+    req_bytes = 2;
+  if ((val >= 0) && isUInt<4>((uint64_t)val))
+    req_bytes = 1;
+  return (req_bytes);
 }
 
 
@@ -176,45 +204,22 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint32_t len, uint8_t opcode)
 static uint32_t calc_pfix_len_pcrel (const int64_t val)
 {
   uint32_t req_bytes = 8;
-  if (isInt<28>(val - 7))
+  if (isInt<29>(val - 7))
     req_bytes = 7;
-  if (isInt<24>(val - 6))
+  if (isInt<25>(val - 6))
     req_bytes = 6;
-  if (isInt<20>(val - 5))
+  if (isInt<21>(val - 5))
     req_bytes = 5;
-  if (isInt<16>(val - 4))
+  if (isInt<17>(val - 4))
     req_bytes = 4;
-  if (isInt<12>(val - 3))
+  if (isInt<13>(val - 3))
     req_bytes = 3;
-  if (isInt<8>(val - 2))
+  if (isInt<9>(val - 2))
     req_bytes = 2;
   if ((val >= 1) && isUInt<4>((uint64_t)val - 1))
     req_bytes = 1;
   return (req_bytes);
 }
-
-// This function is for absolute value, like in binary expressions
-// or global addresses
-static uint32_t calc_pfix_len_abs (const int64_t val)
-{
-  uint32_t req_bytes = 8;
-  if (isInt<28>(val))
-    req_bytes = 7;
-  if (isInt<24>(val))
-    req_bytes = 6;
-  if (isInt<20>(val))
-    req_bytes = 5;
-  if (isInt<16>(val))
-    req_bytes = 4;
-  if (isInt<12>(val))
-    req_bytes = 3;
-  if (isInt<8>(val))
-    req_bytes = 2;
-  if ((val >= 1) && isUInt<4>((uint64_t)val))
-    req_bytes = 1;
-  return (req_bytes);
-}
-
 
 void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   printf ("Relocation Type %i  Value %x\n", rel.type, val);
@@ -239,7 +244,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       int32_t sval = SignExtend32 ((uint32_t)(rel.addend & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_abs (rel.addend);
       printf ("Rel-Type %i  VAL %lu  SVal %i  Len %lu\n", rel.type, val, sval, len);
-      fill_pnfix (loc, sval, len, loc[len-1]);
+      fill_pnfix (loc, sval, loc[len-1]);
     }
     break;
 
@@ -249,7 +254,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       uint32_t len = calc_pfix_len_pcrel (val);
       printf ("VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
 
-      fill_pnfix (loc, sval - len, len, loc[len-1]);
+      fill_pnfix (loc, sval - len, loc[len-1]);
     }
     break;
 
@@ -259,7 +264,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       uint32_t len = calc_pfix_len_pcrel (val - 2);
       printf ("LDPI SYM VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
       // The "-2" is two bytes for the "ldpi" instruction after the ldc.
-      fill_pnfix (loc, sval - 2 - len, len, loc[len-1]);
+      fill_pnfix (loc, sval - 2 - len, loc[len-1]);
     }
     break;
 
@@ -392,13 +397,9 @@ static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
 
   uint32_t req_bytes = calc_pfix_len_pcrel (displace);
 
-  /*
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n", sym.getVA(ctx), loc, r.addend);
   printf ("relaxJump Displace %li\n", displace);
-  printf ("Current size %li\n", sec.size);
-  printf ("INSN %#018"PRIx64"\n", insnPair);
   printf ("Symbol %s\n\n", toStr(ctx, sym).c_str ());
-  */
 
   // Relocation is kept as it is
   remove = 8 - req_bytes;
