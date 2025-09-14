@@ -53,7 +53,7 @@ define i32 @test6b(i32) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -4
 ; CHECK: ldl 3
-; CHECK: stl 4294967295
+; CHECK: stl -1
 ; CHECK: ldc test6a
 ; CHECK: gcall
 ; CHECK: rev

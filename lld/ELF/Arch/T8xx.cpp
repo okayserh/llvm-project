@@ -61,19 +61,6 @@ public:
 } // end anonymous namespace
 
 
-// These are internal relocation numbers for GP relaxation. They aren't part
-// of the psABI spec.
-/*
-#define INTERNAL_R_T8XX_JUMP_P4 256
-#define INTERNAL_R_T8XX_JUMP_P8 257
-#define INTERNAL_R_T8XX_JUMP_P12 258
-#define INTERNAL_R_T8XX_JUMP_P16 259
-#define INTERNAL_R_T8XX_JUMP_P20 260
-#define INTERNAL_R_T8XX_JUMP_P24 261
-#define INTERNAL_R_T8XX_JUMP_P28 262
-*/
-
-
 T8xx::T8xx(Ctx &ctx) : TargetInfo(ctx)
 {
   // TODO: Unclear what this is good for. However, it
@@ -252,8 +239,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_pcrel (val);
-      printf ("VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
-
+      //      printf ("VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
       fill_pnfix (loc, sval - len, loc[len-1]);
     }
     break;
@@ -262,7 +248,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_pcrel (val - 2);
-      printf ("LDPI SYM VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
+      //      printf ("LDPI SYM VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
       // The "-2" is two bytes for the "ldpi" instruction after the ldc.
       fill_pnfix (loc, sval - 2 - len, loc[len-1]);
     }
@@ -286,21 +272,15 @@ void T8xx::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
 
-  printf ("relocateAlloc\n");
+  //  printf ("relocateAlloc\n");
 
   for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     uint64_t val = sec.getRelocTargetVA(ctx, rel, secAddr + rel.offset);
 
-    printf ("secAddr %08x  Offset %li  relalloc %08x\n", secAddr, rel.offset, val);
+    //    printf ("secAddr %08x  Offset %li  relalloc %08x\n", secAddr, rel.offset, val);
     relocate(loc, rel, val);
   }
-}
-
-
-// Extract bits v[begin:end], where range is inclusive, and begin must be < 63.
-static uint32_t extractBits(uint64_t v, uint32_t begin, uint32_t end) {
-  return (v & ((1ULL << (begin + 1)) - 1)) >> end;
 }
 
 
@@ -327,8 +307,6 @@ static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc
 static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
   const Symbol &sym = *r.sym;
-  const uint64_t insnPair = read64le(sec.content().data() + r.offset);
-  const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
   const uint64_t dest = sym.getVA(ctx, r.addend);
   const int64_t displace = dest - loc;
   uint32_t req_bytes = 8;
@@ -359,8 +337,6 @@ static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t lo
 	sec.relaxAux->writes.push_back((uint32_t) base + dest);
       sec.relaxAux->relocTypes[i] = r.type;
     }
-
-  //  printf ("Remove %i\n", remove);
 }
 
 
@@ -372,12 +348,13 @@ static void relaxLDPI(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
   const int64_t displace = dest - loc;
 
   uint32_t req_bytes = calc_pfix_len_pcrel (displace - 2);
-
+  /*
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n", sym.getVA(ctx), loc, r.addend);
   printf ("relaxLDPI Displace %li\n", displace);
   printf ("Current size %li\n", sec.size);
   printf ("INSN %#018"PRIx64"\n", insnPair);
   printf ("Symbol %s\n\n", toStr(ctx, sym).c_str ());
+  */
 
   // Relocation is selected based on required bytes
   remove = 8 - req_bytes;
@@ -391,15 +368,15 @@ static void relaxLDPI(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
 static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
   const Symbol &sym = *r.sym;
-  const uint64_t insnPair = read64le(sec.content().data() + r.offset);
   const uint64_t dest = sym.getVA(ctx) + r.addend;
   const int64_t displace = dest - loc;
 
   uint32_t req_bytes = calc_pfix_len_pcrel (displace);
-
+  /*
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n", sym.getVA(ctx), loc, r.addend);
   printf ("relaxJump Displace %li\n", displace);
   printf ("Symbol %s\n\n", toStr(ctx, sym).c_str ());
+  */
 
   // Relocation is kept as it is
   remove = 8 - req_bytes;

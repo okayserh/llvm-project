@@ -75,13 +75,13 @@ define dso_local i32 @test18b(i32 noundef %0) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -4
 ; CHECK: ldc 17
-; CHECK: stl 4294967295
+; CHECK: stl -1
 ; CHECK: ldc 14
-; CHECK: stl 4294967294
+; CHECK: stl -2
 ; CHECK: ldc 12
-; CHECK: stl 4294967293
+; CHECK: stl -3
 ; CHECK: ldl 3
-; CHECK: stl 4294967292
+; CHECK: stl -4
 ; CHECK: ldc test18a
 ; CHECK: gcall
 ; CHECK: rev

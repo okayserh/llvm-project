@@ -76,11 +76,11 @@ define dso_local i32 @test20b(i32 noundef %0) #0 {
 ; CHECK: ldl 4
 ; CHECK: stl 2
 ; CHECK: ldl 2
-; CHECK: stl 4294967295
+; CHECK: stl -1
 ; CHECK: ldl 2
-; CHECK: stl 4294967294
+; CHECK: stl -2
 ; CHECK: ldl 2
-; CHECK: stl 4294967293
+; CHECK: stl -3
 ; CHECK: ldc test20a
 ; CHECK: gcall
 ; CHECK: rev

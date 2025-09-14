@@ -548,7 +548,7 @@ SDValue T8xxTargetLowering::LowerConstantPool(SDValue Op, SelectionDAG& DAG) con
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
   Result = DAG.getTargetConstantPool(CP->getConstVal(), CP->getValueType(0),
-				     CP->getAlign(), CP->getOffset(), T8xxMCExpr::VK_T8xx_IPTRREL);
+				     CP->getAlign(), CP->getOffset(), T8xxMCExpr::VK_T8xx_SYMREL);
 
   EVT VT = Op.getValueType();
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
@@ -569,7 +569,7 @@ SDValue T8xxTargetLowering::LowerJumpTable(SDValue Op, SelectionDAG& DAG) const
   // TODO: Just a first try to see how things work.
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
-  Result = DAG.getTargetJumpTable(CP->getIndex(), CP->getValueType(0), T8xxMCExpr::VK_T8xx_IPTRREL);
+  Result = DAG.getTargetJumpTable(CP->getIndex(), CP->getValueType(0), T8xxMCExpr::VK_T8xx_SYMREL);
 
   EVT VT = getPointerTy(DAG.getDataLayout ());
   Result = DAG.getNode(T8xxISD::LOAD_SYM,

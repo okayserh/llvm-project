@@ -45,7 +45,7 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
   MCFixupKind Kind = Fixup.getKind();
   if (Kind >= FirstLiteralRelocationKind)
     return Kind - FirstLiteralRelocationKind;
-  
+
   printf ("getRelocType %i\n", (int)Kind);
 
   if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Fixup.getValue())) {
@@ -105,24 +105,12 @@ bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCValue &/*Val*/,
     default:
       return false;
 
-    // All relocations that use a GOT need a symbol, not an offset, as
-    // the offset of the symbol within the section is irrelevant to
-    // where the GOT entry is. Don't need to list all the TLS entries,
-    // as they're all marked as requiring a symbol anyways.
-      /*
-  case ELF::R_SPARC_GOT10:
-    case ELF::R_SPARC_GOT13:
-    case ELF::R_SPARC_GOT22:
-    case ELF::R_SPARC_GOTDATA_HIX22:
-    case ELF::R_SPARC_GOTDATA_LOX10:
-    case ELF::R_SPARC_GOTDATA_OP_HIX22:
-    case ELF::R_SPARC_GOTDATA_OP_LOX10:
-      */
       // Returning true creates a "real" symbol in the ELF object file!
       // We need this for the binary relocations.
   case ELF::R_T8XX_ADDR_BASE:
   case ELF::R_T8XX_ADDR_ADD:
   case ELF::R_T8XX_ADDR_SUB:
+  case ELF::R_T8XX_ADDR_NPFIX:
 
   case ELF::R_T8XX_LDPI_SYM:
   case ELF::R_T8XX_JUMP:

@@ -244,7 +244,7 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
 	  //          Cond.push_back(MachineOperand::CreateImm(BranchCode));
 	  Cond.push_back(MachineOperand::CreateImm(ISD::CondCode::SETFALSE));
     }
-	  
+
         UncondBranch = {MBB.rend(), nullptr};
         continue;
       }
@@ -522,7 +522,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return true;
     }
     break;
-   
+
   case T8xx::FPONESN:
     {
       BuildMI (MBB, MI, DL, get(T8xx::FPORDEREDSN), T8xx::AREG).addReg(T8xx::FAREG).addReg(T8xx::FBREG);
@@ -543,7 +543,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       return true;
     }
     break;
-   
+
   case T8xx::FPR64TOI32:
   case T8xx::FPR32TOI32:
     {
@@ -564,7 +564,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   case T8xx::BRIND:
     {
       BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
-      MBB.erase(MI);      
+      MBB.erase(MI);
     }
     break;
 
