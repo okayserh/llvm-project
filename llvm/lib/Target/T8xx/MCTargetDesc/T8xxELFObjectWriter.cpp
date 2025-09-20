@@ -92,7 +92,7 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
   case T8xx::fixup_t8xx_addr_base:  return ELF::R_T8XX_ADDR_BASE;
   case T8xx::fixup_t8xx_addr_add:   return ELF::R_T8XX_ADDR_ADD;
   case T8xx::fixup_t8xx_addr_sub:   return ELF::R_T8XX_ADDR_SUB;
-
+  case T8xx::fixup_t8xx_align:      return ELF::R_T8XX_ALIGN;
   }
 
   return ELF::R_T8XX_NONE;

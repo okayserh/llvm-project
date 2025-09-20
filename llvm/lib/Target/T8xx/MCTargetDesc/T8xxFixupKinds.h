@@ -27,11 +27,13 @@ namespace llvm {
       fixup_t8xx_jump,
 
       /// fixup_t8xx_pcrel_sym load
-      fixup_t8xx_pcrel_sym,   // 138
+      fixup_t8xx_pcrel_sym,
 
-      fixup_t8xx_addr_base,   // 138
-      fixup_t8xx_addr_add,   // 138
-      fixup_t8xx_addr_sub,   // 138
+      fixup_t8xx_addr_base,
+      fixup_t8xx_addr_add,
+      fixup_t8xx_addr_sub,
+
+      fixup_t8xx_align,
 
       // Marker
       LastTargetFixupKind,

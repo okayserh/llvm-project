@@ -115,9 +115,8 @@ namespace {
         { "fixup_t8xx_addr_base", 0,    64,  0},
         { "fixup_t8xx_addr_add", 0,    64,  0},
         { "fixup_t8xx_addr_sub", 0,    64,  0},
+        { "fixup_t8xx_align",    0,     0,  0},
       };
-
-      printf ("getFixupKindInfo %i\n", (int)Kind);
 
       // Fixup kinds from .reloc directive are like R_SPARC_NONE. They do
       // not require any extra processing.
@@ -154,6 +153,7 @@ namespace {
       case T8xx::fixup_t8xx_addr_base:
       case T8xx::fixup_t8xx_addr_add:
       case T8xx::fixup_t8xx_addr_sub:
+      case T8xx::fixup_t8xx_align:
 	return true;
       }
     }
@@ -215,6 +215,52 @@ namespace {
 
       return true;
     }
+
+
+    // Linker relaxation may change code size. We have to insert Nops
+    // for .align directive when linker relaxation enabled. So then Linker
+    // could satisfy alignment by removing Nops.
+    // The function return the total Nops Size we need to insert.
+    bool shouldInsertExtraNopBytesForCodeAlign(
+       const MCAlignFragment &AF, unsigned &Size) {
+
+      unsigned MinNopLen = 1;
+
+      if (AF.getAlignment() <= MinNopLen) {
+	return false;
+      } else {
+	Size = AF.getAlignment().value() - MinNopLen;
+	return true;
+      }
+    }
+
+    // We need to insert R_RISCV_ALIGN relocation type to indicate the
+    // position of Nops and the total bytes of the Nops have been inserted
+    // when linker relaxation enabled.
+    // The function insert fixup_riscv_align fixup which eventually will
+    // transfer to R_RISCV_ALIGN relocation type.
+    bool shouldInsertFixupForCodeAlign(MCAssembler &Asm,
+				       MCAlignFragment &AF) {
+      // Calculate total Nops we need to insert. If there are none to insert
+      // then simply return.
+      unsigned Count;
+      if (!shouldInsertExtraNopBytesForCodeAlign(AF, Count) || (Count == 0))
+	return false;
+      
+      MCContext &Ctx = Asm.getContext();
+      const MCExpr *Dummy = MCConstantExpr::create(0, Ctx);
+      // Create fixup_riscv_align fixup.
+      MCFixup Fixup =
+	MCFixup::create(0, Dummy, MCFixupKind(T8xx::fixup_t8xx_align), SMLoc());
+      
+      uint64_t FixedValue = 0;
+      MCValue NopBytes = MCValue::get(Count);
+      
+      Asm.getWriter().recordRelocation(Asm, &AF, Fixup, NopBytes, FixedValue);
+      
+      return true;
+    }
+
   };
 
   class ELFT8xxAsmBackend : public T8xxAsmBackend {

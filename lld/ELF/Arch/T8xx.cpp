@@ -86,6 +86,8 @@ RelExpr T8xx::getRelExpr(RelType type, const Symbol &s,
     return R_PC;
   case R_T8XX_LDPI_SYM:
     return R_PC;
+  case R_T8XX_ALIGN:
+    return R_ABS;
   default:
     Err(ctx) << getErrorLoc(ctx, loc) << "unknown relocation (" << type.v
 	     << ") against symbol " << &s;
@@ -93,30 +95,16 @@ RelExpr T8xx::getRelExpr(RelType type, const Symbol &s,
   }
 }
 
-static void writeLDI(uint8_t *loc, uint64_t val) {
-  write16le(loc, (read16le(loc) & 0xf0f0) | (val & 0xf0) << 4 | (val & 0x0f));
-}
 
 bool T8xx::needsThunk(RelExpr expr, RelType type, const InputFile *file,
                      uint64_t branchAddr, const Symbol &s, int64_t a) const {
-  /*
-  switch (type) {
-  case R_T8xx_LO8_LDI_GS:
-  case R_T8xx_HI8_LDI_GS:
-    // A thunk is needed if the symbol's virtual address is out of range
-    // [0, 0x1ffff].
-    return s.getVA() >= 0x20000;
-  default:
-    return false;
-  }
-  */
   return false;
 }
 
 static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode)
 {
   int indx = 0;
-  
+
   // Add pfix and nfix as required
   int i = 7;
   uint32_t imm_dec = (imm < 0 ? (~imm) : imm) & 0xFFFFFFFFu;
@@ -127,12 +115,12 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode)
       // Determine 4 bits for pfix/nfix command
       uint32_t imm_res = imm_dec & imm_and;
       imm_and >>= 4;
-      
+
       // If we had some nonzero bits before
       // continue padding with "pfix" instructions
       if (enc_beg)
 	loc[indx++] = static_cast<uint8_t> (0x20 | (imm_res >> (4 * i)));
-      
+
       // First nonzero bits discovered
       if ((imm_res || ((imm < 0) && i == 1)) && !enc_beg)
 	{
@@ -212,8 +200,10 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   printf ("Relocation Type %i  Value %x\n", rel.type, val);
 
   switch (rel.type) {
+  case R_T8XX_ALIGN:
   case R_T8XX_NONE:
     break;
+
   case R_T8XX_ADDR:
     // Fill in the prefixes
     for (int i = 0; i < 8; ++i)
@@ -223,14 +213,13 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     // Base is not relocated. Only the add/sub relocations
   case R_T8XX_ADDR_BASE:
     break;
-
   case R_T8XX_ADDR_ADD:
   case R_T8XX_ADDR_SUB:
     {
-      printf ("relocate: ADDR_BASE,ADD_SUB\n");
+      //      printf ("relocate: ADDR_BASE,ADD_SUB\n");
       int32_t sval = SignExtend32 ((uint32_t)(rel.addend & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_abs (rel.addend);
-      printf ("Rel-Type %i  VAL %lu  SVal %i  Len %lu\n", rel.type, val, sval, len);
+      //      printf ("Rel-Type %i  VAL %lu  SVal %i  Len %lu\n", rel.type, val, sval, len);
       fill_pnfix (loc, sval, loc[len-1]);
     }
     break;
@@ -239,7 +228,6 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_pcrel (val);
-      //      printf ("VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
       fill_pnfix (loc, sval - len, loc[len-1]);
     }
     break;
@@ -248,7 +236,6 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_pcrel (val - 2);
-      //      printf ("LDPI SYM VAL %lu  SVal %i REL Jump Len %i\n", val, sval, len);
       // The "-2" is two bytes for the "ldpi" instruction after the ldc.
       fill_pnfix (loc, sval - 2 - len, loc[len-1]);
     }
@@ -272,8 +259,6 @@ void T8xx::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
 
-  //  printf ("relocateAlloc\n");
-
   for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     uint64_t val = sec.getRelocTargetVA(ctx, rel, secAddr + rel.offset);
@@ -284,7 +269,7 @@ void T8xx::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
 }
 
 
-// Relax R_RISCV_CALL/R_RISCV_CALL_PLT auipc+jalr to c.j, c.jal, or jal.
+// TODO
 static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
   const Symbol &sym = *r.sym;
@@ -296,6 +281,13 @@ static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc
   printf ("Symbol %s\n", toStr(ctx, sym).c_str ());
   printf ("Sym Type %i  bind %i\n", sym.type, sym.binding);
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n\n", sym.getVA(ctx), loc, r.addend);
+
+  uint32_t req_bytes = calc_pfix_len_pcrel (dest);
+
+  remove = 0;
+
+  sec.relaxAux->writes.push_back(0x0); // Dummy value to keep array indices in sync
+  sec.relaxAux->relocTypes[i] = r.type;
 }
 
 
@@ -310,7 +302,7 @@ static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t lo
   const uint64_t dest = sym.getVA(ctx, r.addend);
   const int64_t displace = dest - loc;
   uint32_t req_bytes = 8;
-  
+
   //  printf ("Sym Value %08x   Loc %08x  Add  %08x   Dest %08x\n", sym.getVA(ctx), loc, r.addend, dest);
   if (r.type == R_T8XX_ADDR_BASE)
     {
@@ -343,7 +335,6 @@ static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t lo
 static void relaxLDPI(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
   const Symbol &sym = *r.sym;
-  const uint64_t insnPair = read64le(sec.content().data() + r.offset);
   const uint64_t dest = sym.getVA(ctx) + r.addend;
   const int64_t displace = dest - loc;
 
@@ -372,11 +363,6 @@ static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
   const int64_t displace = dest - loc;
 
   uint32_t req_bytes = calc_pfix_len_pcrel (displace);
-  /*
-  printf ("Sym Value %08x   Loc %08x    Dest  %08x\n", sym.getVA(ctx), loc, r.addend);
-  printf ("relaxJump Displace %li\n", displace);
-  printf ("Symbol %s\n\n", toStr(ctx, sym).c_str ());
-  */
 
   // Relocation is kept as it is
   remove = 8 - req_bytes;
@@ -402,12 +388,30 @@ static bool relax(Ctx &ctx, InputSection &sec) {
     const uint64_t loc = secAddr + r.offset - delta;
     uint32_t &cur = aux.relocDeltas[i], remove = 0;
     switch (r.type) {
+    case R_T8XX_ALIGN: {
+      const uint64_t nextLoc = loc + r.addend;
+      const uint64_t align = PowerOf2Ceil(r.addend);
+      // All bytes beyond the alignment boundary should be removed.
+      remove = nextLoc - ((loc + align - 1) & -align);
+      // If we can't satisfy this alignment, we've found a bad input.
+      if (LLVM_UNLIKELY(static_cast<int32_t>(remove) < 0)) {
+        Err(ctx) << getErrorLoc(ctx, (const uint8_t *)loc)
+                 << "insufficient padding bytes for " << r.type << ": "
+                 << r.addend
+                 << " bytes available "
+                    "for requested alignment of "
+                 << align << " bytes";
+        remove = 0;
+      }
+      aux.writes.push_back (0x0);  // Dummy value to keep array indices in sync
+      break;
+    }
+
       // T8XX_ADDR is a global absolute address, used in a LDC command for example
-      /*
     case R_T8XX_ADDR:
       relaxNPFix(ctx, sec, i, loc, r, remove);
       break;
-      */
+
     case R_T8XX_JUMP:
       relaxJump(ctx, sec, i, loc, r, remove);
       break;
@@ -449,8 +453,6 @@ static bool relax(Ctx &ctx, InputSection &sec) {
       a.d->value = a.offset - delta;
   }
 
-  printf ("Delta %lu\n", delta);
-  
   // Inform assignAddresses that the size has changed.
   if (!isUInt<32>(delta))
     Fatal(ctx) << "section size decrease is too large: " << delta;
@@ -472,7 +474,7 @@ bool T8xx::relaxOnce(int pass) const {
     return false;
 
   printf ("LLD.relaxOnce Pass: %i\n", pass);
-  
+
   if (pass == 0)
     initSymbolAnchors(ctx);
 
@@ -530,12 +532,24 @@ void T8xx::finalizeRelax(int passes) const {
         // are multiples of 4, it is as if we have skipped some NOPs. Otherwise
         // we are in the middle of a 4-byte NOP, and we need to rewrite the NOP
         // sequence.
-        int64_t skip = 0;
-
-	// TODO: Here the code for putting in the difference in case of binary
-	// relocations needs to be filled in.
+	int64_t skip = 0;
+	/*
+        if (r.type == R_T8XX_ALIGN) {
+          if (remove % 4 || r.addend % 4) {
+            skip = r.addend - remove;
+            int64_t j = 0;
+            for (; j + 4 <= skip; j += 4)
+              write32le(p + j, 0x00000013); // nop
+            if (j != skip) {
+              assert(j + 2 == skip);
+              write16le(p + j, 0x0001); // c.nop
+            }
+          }
+	  } else*/
 
 	if (RelType newType = aux.relocTypes[i]) {
+	  // TODO: Here the code for putting in the difference in case of binary
+	  // relocations needs to be filled in.
 	  switch (newType)
 	    {
 	    case R_T8XX_ADDR_ADD:
@@ -547,38 +561,7 @@ void T8xx::finalizeRelax(int passes) const {
 	      }
 	      break;
 	    }
-	}	
-
-	
-	/* TODO: See if this may be needed
-	if (RelType newType = aux.relocTypes[i]) {
-          switch (newType) {
-          case INTERNAL_R_RISCV_GPREL_I:
-          case INTERNAL_R_RISCV_GPREL_S:
-            break;
-          case R_RISCV_RELAX:
-            // Used by relaxTlsLe to indicate the relocation is ignored.
-            break;
-          case R_RISCV_RVC_JUMP:
-            skip = 2;
-            write16le(p, aux.writes[writesIdx++]);
-            break;
-          case R_RISCV_JAL:
-            skip = 4;
-            write32le(p, aux.writes[writesIdx++]);
-            break;
-          case R_RISCV_32:
-            // Used by relaxTlsLe to write a uint32_t then suppress the handling
-            // in relocateAlloc.
-            skip = 4;
-            write32le(p, aux.writes[writesIdx++]);
-            aux.relocTypes[i] = R_RISCV_NONE;
-            break;
-          default:
-            llvm_unreachable("unsupported type");
-          }
-        }
-	*/
+	}
 
         p += skip;
         offset = r.offset + skip + remove;
