@@ -253,6 +253,8 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
       TBB = CondBranchTarget;
       FBB = nullptr;
 
+      printf ("Cond FALSE\n");
+      
       //Cond.push_back(MachineOperand::CreateImm(BranchCode));
       Cond.push_back(MachineOperand::CreateImm(ISD::CondCode::SETFALSE));
 
@@ -279,6 +281,7 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
     return true;
   }
 
+  printf ("Fallthrough\n");
   return false;
 
 }
@@ -327,6 +330,27 @@ unsigned T8xxInstrInfo::insertBranch(MachineBasicBlock &MBB,
   unsigned NumInserted = 0;
   printf ("T8xx::insertBranch\n");
 
+  printf ("MBB\n");
+  MBB.dump ();
+  
+  if (TBB)
+    {
+      printf ("TBB\n");
+      TBB->dump ();
+    }
+  
+  if (FBB)
+    {
+      printf ("FBB\n");
+      FBB->dump ();
+    }
+
+  // Shouldn't be a fall through.
+  assert(TBB && "insertBranch must not be told to insert a fallthrough");
+
+  for (auto MO = Cond.begin (); MO != Cond.end (); ++MO)
+    MO->dump ();
+  
   // Insert any conditional branch.
   // TODO: Quick fix. Need to figure right way to do this
   if (!Cond.empty ())
