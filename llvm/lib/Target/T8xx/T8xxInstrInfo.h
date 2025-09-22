@@ -85,7 +85,10 @@ public:
 			ArrayRef<MachineOperand> Cond,
 			const DebugLoc &DL,
 			int *BytesAdded = nullptr) const override;
-  
+
+  MachineBasicBlock *getBranchDestBlock(const MachineInstr &MI) const override;
+
+
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                    const DebugLoc &DL, MCRegister DestReg, MCRegister SrcReg,
                    bool KillSrc, bool RenamableDest = false,
