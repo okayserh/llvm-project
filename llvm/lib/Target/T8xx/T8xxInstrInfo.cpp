@@ -122,6 +122,9 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                             bool AllowModify) const {
   printf ("T8xx::analyzeBranch\n");
 
+  MBB.dump ();
+  
+
   TBB = FBB = nullptr;
   Cond.clear();
 

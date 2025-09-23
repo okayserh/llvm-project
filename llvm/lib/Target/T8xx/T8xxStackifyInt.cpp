@@ -1503,8 +1503,10 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
         continue;
 
       // Ignore debugging intrinsics.
+      /*
       if (Instr->isDebugValue())
         continue;
+      */
 
       // Definition is always AREG
       const iterator_range<MachineInstr::mop_iterator> &Range_defs(Instr->defs());
