@@ -68,6 +68,11 @@ namespace llvm {
     EmitInstrWithCustomInserter(MachineInstr &MI,
 				MachineBasicBlock *MBB) const override;
 
+    // TODO: Quick fix to make all jump tables entries "global".
+    unsigned getJumpTableEncoding() const override;
+
+    bool isJumpTableRelative() const override;
+    
   private:
     SDValue
     LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,

@@ -115,6 +115,11 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   // Debugging output. Print current frame info
   MFI.dump (MF);
 
+  // Save the return address on old stack position 0
+  // Note: This is always needed! Otherwise, the function does not know where
+  // to return to.
+  BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
+
   // Dynamic stack realignment
   Align MaxAlign = MFI.getMaxAlign();
 
@@ -127,6 +132,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 
   printf ("Fixed Stack %li   Stack %li   OffsetAdj %li\n", FixedStackSize, StackSize, OffsetAdj);
 
+  // If not stack alignment is needed, skip rest of prologue
   if ((FixedStackSize + StackSize) == 0) {
     return;
   }
@@ -145,9 +151,6 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   MFI.setOffsetAdjustment (MaxAlign.value ());
 
   // Adjust the stack pointer.
-
-  // Save the return address on old stack position 0
-  BuildMI(MBB, MBBI, dl, TII.get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
 
   // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
   if (MFI.shouldRealignStack ())

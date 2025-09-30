@@ -607,20 +607,6 @@ def : Pattern<(i32 (load_sym tblockaddress:$addr)),  [(LDC $addr)]>;
 // Branch Instructions
 //===----------------------------------------------------------------------===//
 
-
-// Compiles at least
-def BRimm  : T8Inst<(outs), (ins i32imm:$addr),
-                   "j $addr",
-                   [(brind tglobaladdr:$addr)]> {
-		   let isCodeGenOnly = 1;
-		   let isPseudo = 1;
-		   let isBranch = 1;
-		   let isBarrier = 1;
-}
-
-
-// Note j is a relative call
-
 let isTerminator = 1, isBranch = 1 in {
 def CJ    : T8InstImm<0xA,
 		(outs),
@@ -628,7 +614,6 @@ def CJ    : T8InstImm<0xA,
                 "cj $imm",
 		[(MxBrNotCond i32:$cc, bb:$imm)]>;
 }
-
 
 let isTerminator = 1, isBranch = 1, isBarrier = 1 in {
 def JUMP  : T8InstImm<0x0,
@@ -638,8 +623,8 @@ def JUMP  : T8InstImm<0x0,
                    [(br bb:$imm)]>;
 }
 
-
-// TODO: Test to figure out how the indirect branch works
+// Note: Defines a pseudo instruction, which is replaced by a GCALL in T8xxInstrInfo.cpp
+// during Pseudo Code replacement.
 def BRIND  : T8Inst<(outs),
 		   (ins OReg:$target),
                    "brind",
@@ -651,11 +636,6 @@ def BRIND  : T8Inst<(outs),
    let isCodeGenOnly = 1;
    let isPseudo = 1;
 }
-
-/*
-def : Pat<(brind (i32 OReg:$target)),
-           (GCALL $target)>;
-	   */
 
 
 //===----------------------------------------------------------------------===//

@@ -23,6 +23,7 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
@@ -98,7 +99,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
       addRegisterClass(MVT::f32, &T8xx::FPRegRegClass);
       addRegisterClass(MVT::f64, &T8xx::DFPRegRegClass);
     }
-  
+
   computeRegisterProperties(Subtarget->getRegisterInfo());
 
   for (auto VT : MVT::integer_valuetypes()) {
@@ -143,7 +144,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
       setOperationAction(ISD::FNEG, MVT::f32, Expand);
       setOperationAction(ISD::FNEG, MVT::f64, Expand);
     }
-  
+
   // Nodes that require custom lowering
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
@@ -227,7 +228,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
       setOperationAction(ISD::ATOMIC_LOAD, MVT::i32, Custom);
       setOperationAction(ISD::ATOMIC_STORE, MVT::i32, Custom);
     }
-  */  
+  */
 
   // Alternatively?
   // Cortex-M (besides Cortex-M0) have 32-bit atomics.
@@ -293,7 +294,7 @@ void T8xxTargetLowering::ReplaceNodeResults(SDNode *N,
   N->dump ();
   llvm_unreachable("ReplaceNodeResults not implemented for this target!");
 }
-    
+
 
 SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   printf ("### Lower Operation ### %i\n", Op.getOpcode ());
@@ -377,7 +378,7 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
       return (NewCond);
     }
   */
-    
+
   return (Op);
 }
 
@@ -456,12 +457,12 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 	    invCC = ISD::SETUGE;
 	    break;
 	    // Otherwise use the original condition and introduce a negation
-	    
+
 	  default:
 	    printf ("### Unsupported condition code!!!\n");
 	    break;
 	  }
-	
+
 	NewCond = DAG.getSetCC (DL, Cond.getValueType (),
 				Cond.getOperand(0),
 				Cond.getOperand(1),
@@ -470,7 +471,7 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   } else {
 
     printf ("#### LowerBRCOND Negation Case\n");
-    
+
     SDValue Op0 = Op.getOperand(0);
     SDValue Op1 = Op.getOperand(1);
     SDValue Op2 = Op.getOperand(2);
@@ -552,11 +553,11 @@ SDValue T8xxTargetLowering::LowerConstantPool(SDValue Op, SelectionDAG& DAG) con
 
   EVT VT = Op.getValueType();
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
-  
+
   // Add instruction to add instruction pointer to relative address
   Result = DAG.getNode(T8xxISD::ADD_IPTR,
 		       SDLoc(Op), VT, Result);
-  
+
   return Result;
 }
 
@@ -578,7 +579,7 @@ SDValue T8xxTargetLowering::LowerJumpTable(SDValue Op, SelectionDAG& DAG) const
   // Add instruction to add instruction pointer to relative address
   Result = DAG.getNode(T8xxISD::ADD_IPTR,
 		       SDLoc(Op), VT, Result);
-  
+
   return Result;
 }
 
@@ -596,7 +597,7 @@ SDValue T8xxTargetLowering::LowerBlockAddress(SDValue Op, SelectionDAG& DAG) con
 
   EVT VT = Op.getValueType();
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
-  
+
   return Result;
 }
 
@@ -661,7 +662,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
 
   // Create the conditional branch instruction.
   BuildMI(MBB, DL, TII->get(T8xx::CJ)).addReg(MI.getOperand(1).getReg()).addMBB(SinkMBB);
-  
+
   //  Copy0MBB:
   //   %FalseValue = ...
   //   # fallthrough to SinkMBB
@@ -797,7 +798,7 @@ T8xxTargetLowering::EmitLoweredFPSetCC(MachineInstr &MI,
     .addReg(MI.getOperand(1).getReg())
     .addReg(MI.getOperand(2).getReg());
   BuildMI(MBB, DL, TII->get(T8xx::CJ)).addReg(IsOrderedReg).addMBB(SinkMBB);
-  
+
   //  Copy0MBB:
   //   %FalseValue = ...
   //   # fallthrough to SinkMBB
@@ -808,7 +809,7 @@ T8xxTargetLowering::EmitLoweredFPSetCC(MachineInstr &MI,
   BuildMI(Copy0MBB, DL, TII->get(T8xx::FPGTSN),CondReg)
     .addReg(Op1Reg)
     .addReg(Op2Reg);
-  
+
   //  SinkMBB:
   //   %Result = phi [ %FalseValue, Copy0MBB ], [ %TrueValue, ThisMBB ]
   //  ...
@@ -819,14 +820,14 @@ T8xxTargetLowering::EmitLoweredFPSetCC(MachineInstr &MI,
 
   Register DestReg = MI.getOperand(0).getReg();
   MachineInstrBuilder MIB;
-  
+
   MIB =
     BuildMI(*SinkMBB, SinkInsertionPoint, DL, TII->get(T8xx::PHI), DestReg)
     .addReg(CondReg)
     .addMBB(Copy0MBB)
     .addReg(IsOrderedReg)
     .addMBB(ThisMBB);
-  
+
   // Now remove the pseudo code instruction
   for (MachineBasicBlock::iterator MIIt = MIItBegin; MIIt != MIItEnd;)
     (MIIt++)->eraseFromParent();
@@ -849,6 +850,32 @@ T8xxTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
 
 }
 
+//
+// Jump Table related functions.
+// The default functionality of LLVM selects a proper JumpTable Encoding
+// based on code model and whether position independent code was
+// requested.
+// As a quick fix, the T8xx method always requests EK_BlockAddress.
+//
+// A proper solution should create the correct arithmetic entries,
+// which allow position independent code. So far the arithemtic
+// entries are created, but not properly treated during code
+// relaxation in the linking process.
+//
+// Note: Does not work properly. Fixes the jump table itself.
+// However, the conditional jump still assumes position indepence
+// and adopts a double dereferencing!
+
+
+unsigned T8xxTargetLowering::getJumpTableEncoding() const {
+  return MachineJumpTableInfo::EK_BlockAddress;
+}
+
+// Relative jump tables are not support, yet!
+bool T8xxTargetLowering::isJumpTableRelative() const
+{
+  return false;
+}
 
 
 //===----------------------------------------------------------------------===//
@@ -1072,13 +1099,8 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
 
-  printf ("LowerFormalArguments\n");
-  DAG.dump ();
-  printf ("Pre LowerFormalArguments\n");
-
   MachineFunction &MF = DAG.getMachineFunction();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
-
 
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;

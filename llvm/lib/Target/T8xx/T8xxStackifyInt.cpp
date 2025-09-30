@@ -246,8 +246,6 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
           LIS.getInstructionIndex(*Insert)))
     {
       const LiveInterval &li = LIS.getInterval(Reg);
-      //      li.dump ();
-      //      printf ("SlotIndex %i\n", ValNo->def);
       MachineInstr *temp = LIS.getInstructionFromIndex(ValNo->def);
       if (temp)
 	temp->dump ();
@@ -425,7 +423,7 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 		    }
 		  else
 		    {
-		      printf ("Multiple definitions\n");
+		      LLVM_DEBUG(dbgs() << "getDepth -> Multiple definitions\n");
 		      // Try to find all definitions of the register.
 		      MachineRegisterInfo::def_instr_iterator def_reg = MRI.def_instr_begin(Reg);
 		      while (def_reg != MRI.def_instr_end())
@@ -481,11 +479,18 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
     {
       MachineBasicBlock::iterator ItDef = *DefI;
       MachineBasicBlock::iterator ItMi = *MI;
-	  
+
+      // Debug output
+      LLVM_DEBUG(dbgs() << "SpOCl Def ");
+      ItDef->dump ();
+      LLVM_DEBUG(dbgs() << "\n SpOCl Mi ");
+      ItMi->dump ();
+      LLVM_DEBUG(dbgs() << "\n");
+      
       // If the instructions are already in the right sequence,
       // no splice is required
       if (std::next(ItDef) == ItMi)
-	printf ("### Instruction sequence already OK\n");
+	LLVM_DEBUG(dbgs() << "SpliceOrCloneInstruction: ### Instruction sequence already OK\n");
       else
 	{
 	  // Specifically only address the COPY $areg instruction!
@@ -495,30 +500,30 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	    {
 	      // If the results of the copy is needed at some other place,
 	      // the return value is stored in a temporary variable
-	      printf ("### Copy instruction\n");
+	      LLVM_DEBUG(dbgs() << "SpliceOrCloneInstruction: ### Copy instruction\n");
 	      DebugLoc DL = DefI->getDebugLoc();
-	      
+
 	      Register RegClone = MRI.cloneVirtualRegister (Reg);
 	      Use->setReg (RegClone);
-	      
+
 	      // TODO: Just to see if this works. Might be rather inefficient to have this
 	      // after each newly created virtual register
 	      VRM.grow ();
-	      
+
 	      // Store temporary variable after defining instruction
 	      if (VRM.isAssignedReg (Reg))
 		VRM.assignVirt2StackSlot (Reg);
-	      
+
 	      MachineBasicBlock::iterator MBBI = *DefI;
-	      
+
 	      BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
 		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-	      
+
 	      // Create new virtual register for clone
 	      DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).
 		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 	    }
-	  
+
 	  // Shift defining instruction in front of consuming instruction
 	  MBB->splice (MI, DefI->getParent (), DefI);
 	}
@@ -625,7 +630,6 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      if (RC->getID () == T8xx::DFPRegRegClassID)
 		OpDepthFP.push_back (std::make_pair(10000, I));
 	    }
-	  //	  printf ("Op Depth %i\n", OpDepth.back ());
 	}
 
       // TODO: Ignore phyiscal registers for the moment.
@@ -642,7 +646,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
       if (OpDepth.size () == 2)
 	{
-	  printf ("Reorder Depth 2,  %i %i\n", OpDepth[0].first, OpDepth[1].first);
+	  LLVM_DEBUG(dbgs() << "Reorder Depth 2  " << OpDepth[0].first << "   " << OpDepth[1].first << "\n");
 	  // Move instruction ahead of current instruction and then move on
 	  // to definition
 
@@ -660,7 +664,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 		  // For non commuting operators this string must be used
 		  // It brings AREG and BREG into the required order
 		  // (div, sub, stnl!)
-		  str2code = "BAR";
+		  str2code = "BAr";
 		}
 	    }
 	  else
@@ -681,15 +685,15 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  // is not needed!.
 	  // Otherwise, up to two temporary variables are needed for the operands which
 	  // have depth >2.
-	  printf ("Reorder Depth 3,  %i %i %i\n", OpDepth[0].first, OpDepth[1].first, OpDepth[2].first);
+	  LLVM_DEBUG(dbgs() << "Reorder Depth 3  " << OpDepth[0].first << OpDepth[1].first << OpDepth[2].first << "\n");
 	  int indx = 0,
 	    indx_fac = 1;
 	  for (int i = 0; i < 3; ++i)
 	    {
 	      // OpDepth[2-1] == 1 -> Add 0 to indx, i.e. do nothing
-	      if (OpDepth[2-i].first == 2)
+	      if (OpDepth[i].first == 2)
 		indx += indx_fac;
-	      if (OpDepth[2-i].first > 2)
+	      if (OpDepth[i].first > 2)
 		indx += indx_fac * 2;
 	      indx_fac *= 3;
 	    }
@@ -697,9 +701,9 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	    indx -= 9;
 
 	  if ((indx >= 0) && (indx < 18))
-	    printf ("Operations %s\n", tcwg_tab5[indx]);
+	    LLVM_DEBUG(dbgs() << "Operations " << tcwg_tab5[indx] << "\n");
 	  else
-	    printf ("3 Operand Index error!\n");
+	    LLVM_DEBUG(dbgs() << "3 Operand Index error!\n");
 
 	  // Now transform the string into actual instructions
 	  str2code = tcwg_tab5[indx];
@@ -737,7 +741,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
   if (str2code != NULL)
     {
-      printf ("Str2Code %s\n", str2code);
+      LLVM_DEBUG(dbgs() << "Str2Code " << str2code << "\n");
 
       while (*str2code != 0)
 	{
@@ -758,8 +762,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-	      if (DefI == nullptr)
-		printf ("Instruction not found!!!\n");
+	      assert((DefI != nullptr) && "Integer, Instruction not found!!!");
 
 	      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
 	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
@@ -774,8 +777,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
-	      if (DefI == nullptr)
-		printf ("Instruction not found!!!\n");
+	      assert((DefI != nullptr) && "Floating Point, Instruction not found!!!");
 
 	      DefI = SpliceOrCloneInstruction (MF, MBB, MRI, LIS, VRM, MI, Use);
 	      reorderRecursive (MF, DefI, MRI, LIS, VRM, output);
@@ -784,7 +786,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 	      // Insert reversal of two top register stack positions
 	      // Required for BA case with non commuting operator
-	    case 'R': {
+	    case 'r': {
 	      // Assert somehow that only two operands are available
 
 	      // Note Character denotes operand position!
@@ -846,7 +848,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 		  RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
 
 		  VRM.grow ();
-		  
+
 		  // TODO: Evaluate whether something needs to be done regarding the newly introduced
 		  // integer variable?
 		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
@@ -950,7 +952,7 @@ void insertTempStore (MachineBasicBlock::instr_iterator def,
 
   bool isFP = false;
   unsigned OpCode = 0;
-  
+
   switch (MRI.getRegClassOrNull (VirtOrig)->getID ())
     {
     case T8xx::ORegRegClassID:
@@ -965,7 +967,7 @@ void insertTempStore (MachineBasicBlock::instr_iterator def,
       OpCode = T8xx::FPSTNLDB;
       break;
     default:
-      printf ("Unknow register class\n");
+      llvm_unreachable("Unknow register class!");
     }
 
   Register RegFPStack;
@@ -1012,7 +1014,7 @@ void insertTempStore (MachineBasicBlock::instr_iterator def,
 	    addImm(0);
 	}
     }
-  
+
 }
 
 void insertTempLoad (MachineBasicBlock::instr_iterator use,
@@ -1065,10 +1067,10 @@ void insertTempLoad (MachineBasicBlock::instr_iterator use,
       }
       break;
     default:
-      printf ("Unknow register class\n");
+      llvm_unreachable("Unknow register class\n");
     }
 }
-		      
+
 
 /// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
 /// register references into FP stack references.
@@ -1088,11 +1090,12 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   // OKH: Try to use the virtual register map
   auto &VRM_Leg = getAnalysis<VirtRegMapWrapperLegacy>();
   VirtRegMap &VRM = VRM_Leg.getVRM ();
-  printf ("############ Register Map\n");
+
+  LLVM_DEBUG(dbgs() << "############ Register Map\n");
   VRM.dump ();
 
   // LiveInterval dump
-  printf ("############ LiveInterval Map\n");
+  LLVM_DEBUG(dbgs() << "############ LiveInterval Map\n");
   LIS.dump ();
 
   // Some map to keep track of registers that have already been created as
@@ -1104,15 +1107,14 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   // order isn't significant, but we may want to change this in the future.
   std::map<Register, int> map_mult_def;
 
-
   // Test to see whether the algorithm can be structured differently.
   std::vector<StackInfos> stack_info (MRI.getNumVirtRegs ());
 
   for (unsigned int i = 0, e = MRI.getNumVirtRegs (); i != e; ++i)
     {
       unsigned VirtReg = Register::index2VirtReg (i);
-      printf ("I %i   Reg %u\n", i, VirtReg);
-      
+      LLVM_DEBUG(dbgs() << "I " << i << "  Reg " << VirtReg << "\n");
+
       // Depth is initialized with -1 (for "not calculated yet")
       stack_info[i].oreg_depth = -1;
       stack_info[i].fpreg_depth = -1;
@@ -1223,7 +1225,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 			vreg_replace.push_back (std::make_pair (op_def, VirtNew));
 		    }
 		}
-	      
+
 	      MachineBasicBlock::instr_iterator MBBI(*def_iter);
 	      insertTempStore (MBBI, MRI, VRM, VirtReg, VirtNew);
 	    }
@@ -1234,25 +1236,25 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	{
 	  // Find definition of virtual register
 	  MachineRegisterInfo::def_instr_iterator def_iter = MRI.def_instr_begin(VirtReg);
-	  
+
 	  // A cloned definition is copied in front of the using instructions
 	  MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
 	  ++use_iter;  // The first use gets the original virtual register
-	  
+
 	  for (; use_iter != MRI.use_instr_nodbg_end(); ++use_iter)
 	    {
 	      MachineBasicBlock *MBB = use_iter->getParent ();
 	      MachineBasicBlock::instr_iterator MBBI_use(*use_iter);
 	      MachineBasicBlock::instr_iterator MBBI_def(*def_iter);
-	      
+
 	      // Clone instruction
 	      MachineInstr &MI_Clone = MF.cloneMachineInstrBundle(*MBB, MBBI_use, *MBBI_def);
-	      
+
 	      // Create new virtual register and replace in cloned definition
 	      const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI_Clone.defs();
 	      Register VirtNew = MRI.createVirtualRegister (MRI.getRegClassOrNull (VirtReg));
 	      Range_defs.begin()->setReg(VirtNew);
-	      
+
 	      // Replace register in using instruction with newly created virtual register
 	      const iterator_range<MachineInstr::mop_iterator> &Range_uses = use_iter->uses();
 	      for (MachineOperand *op_use = Range_uses.begin(); op_use != Range_uses.end (); ++op_use)
@@ -1266,33 +1268,32 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       // Run through operands and replace registers with newly created virtual registers
       for (auto vi = vreg_replace.begin (); vi != vreg_replace.end (); ++vi)
 	vi->first->setReg (vi->second);
-    }      
+    }
 
   VRM.grow ();
 
   // Note: After the floating point substitution every virtual register should be used at maximum one time
   // If a floating point register is loaded from a stack position, a new virtual register has been defined.
-  
-  printf ("After Reg Substitution\n");
+
+  LLVM_DEBUG(dbgs() << "After Reg Substitution\n");
   for (MachineBasicBlock &MBB : MF) {
     MBB.dump ();
   }
-  printf ("##########################\n");
-
+  LLVM_DEBUG(dbgs() << "##########################\n");
 
   // For debugging, count uses and defs again.
   std::vector<StackInfos> stack_info_new (MRI.getNumVirtRegs ());
   for (unsigned int i = 0, e = MRI.getNumVirtRegs (); i != e; ++i)
     {
       unsigned VirtReg = Register::index2VirtReg (i);
-      printf ("I %i   Reg %u\n", i, VirtReg);
-      
+      LLVM_DEBUG(dbgs() << "I " << i << "  Reg " << VirtReg << "\n");
+
       // Depth is initialized with -1 (for "not calculated yet")
       stack_info_new[i].oreg_depth = -1;
       stack_info_new[i].fpreg_depth = -1;
       stack_info_new[i].action = None;
 
-      printf ("Uses\n");
+      LLVM_DEBUG(dbgs() << "Uses\n");
       // Uses of a register
       MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
       for (; use_iter != MRI.use_instr_nodbg_end(); ++use_iter)
@@ -1325,17 +1326,21 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     }
 
   // Debug info
-  for (unsigned int i = 0, e = MRI.getNumVirtRegs(); i != e; ++i)
-    {
-      printf ("I %i  Defs %i  Uses %i  OReg Depth %i  FPReg Depth %i\n", i,
-	      stack_info_new[i].defs, stack_info_new[i].nondbg_uses,
-	      stack_info_new[i].oreg_depth, stack_info_new[i].fpreg_depth);
-    }
+  LLVM_DEBUG({
+      for (unsigned int i = 0, e = MRI.getNumVirtRegs(); i != e; ++i)
+	{
+	  dbgs() << "I " << i <<
+	    "  Defs " << stack_info_new[i].defs <<
+	    "  Uses " << stack_info_new[i].nondbg_uses <<
+	    "  OReg Depth " << stack_info_new[i].oreg_depth <<
+	    "  FPReg Depth " << stack_info_new[i].fpreg_depth << "\n";
+	}
+    });
 
   // Reordering to get right sequence in operand stack
   // TODO:
 
-  // Old/Real code  
+  // Old/Real code
   for (MachineBasicBlock &MBB : MF) {
 
     // Don't use a range-based for loop, because we modify the list as we're
@@ -1423,10 +1428,10 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     for (auto PI = proc_fp_instr.begin (); PI != proc_fp_instr.end (); ++PI)
       {
 	MBB.dump ();
-	printf ("Reorder FP\n");
+	LLVM_DEBUG(dbgs() << "Reorder FP\n");
 	(*PI)->dump ();
 	reorderRecursive (MF, *PI, MRI, LIS, VRM, outvec);
-	printf ("Reorder End\n");
+	LLVM_DEBUG(dbgs() << "Reorder End\n");
       }
     MBB.dump ();
 
@@ -1434,17 +1439,15 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
     for (auto PI = proc_instr.begin (); PI != proc_instr.end (); ++PI)
       {
 	MBB.dump ();
-	printf ("Reorder INT\n");
+	LLVM_DEBUG(dbgs () << "Reorder INT\n");
 	(*PI)->dump ();
 	reorderRecursive (MF, *PI, MRI, LIS, VRM, outvec);
-	printf ("Reorder End\n");
+	LLVM_DEBUG(dbgs () << "Reorder End\n");
       }
     MBB.dump ();
 
-
-    printf ("Print sequence\n");
+    LLVM_DEBUG(dbgs ()<<"Print sequence\n");
     std::map<Register, int> vreg_map;
-
     for (auto O = outvec.begin (); O != outvec.end (); ++O)
       {
 	(*O)->dump ();
@@ -1466,27 +1469,26 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  }
 
       }
-    printf ("End Print sequence\n\n");
+    LLVM_DEBUG(dbgs() << "End Print sequence\n\n");
 
     // Debug output about register usage
-    printf ("Def usage\n");
+    LLVM_DEBUG(dbgs() << "Def usage\n");
     for (auto I = vreg_map.begin (); I != vreg_map.end (); ++I)
       {
-	printf ("ID %i  Count %i  # ", I->first.id(), I->second);
+	LLVM_DEBUG(dbgs() << "ID " << I->first.id() <<
+		   "  Count " << I->second << "  # ");
 	if (MRI.hasOneNonDBGUse(I->first))
-	  printf ("One Non DBG Use\n");
+	  LLVM_DEBUG(dbgs() << "One Non DBG Use\n");
 	else
-	  printf ("Multiple Non DBG Use\n");
+	  LLVM_DEBUG(dbgs() << "Multiple Non DBG Use\n");
       }
-    printf ("End Def usage\n");
-
+    LLVM_DEBUG(dbgs() << "End Def usage\n");
 
     // More debug output
     for (auto MII = MBB.begin(); MII != MBB.end(); ++MII)
       {
 	MII->dump ();
       }
-
   }
 
 
@@ -1551,8 +1553,8 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   } // MachineInstr
 
   } // MachineBasicBlock
-
-  printf ("############ Register Map\n");
+    
+    LLVM_DEBUG(dbgs() << "############ Register Map\n");
 
   //  return Changed;
   return false;

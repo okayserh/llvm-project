@@ -350,8 +350,6 @@ unsigned T8xxMCCodeEmitter::
 getMachineOpValue(const MCInst &MI, const MCOperand &MO,
                   SmallVectorImpl<MCFixup> &Fixups,
                   const MCSubtargetInfo &STI) const {
-  printf ("getMachineOpValue called\n");
-
   if (MO.isReg())
     return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg());
 
@@ -360,39 +358,7 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
 
   assert(MO.isExpr());
 
-  // Debug code
-  MI.dump ();
-  MO.dump ();
-
   return getExprOpValue(MI, MO.getExpr(),Fixups, STI);
-  /*
-  const MCExpr *Expr = MO.getExpr();
-  MCExpr::ExprKind Kind = Expr->getKind ();
-
-  printf ("Expr Kind %i\n", (int)Kind);
-
-  if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Expr)) {
-    const MCExpr *SubExpr = SExpr->getSubExpr ();
-    printf ("T8xx Kind %i Sub Expr Kind %i\n",
-	    (int)SExpr->getKind (),
-	    (int)SubExpr->getKind() );
-    SubExpr->dump ();
-
-    MCFixupKind Kind = (MCFixupKind)SExpr->getFixupKind();
-    Fixups.push_back(MCFixup::create(0, Expr, Kind));
-    return 0;
-  }
-
-  int64_t Res;
-  if (Expr->evaluateAsAbsolute(Res))
-    {
-      printf ("evalAsAbs %li\n", Res);
-      return Res;
-    }
-  */
-
-  llvm_unreachable("Unhandled expression!");
-  return 0;
 }
 
 
