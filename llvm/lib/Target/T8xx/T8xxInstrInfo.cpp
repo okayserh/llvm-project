@@ -27,6 +27,8 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "t8xx-instr-info"
+
 #define GET_INSTRINFO_CTOR_DTOR
 #include "T8xxGenInstrInfo.inc"
 
@@ -120,10 +122,10 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                             MachineBasicBlock *&FBB,
                             SmallVectorImpl<MachineOperand> &Cond,
                             bool AllowModify) const {
-  printf ("T8xx::analyzeBranch\n");
-
-  MBB.dump ();
-  
+  LLVM_DEBUG({
+      dbgs() << "T8xx::analyzeBranch\n";
+      MBB.dump ();
+    });
 
   TBB = FBB = nullptr;
   Cond.clear();
@@ -198,7 +200,7 @@ T8xxInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
 unsigned
 T8xxInstrInfo::removeBranch(MachineBasicBlock &MBB,
 			   int *BytesRemoved) const {
-  printf ("T8xx::removeBranch\n");
+  LLVM_DEBUG(dbgs() << "T8xx::removeBranch\n");
 
   if (BytesRemoved)
     *BytesRemoved = 0;
@@ -247,7 +249,7 @@ unsigned T8xxInstrInfo::insertBranch(MachineBasicBlock &MBB,
                                     const DebugLoc &DL,
 				    int *BytesAdded) const {
   unsigned NumInserted = 0;
-  printf ("T8xx::insertBranch\n");
+  LLVM_DEBUG(dbgs() << "T8xx::insertBranch\n");
 
   if (BytesAdded)
     *BytesAdded = 0;
@@ -344,7 +346,9 @@ void T8xxInstrInfo::storeRegStack (MachineInstr &MI, const unsigned int OpNum,
   const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
 
   const MachineOperand::MachineOperandType MOT = MI.getOperand(OpNum).getType ();  // X
-  printf ("storeRegStack TYPE: %i\n", (int) MOT);
+
+  LLVM_DEBUG(dbgs() << "storeRegStack TYPE: " << (int) MOT << "\n");
+
   switch (MOT)
     {
     case MachineOperand::MO_Register:
@@ -357,7 +361,7 @@ void T8xxInstrInfo::storeRegStack (MachineInstr &MI, const unsigned int OpNum,
       break;
 
     default:
-      printf ("Failed in storeRegStack! Wrong destination operand type\n");
+      llvm_unreachable("Failed in storeRegStack! Wrong destination operand type\n");
       break;
     }
 }
@@ -365,7 +369,7 @@ void T8xxInstrInfo::storeRegStack (MachineInstr &MI, const unsigned int OpNum,
 
 bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 {
-  printf ("expandPostRAPseudo %i %i\n", MI.getOpcode (), T8xx::LDC);
+  LLVM_DEBUG(dbgs()<< "expandPostRAPseudo Opcode: " << MI.getOpcode () << "\n");
 
   MachineBasicBlock &MBB = *MI.getParent();
   const MachineFunction *MF = MBB.getParent();
@@ -520,11 +524,13 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 
   case T8xx::CALL:
     {
-      for (unsigned int i = 0; i < MI.getNumOperands (); ++i)
-	{
-	  printf ("CALL Op%i %i\n", i, MI.getOperand (i).getType ());
-	  MI.getOperand (i).dump ();
-	}
+      LLVM_DEBUG({
+	  for (unsigned int i = 0; i < MI.getNumOperands (); ++i)
+	    {
+	      dbgs () << "CALL Op" << i << " " << MI.getOperand (i).getType () << "\n";
+	      MI.getOperand (i).dump ();
+	    }
+	});
 
       // First OP is MO_GlobalAddress
       // Second OP is MO_RegisterMask

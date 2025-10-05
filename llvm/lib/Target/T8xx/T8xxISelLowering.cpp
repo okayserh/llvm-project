@@ -37,6 +37,7 @@
 #include "llvm/Support/KnownBits.h"
 using namespace llvm;
 
+#define DEBUG_TYPE "t8xx-codegen"
 
 const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch (Opcode) {
@@ -89,7 +90,7 @@ static bool isCMOVPseudo(MachineInstr &MI) {
 T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
                                          const T8xxSubtarget &STI)
     : TargetLowering(TM), Subtarget(&STI) {
-  //  MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
+  MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
 
   // Set up the register classes.
   addRegisterClass(MVT::i32, &T8xx::ORegRegClass);
@@ -146,7 +147,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
     }
 
   // Nodes that require custom lowering
-  setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
+  setOperationAction(ISD::GlobalAddress, PtrVT, Custom);
 
   // TODO: Test code to check what this does?
   setOperationAction(ISD::BlockAddress,       MVT::i32,   Custom);
@@ -274,14 +275,14 @@ If you're developing an LLVM backend for a new architecture, you would implement
 
 bool T8xxTargetLowering::useSoftFloat() const {
   if (Subtarget->useSoftFloat ())
-    printf ("use Softfloat : true\n");
+    LLVM_DEBUG(dbgs() << "use Softfloat : true\n");
   else
-    printf ("use Softfloat : false\n");
+    LLVM_DEBUG(dbgs() << "use Softfloat : false\n");
 
   if (Subtarget->useFPU ())
-    printf ("use FPU : true\n");
+    LLVM_DEBUG(dbgs() << "use FPU : true\n");
   else
-    printf ("use FPU : false\n");
+    LLVM_DEBUG(dbgs() << "use FPU : false\n");
 
   return Subtarget->useSoftFloat();
 }
@@ -297,44 +298,43 @@ void T8xxTargetLowering::ReplaceNodeResults(SDNode *N,
 
 
 SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
-  printf ("### Lower Operation ### %i\n", Op.getOpcode ());
+  LLVM_DEBUG(dbgs() << "### Lower Operation ### " << Op.getOpcode () << "\n");
 
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Unimplemented operand");
   case ISD::STORE:
-    printf ("#### Lower Store #####\n");
+    LLVM_DEBUG(dbgs() << "#### Lower Store #####\n");
     return LowerSTORE(Op, DAG);
   case ISD::SETCC:
-    printf ("#### SETCC #####\n");
+    LLVM_DEBUG(dbgs() << "#### SETCC #####\n");
     return LowerSETCC(Op, DAG);
   case ISD::SELECT:
-    printf ("####### Lower Select  #########\n");
+    LLVM_DEBUG(dbgs() << "####### Lower Select  #########\n");
     return LowerSELECT(Op, DAG);
   case ISD::BRCOND:
     return LowerBRCOND(Op, DAG);
 
   case ISD::GlobalAddress:
-    printf ("####### Lower GlobalAddress  #########\n");
+    LLVM_DEBUG(dbgs() << "####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
 
     //TODO: These four may need reevaluation
   case ISD::ConstantPool:
-    printf ("####### Lower ConstantPool  #########\n");
+    LLVM_DEBUG(dbgs() << "####### Lower ConstantPool  #########\n");
     return LowerConstantPool(Op, DAG);
 
   case ISD::JumpTable:
-    printf ("####### Lower JumpTable  #########\n");
+    LLVM_DEBUG(dbgs() << "####### Lower JumpTable  #########\n");
     return LowerJumpTable(Op, DAG);
 
   case ISD::BlockAddress:
-    printf ("####### Lower BlockAddress  #########\n");
+    LLVM_DEBUG(dbgs() << "####### Lower BlockAddress  #########\n");
     return LowerBlockAddress(Op, DAG);
 
   case ISD::GlobalTLSAddress:
-    printf ("####### Lower GlobalTLSAddress  #########\n");
+    LLVM_DEBUG(dbgs() << "####### Lower GlobalTLSAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
-
   }
 }
 
@@ -346,9 +346,11 @@ SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
   SDValue Op1 = Op.getOperand(1);
   SDValue Op2 = Op.getOperand(2);
 
-  Op0.dump ();
-  Op1.dump ();
-  Op2.dump ();
+  LLVM_DEBUG({
+      Op0.dump ();
+      Op1.dump ();
+      Op2.dump ();
+    });
 
   return (Op);
 }
@@ -392,7 +394,7 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SDValue CC;
 
-  printf ("#### LowerBRCOND\n");
+  LLVM_DEBUG(dbgs() << "#### LowerBRCOND\n");
 
   SDValue NewCond;
   if (Cond.getOpcode() == ISD::SETCC) {
@@ -459,8 +461,7 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 	    // Otherwise use the original condition and introduce a negation
 
 	  default:
-	    printf ("### Unsupported condition code!!!\n");
-	    break;
+	    llvm_unreachable("Unsupported condition code!!!");
 	  }
 
 	NewCond = DAG.getSetCC (DL, Cond.getValueType (),
@@ -470,15 +471,17 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
       }
   } else {
 
-    printf ("#### LowerBRCOND Negation Case\n");
+    LLVM_DEBUG(dbgs() << "#### LowerBRCOND Negation Case\n");
 
     SDValue Op0 = Op.getOperand(0);
     SDValue Op1 = Op.getOperand(1);
     SDValue Op2 = Op.getOperand(2);
 
-    Op0.dump ();
-    Op1.dump ();
-    Op2.dump ();
+    LLVM_DEBUG({
+	Op0.dump ();
+	Op1.dump ();
+	Op2.dump ();
+      });
 
     // Otherwise insert logical not (= EQ 0)
     NewCond = DAG.getSetCC (DL, Cond.getValueType (),
@@ -500,18 +503,10 @@ SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
   SDValue Op2 = Op.getOperand(2);
   SDLoc DL(Op);
 
-  // TODO:
-  /*
-  if (Cond.getOpcode() == ISD::SETCC) {
-    if (SDValue NewCond = LowerSETCC(Cond, DAG))
-      Cond = NewCond;
-  }
-  */
-
   // T8xxISD::CMOV means set the result (which is operand 1) to the RHS if
   // condition is true.
   SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
-  SDValue Ops[] = {Cond, Op2, Op1};
+  SDValue Ops[] = {Cond, Op1, Op2};
   return DAG.getNode(T8xxISD::CMOV, DL, VTs, Ops);
 }
 
@@ -523,17 +518,28 @@ SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) co
   GlobalAddressSDNode *GlobalAddr = cast<GlobalAddressSDNode>(Op.getNode());
   int64_t Offset = cast<GlobalAddressSDNode>(Op)->getOffset();
 
+  //  assert(GlobalAddr->getOffset() == 0 && "unexpected offset in global node");
+
   // TODO: Just a first try to see how things work.
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
   Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32, 0, T8xxMCExpr::VK_T8xx_GLOBAL);
-
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
 
   if (Offset != 0)
     {
-      SDValue PtrOff = DAG.getIntPtrConstant(Offset, SDLoc(Op));
-      Result = DAG.getNode(ISD::ADD, SDLoc(Op), MVT::i32, Result, PtrOff);
+      LLVM_DEBUG(dbgs() << "LowerGlobalAddress Ofset:" << Offset << "\n");
+
+      if (Offset > 0)
+	{
+	  SDValue PtrOff = DAG.getIntPtrConstant(Offset, SDLoc(Op));
+	  Result = DAG.getNode(ISD::ADD, SDLoc(Op), MVT::i32, Result, PtrOff);
+	}
+      else
+	{
+	  SDValue PtrOff = DAG.getIntPtrConstant(-Offset, SDLoc(Op));
+	  Result = DAG.getNode(ISD::SUB, SDLoc(Op), MVT::i32, Result, PtrOff);
+	}
     }
 
   return Result;
@@ -611,8 +617,10 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   const TargetInstrInfo *TII = Subtarget->getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
-  printf ("EmitLoweredSelect\n");
-  MI.dump ();
+  LLVM_DEBUG({
+      dbgs() << "EmitLoweredSelect\n";
+      MI.dump ();
+    });
 
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -735,8 +743,10 @@ T8xxTargetLowering::EmitLoweredFPSetCC(MachineInstr &MI,
   const TargetInstrInfo *TII = Subtarget->getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
-  printf ("EmitLoweredFPSetCC\n");
-  MI.dump ();
+  LLVM_DEBUG({
+      dbgs() << "EmitLoweredFPSetCC\n";
+      MI.dump ();
+    });
 
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -910,7 +920,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     llvm_unreachable("Unimplemented");
   }
 
-  printf ("LowerCall\n");
+  LLVM_DEBUG(dbgs() << "LowerCall\n");
 
   // Analyze operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
@@ -927,10 +937,12 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SmallVector<std::pair<unsigned, SDValue>, 8> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
 
-  printf ("ArgLocs %li\n", ArgLocs.size());
+  LLVM_DEBUG(dbgs() << "ArgLocs " << ArgLocs.size() << "\n");
 
-  printf ("Before ArgLocs\n");
-  DAG.dump ();
+  LLVM_DEBUG({
+      dbgs() << "Before ArgLocs\n";
+      DAG.dump ();
+    });
 
   // Walk the register/memloc assignments, inserting copies/loads.
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
@@ -941,13 +953,13 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     assert(VA.getLocInfo() == CCValAssign::Full && "Unhandled loc info");
 
     if (VA.isRegLoc()) {
-      printf ("VA %i is Reg\n", i);
+      LLVM_DEBUG(dbgs() << "VA " << i << " is Reg\n");
 
       RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
       continue;
     }
 
-    printf ("VA %i is Mem\n", i);
+    LLVM_DEBUG(dbgs() << "VA " << i << " is Mem\n");
 
     assert(VA.isMemLoc() &&
            "Only support passing arguments through registers or via the stack");
@@ -993,8 +1005,10 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Chain = DAG.getNode(ISD::TokenFactor, Loc, MVT::Other, MemOpChains);
   }
 
-  printf ("Before RegsToPass\n");
-  DAG.dump ();
+  LLVM_DEBUG({
+      dbgs() << "Before RegsToPass\n";
+      DAG.dump ();
+    });
 
   // Build a sequence of copy-to-reg nodes chained together with token chain
   // and flag operands which copy the outgoing args into the appropriate regs.
@@ -1004,8 +1018,11 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 			     RegsToPass[i].second, InFlag);
     InFlag = Chain.getValue(1);
   }
-  printf ("After RegsToPass\n");
-  DAG.dump ();
+
+  LLVM_DEBUG({
+      dbgs() << "After RegsToPass\n";
+      DAG.dump ();
+    });
 
   // We only support calling global addresses.
   /* Original code
@@ -1019,10 +1036,15 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // This works with a call instruction that directly takes
   // the address as parameter
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
-    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0, T8xxMCExpr::VK_T8xx_IPTRREL);
+    {
+      LLVM_DEBUG(dbgs() << "Lower Call: GlobalAddressSDNode\n");
+      Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0, T8xxMCExpr::VK_T8xx_IPTRREL);
+    }
   else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee))
-    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), MVT::i32, T8xxMCExpr::VK_T8xx_IPTRREL);
-
+    {
+      LLVM_DEBUG(dbgs() << "Lower Call: ExternalSymbolSDNode\n");
+      Callee = DAG.getTargetExternalSymbol(E->getSymbol(), MVT::i32, T8xxMCExpr::VK_T8xx_IPTRREL);
+    }
 
   std::vector<SDValue> Ops;
   Ops.push_back(Chain);
@@ -1109,10 +1131,9 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
   CCInfo.AnalyzeFormalArguments(Ins, CC_T8xx32);
 
   int i = 0;
-
   for (auto &VA : ArgLocs) {
     if (VA.isRegLoc()) {
-      printf ("VA %i is Reg\n", i++);
+      LLVM_DEBUG(dbgs() << "VA " << i++ << " is Reg\n");
       // Arguments passed in registers
       EVT RegVT = VA.getLocVT();
       assert(RegVT.getSimpleVT().SimpleTy == MVT::i32 &&
@@ -1130,7 +1151,7 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
     /* This generates a sequence of "LDL" instructions, the results of which
        are not used later
        NOTE: Leads to exception when this code is not present! */
-    printf ("VA %i is Mem\n", i++);
+    LLVM_DEBUG(dbgs() << "VA " << i++ << " is Mem\n");
 
     assert(VA.isMemLoc() &&
            "Can only pass arguments as either registers or via the stack");
@@ -1176,9 +1197,11 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                  const SmallVectorImpl<ISD::OutputArg> &Outs,
                                  const SmallVectorImpl<SDValue> &OutVals,
                                  const SDLoc &DL, SelectionDAG &DAG) const {
-  printf ("LowerFormalReturn\n");
-  DAG.dump ();
-  printf ("Pre LowerFormalReturn\n");
+  LLVM_DEBUG({
+      dbgs() << "LowerFormalReturn\n";
+      DAG.dump ();
+      dbgs() << "Pre LowerFormalReturn\n";
+    });
 
   // CCValAssign - represent the assignment of the return value to locations.
   SmallVector<CCValAssign, 16> RVLocs;
@@ -1193,7 +1216,7 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   SDValue Flag;
   SmallVector<SDValue, 4> RetOps(1, Chain);
 
-  printf ("Temp A, RVLocs Size %li\n", RVLocs.size());
+  LLVM_DEBUG(dbgs() << "Temp A, RVLocs Size " << RVLocs.size() << "\n");
 
   // OKH: General remark, in Webassembly, the operands are directly
   // used for return. However, the return instruction follows after
@@ -1222,10 +1245,10 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   SDValue ret = DAG.getNode(T8xxISD::RET_FLAG, DL, MVT::Other, RetOps);
 
-  printf ("Post Lower Return\n");
-  DAG.dump ();
-
-  printf ("Temp C\n");
+  LLVM_DEBUG({
+      dbgs() << "Post Lower Return\n";
+      DAG.dump ();
+    });
 
   return ret;
 }

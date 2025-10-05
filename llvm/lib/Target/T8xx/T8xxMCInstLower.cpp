@@ -28,6 +28,7 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "t8xx-mcinst-lower"
 
 MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
 
@@ -35,27 +36,13 @@ MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
     (T8xxMCExpr::VariantKind)MO.getTargetFlags();
   const MCSymbol *Symbol = nullptr;
 
-  printf("LowerSymbolOperand Kind %i  Type %i\n", (int)Kind, (int)MO.getType());
+  LLVM_DEBUG(dbgs() << "LowerSymbolOperand Kind " << (int)Kind <<
+	     "  Type " << (int)MO.getType() << "\n");
   
   switch(MO.getType()) {
   default: llvm_unreachable("Unknown type in LowerSymbolOperand");
   case MachineOperand::MO_MachineBasicBlock:
-    {
-      Symbol = MO.getMBB()->getSymbol();
-
-      /* When an assembler ".s" file is generated, real labels are generated as well
-	 for ".o" files, no labels are generated.
-      printf ("################\n");
-      if (Symbol->isTemporary ())
-	printf ("Sym is Temp\n");
-      std::string temp;
-      raw_string_ostream ostemp(temp);
-      Symbol->print (ostemp, nullptr);
-      std::cout << temp;
-    
-      printf ("Lower Sym Name %s\n", Symbol->getName().str().c_str());
-      */
-    }
+    Symbol = MO.getMBB()->getSymbol();
     break;
 
   case MachineOperand::MO_GlobalAddress:

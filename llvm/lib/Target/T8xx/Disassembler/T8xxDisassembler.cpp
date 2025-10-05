@@ -94,13 +94,13 @@ static DecodeStatus decodeImm(MCInst &Inst, unsigned Insn, uint64_t Address,
     case 0xD: // STL
       Inst.addOperand(MCOperand::createReg(T8xx::AREG));
       Inst.addOperand(MCOperand::createReg(T8xx::WPTR));
-      Inst.addOperand(MCOperand::createImm(imm * 4));
+      Inst.addOperand(MCOperand::createImm(imm));
       break;
     case 0x3:  // LDNL
     case 0x5:  // LDNLP
       Inst.addOperand(MCOperand::createReg(T8xx::AREG));
       Inst.addOperand(MCOperand::createReg(T8xx::AREG));
-      Inst.addOperand(MCOperand::createImm(imm * 4));
+      Inst.addOperand(MCOperand::createImm(imm));
       break;
     case 0x4:  // LDC
       Inst.addOperand(MCOperand::createReg(T8xx::AREG));
@@ -117,12 +117,12 @@ static DecodeStatus decodeImm(MCInst &Inst, unsigned Insn, uint64_t Address,
       Inst.addOperand(MCOperand::createImm(imm));
       break;
     case 0xB: // AJW
-      Inst.addOperand(MCOperand::createImm(imm * 4));
+      Inst.addOperand(MCOperand::createImm(imm));
       break;
     case 0xE:  // STNL
       Inst.addOperand(MCOperand::createReg(T8xx::AREG));
       Inst.addOperand(MCOperand::createReg(T8xx::AREG));
-      Inst.addOperand(MCOperand::createImm(imm * 4));
+      Inst.addOperand(MCOperand::createImm(imm));
       break;
       // Note: 0xF is the "OP" instruction, which encodes additional instructions
     }
@@ -133,7 +133,6 @@ static DecodeStatus decodeImm(MCInst &Inst, unsigned Insn, uint64_t Address,
 static DecodeStatus decodeRegStack(MCInst &Inst, unsigned Insn, uint64_t Address,
 				   const MCDisassembler *Decoder)
 {
-  unsigned addr = 0;
   Inst.addOperand(MCOperand::createReg(T8xx::AREG));
   Inst.addOperand(MCOperand::createReg(T8xx::BREG));
   return MCDisassembler::Success;
@@ -164,17 +163,7 @@ DecodeStatus T8xxDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
                                                uint64_t Address,
                                                raw_ostream &CStream) const {
   uint32_t Insn;
-  bool isLittleEndian = true; // getContext().getAsmInfo()->isLittleEndian();
   DecodeStatus Result;
-
-  int32_t prefix = 0;
-  
-  //  printf ("Decode Size %lu  Address %lu\n", Size, Address);
-  /*
-  for (unsigned int i = 0; i < 20; ++i)
-    printf ("%20x ", Bytes[i]);
-  printf ("\n");
-  */
 
   // Collect nfix / pfix instructions
   uint32_t ORegBuf = 0;
@@ -186,7 +175,6 @@ DecodeStatus T8xxDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
       if ((Bytes[i] >> 4) == 0x6)
 	ORegBuf = ~ORegBuf;
       ORegBuf <<= 4;
-      //      printf ("P/NFIX %i\n", i);
       ++i;
     }
 

@@ -51,7 +51,9 @@ void T8xxAsmPrinter::emitInstruction(const MachineInstr *MI) {
     MCInst TmpInst;
     LowerT8xxMachineInstrToMCInst(&*I, TmpInst, *this);
 
-    TmpInst.dump ();
+    LLVM_DEBUG({
+	TmpInst.dump ();
+      });
 
     EmitToStreamer(*OutStreamer, TmpInst);
   } while ((++I != E) && I->isInsideBundle()); // Delay slot check.
@@ -127,21 +129,12 @@ void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
 }
 
 
-// TODO: Quick attempt to see whether this produces a reasonable result
-bool T8xxAsmPrinter::isBlockOnlyReachableByFallthrough(const MachineBasicBlock *MBB) const
-{
-  return false;
-}
-
-
 // Print a 'memsrc' operand which is a (Register, Offset) pair.
 void T8xxAsmPrinter::printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
                                          raw_ostream &O) {
   //  const MachineOperand &Op1 = MI->getOperand(OpNum);
   const MachineOperand &Op2 = MI->getOperand(OpNum + 1);
   O << "[";
-  //  printRegName(O, Op1.getReg());
-  //StringRef(getRegisterName(MO.getReg())).lower()
   
   unsigned Offset = Op2.getImm();
   if (Offset) {

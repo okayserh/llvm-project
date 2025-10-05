@@ -184,7 +184,7 @@ def WPtrSrc : Operand<iPTR> {
   let PrintMethod = "printAddrModeMemSrc";
   let MIOperandInfo = (ops WptrRegs, i32imm);
 //  let EncoderMethod = "getMemSrcValue";
-  let DecoderMethod = "DecodeWPtrSrcOperand";
+//  let DecoderMethod = "DecodeWPtrSrcOperand";
   let ParserMatchClass = T8xxWPtrSrcAsmOperand;
 }
 
@@ -300,20 +300,14 @@ def XOR : T8BinaryOp8<0x33, "xor", xor>;  // #53
 def OR  : T8BinaryOp8<0x4B, "or", or>;  // #53
 def AND : T8BinaryOp8<0x46, "and", and>;  // #53
 
-
-// Dummy instruction to test the code generated
-def SRA : T8BinaryOp8<0x23, "sra", sra>;  // #53
-
-/*def : Pat<(sra OReg:$cnt, OReg:$src),
-	  (LSHR OReg:$cnt, (XDBLE OReg:$src) )>;
-*/
+def : Pat<(sra OReg:$src, OReg:$cnt),
+	  (LSHR (XDBLE OReg:$src), OReg:$cnt)>;
 
 /* Define via patterns */
 /*
 defm UDIV : T8BinaryOp<0x21, 0xFA, "ldiv", udiv>;   // Pseudo code, ldiv (Section 5.7.2 Compiler writer guide)
 defm UREM : T8BinaryOp<0x21, 0xFB, "ldiv", urem>;   // Pseudo code, ldiv -> TODO
 
-defm SRA : T8BinaryOp<0x01, 0x21, "lshr", sra>;  // #53   (Pseudo Code, needs transformation)
 defm ROTR : T8BinaryOp<0x01, 0x22, "lshr", rotr>;
 defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
 */
@@ -441,8 +435,12 @@ def GT :      T8InstOp4<0x9,
 		(i32 (setcc i32:$lhs, i32:$rhs, SETGT)))]>;
 
 /* Other comparisons will be created by patterns */
+
+// Note: The double EQC is needed since DIFF yields a result != 0
+// for true. However, certain operations expect 0 for false and 1 for true.
+// TODO: Could be optimized in conjunction with a CJ instruction.
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETNE),
-           (DIFF $rhs, $lhs)>;
+           (EQC (EQC (DIFF $rhs, $lhs), 0), 0)>;
 
 def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETEQ),
            (EQC (DIFF $rhs, $lhs), 0)>;
@@ -540,19 +538,6 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 // Call Instructions
 //===----------------------------------------------------------------------===//
 
-// This is inherently linked to the method "LowerCall", where
-// the corresponding call is created in the DAG.
-
-// Working version (passed through register)
-//let isCall = 1, Uses = [R15] in {
-//  def CALL : T8Inst<(outs), (ins OReg:$addr),
-//                      "call $addr",
-//                      [(call i32:$addr)]> {
-//    let op1 = 0x22;
-//  }
-//}
-
-
 // Working version, passed directly
 // Note: Currently only one return value in the A register is allowed
 // Since the gcall exchanges instruction pointer with the A reg,
@@ -573,7 +558,6 @@ def CALL : T8Inst<(outs), (ins i32imm:$addr),
 // Version with absolute adressing
 def CALL : T8Inst<(outs), (ins i32imm:$addr),
                       "ldc $addr\n\tgcall \n\trev \n",
-//                      [(call tglobaladdr:$addr)]> {
                       []> {
     let isCodeGenOnly = 1;
     let isPseudo = 1;

@@ -28,6 +28,8 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "t8xx-frame-lowering"
+
 
 // Current stack implementation at T8xx
 // |                                  |  Higher address
@@ -74,7 +76,7 @@ void T8xxFrameLowering::emitSPAdjustment(MachineFunction &MF,
                                           unsigned ADDrr,
                                           unsigned ADDri) const
 {
-  printf ("emitSPAdjustment\n");
+  LLVM_DEBUG(dbgs() << "emitSPAdjustment \n");
 }
 
 
@@ -91,7 +93,10 @@ uint64_t T8xxFrameLowering::computeParameterSize(MachineFunction &MF) const
 }
 
 
-// Introduce a spill register for WPtr ?
+// If an alignment > 4 is required, the original WPtr is
+// reduced such that sufficient space is reserved on the stack.
+// However, the aligned FramePointer is stored in a newly
+// introduced spill space on the stack.
 void T8xxFrameLowering::spillFPBP(MachineFunction &MF) const
 {
   MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -104,7 +109,7 @@ void T8xxFrameLowering::spillFPBP(MachineFunction &MF) const
 
 void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
-  printf ("emitPrologue\n");
+  LLVM_DEBUG(dbgs() << "emitPrologue\n");
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
@@ -113,7 +118,9 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
 
   // Debugging output. Print current frame info
-  MFI.dump (MF);
+  LLVM_DEBUG ({
+      MFI.dump (MF);
+    });
 
   // Save the return address on old stack position 0
   // Note: This is always needed! Otherwise, the function does not know where
@@ -123,14 +130,17 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   // Dynamic stack realignment
   Align MaxAlign = MFI.getMaxAlign();
 
-  printf ("Requested Alignment %li\n", MaxAlign.value ());
+  LLVM_DEBUG (dbgs() << "Requested Alignment " << MaxAlign.value () << "\n");
 
   // Compute the stack size, to determine if we need a prologue at all.
   uint64_t FixedStackSize = computeParameterSize (MF);
   uint64_t StackSize = alignTo (MFI.getStackSize (), getStackAlign ());
   uint64_t OffsetAdj = MaxAlign.value ();
 
-  printf ("Fixed Stack %li   Stack %li   OffsetAdj %li\n", FixedStackSize, StackSize, OffsetAdj);
+  LLVM_DEBUG (dbgs() << "Fixed Stack " <<
+	      FixedStackSize << "   Stack " <<
+	      StackSize << "   OffsetAdj " <<
+	      OffsetAdj << "\n");
 
   // If not stack alignment is needed, skip rest of prologue
   if ((FixedStackSize + StackSize) == 0) {
@@ -139,7 +149,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 
   // Attempt to adjust stack offset
   /* Note: This is just a helper variable in the MFI object. */
-  printf ("Current FI Offset = %li\n", MFI.getOffsetAdjustment ());
+  LLVM_DEBUG (dbgs() << "Current FI Offset = " << MFI.getOffsetAdjustment () << "\n");
 
   // Note: Stack position 0 may be used by some Transputer internals
   // Hence do not use that. However, when alignments other than the natural
@@ -219,13 +229,12 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
       Size = -Size;
   }
   return MBB.erase(I);
-  //  return MBB.end ();
 }
 
 
 void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
                                   MachineBasicBlock &MBB) const {
-  printf ("emitEpilogue\n");
+  LLVM_DEBUG (dbgs() << "emitEpilogue\n");
 
   // Compute the stack size, to determine if we need an epilogue at all.
   MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -247,7 +256,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 
   // Dynamic stack realignment
   Align MaxAlign = MFI.getMaxAlign();
-  printf ("Requested Alignment %li\n", MaxAlign.value ());
+  LLVM_DEBUG (dbgs() << "Requested Alignment " << MaxAlign.value () << "\n");
 
   // Now some dynamic alignment would be needed if the requested alignment is above 4 bytes
   if (MFI.shouldRealignStack ())
@@ -282,8 +291,6 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 	.addImm((StackSize + OffsetAdj) / 4)
         .setMIFlag(MachineInstr::FrameSetup);
     }
-
-  printf ("emitEpilogue End\n");
 }
 
 bool T8xxFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {

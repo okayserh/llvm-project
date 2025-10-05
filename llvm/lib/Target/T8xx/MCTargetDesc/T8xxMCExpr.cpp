@@ -75,7 +75,8 @@ T8xxMCExpr::VariantKind T8xxMCExpr::parseVariantKind(StringRef name)
 }
 
 T8xx::Fixups T8xxMCExpr::getFixupKind(T8xxMCExpr::VariantKind Kind) {
-  printf ("FixupKind %i\n", (int) Kind);
+
+  LLVM_DEBUG(dbgs() << "FixupKind " << (int) Kind << "\n");
 
   switch (Kind) {
   default: llvm_unreachable("Unhandled T8xxMCExpr::VariantKind");

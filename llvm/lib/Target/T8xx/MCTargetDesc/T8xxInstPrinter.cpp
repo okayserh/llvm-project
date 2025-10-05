@@ -54,12 +54,7 @@ bool T8xxInstPrinter::printT8xxAliasInstr(const MCInst *MI,
 void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
                                     const MCSubtargetInfo &STI,
                                     raw_ostream &O) {
-  //  MI->dump ();
-  // printf ("Op Num %i No Ops %i\n", opNum, MI->getNumOperands ());
-
   const MCOperand &MO = MI->getOperand (opNum);
-
-  //  printf ("printOperand\n");
   
   if (MO.isReg()) {
     printRegName(O, MO.getReg());
@@ -67,7 +62,7 @@ void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
   }
 
   if (MO.isImm()) {
-    printf ("printOperand Imm %li\n", MO.getImm ());
+    LLVM_DEBUG(dbgs() << "printOperand Imm " << MO.getImm () << "\n");
     
     O << (int)MO.getImm();
     return;
@@ -82,9 +77,6 @@ void T8xxInstPrinter::printOperand(const MCInst *MI, int opNum,
 void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
 					  const MCSubtargetInfo &STI,
 					  raw_ostream &O) {
-  //MI->dump ();
-  //  printf ("Op Num %i No Ops %i\n", OpNum, MI->getNumOperands ());
-
   if ((OpNum + 1) < MI->getNumOperands ())
     {
       const MCOperand &Op1 = MI->getOperand(OpNum);
@@ -104,16 +96,6 @@ void T8xxInstPrinter::printAddrModeMemSrc(const MCInst *MI, int OpNum,
       O << "x0x";
     }
       
-  /*
-  O << "[";
-  printRegName(O, Op1.getReg());
-
-  unsigned Offset = Op2.getImm();
-  if (Offset) {
-    O << ", #" << Offset;
-  }
-  O << "]";
-  */
 }
 
 

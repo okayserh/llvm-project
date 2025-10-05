@@ -64,11 +64,11 @@ entry:
 ; CHECK: cj 3
 ; CHECK: fpgt
 ; CHECK: eqc 0
-; CHECK: j .LBB0_1
-; CHECK: ldc 15
+; CHECK: cj .LBB0_1
+; CHECK: ldc 25
 ; CHECK: j .LBB0_3
 ; CHECK-LABEL: .LBB0_1:
-; CHECK: ldc 25
+; CHECK: ldc 15
 ; CHECK-LABEL: .LBB0_3:
 ; CHECK: stl 9
 ; CHECK: ldl 9

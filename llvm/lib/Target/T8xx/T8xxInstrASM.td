@@ -108,8 +108,10 @@ def TESTPRANAL : T8InstOp8<0x2A, (outs OReg:$dst1), (ins), "testpranal", []>;
 def GAJW :    T8InstOp8<0x3C, (outs), (ins), "gajw", []>;
 
 // Long arithmetic
+// Note: In the operand list, AReg ist last!
+
 def XDBLE :   T8InstOp8<0x1D, (outs LReg:$dst1), (ins OReg:$src), "xdble", []>;
-def LSHR :    T8InstOp8<0x35, (outs OReg:$dst1), (ins OReg:$cnt, LReg:$src1), "lshr", []>;
+def LSHR :    T8InstOp8<0x35, (outs OReg:$dst1), (ins LReg:$src1, OReg:$cnt), "lshr", []>;
 def LSHL :    T8InstOp8<0x36, (outs LReg:$dst1), (ins OReg:$cnt, LReg:$src1), "lshl", []>;
 def LADD :    T8InstOp8<0x16, (outs OReg:$dst1), (ins OReg:$src1, OReg:$src2, OReg:$src3), "ladd", []>;
 def LSUB :    T8InstOp8<0x38, (outs OReg:$dst1), (ins OReg:$src1, OReg:$src2, OReg:$src3), "lsub", []>;

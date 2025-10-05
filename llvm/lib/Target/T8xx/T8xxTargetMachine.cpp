@@ -203,10 +203,8 @@ bool T8xxPassConfig::addInstSelector() {
 
 
 void T8xxPassConfig::addPostRegAlloc() {
-  // TODO: Initially intended to do an allocation of the
-  // processor stack registers.
-  // Not working and seems to lead to problems.
-  printf ("Added T8xx Stack Pass\n");
+  // Pass to reorder instruction to meet the requirements from
+  // the Transputer's operand register stack.
   addPass(createT8xxStackPass());
 }
 

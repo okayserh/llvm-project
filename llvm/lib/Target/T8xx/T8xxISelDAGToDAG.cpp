@@ -70,7 +70,8 @@ INITIALIZE_PASS(T8xxDAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false, false)
 
 bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset) {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
-    printf ("FrameIndexSDNode\n");
+    LLVM_DEBUG(dbgs() << "FrameIndexSDNode\n");
+
     EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
     Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
     Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
@@ -78,7 +79,8 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
     // Test to see whether the alignment can be used to select
     // only proper frame objects
     MachineFrameInfo &MFI = MF->getFrameInfo ();
-    printf ("Object %i  Alignment %li\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
+    LLVM_DEBUG(dbgs() << "Object " << FIN->getIndex () <<
+	       "  Alignment " << MFI.getObjectAlign(FIN->getIndex()).value () << "\n");
 
     // ADDRri ensures that only 32 bit aligned relatives to the WPTR are
     // selected
@@ -104,48 +106,19 @@ bool T8xxDAGToDAGISel::SelectADDRri(SDValue Addr, SDValue &Base, SDValue &Offset
    */
 
   // Try to eliminate the tedious way through ldlp, stnl and
-  // condense it into 
-  if (Addr.getOpcode() == T8xxISD::ADD_WPTR)
-    printf ("T8xxISD:ADD_WPTR\n");
+  // condense it into
+  LLVM_DEBUG({
+      if (Addr.getOpcode() == T8xxISD::ADD_WPTR)
+	dbgs() << "T8xxISD:ADD_WPTR\n";
+    });
 
-
-#if 0
-  if (Addr.getOpcode() == ISD::ADD) {
-    printf ("ISD:ADD\n");
-    if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
-      // TODO: Check, whether there is a limitation to 13 bit offsets
-      if (isInt<32>(CN->getSExtValue())) {
-        if (FrameIndexSDNode *FIN =
-                dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
-          // Constant offset from frame ref.
-          Base = CurDAG->getTargetFrameIndex(
-              FIN->getIndex(), TLI->getPointerTy(CurDAG->getDataLayout()));
-        } else {
-
-	  Base = Addr.getOperand(0);
-	  return true;
-        }
-        Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
-                                           MVT::i32);
-        return true;
-      }
-    }
-  }
-#endif
-  
-  /* This seems to be the case that admits regular "Registers" ad
-     base !?
-  Base = Addr;
-  Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
-  return true;
-  */
   return false;
 }
 
 
 bool T8xxDAGToDAGISel::SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offset) {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
-    printf ("FrameIndexSDNode\n");
+    LLVM_DEBUG(dbgs() << "FrameIndexSDNode\n");
     EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
     Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
     Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
@@ -153,7 +126,8 @@ bool T8xxDAGToDAGISel::SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offse
     // Test to see whether the alignment can be used to select
     // only proper frame objects
     MachineFrameInfo &MFI = MF->getFrameInfo ();
-    printf ("Object %i  Alignment %li\n", FIN->getIndex (), MFI.getObjectAlign(FIN->getIndex()).value ());
+    LLVM_DEBUG(dbgs() << "Object " << FIN->getIndex () <<
+	       "  Alignment " << MFI.getObjectAlign(FIN->getIndex()).value () << "\n");
     return true;
   }
 
@@ -163,44 +137,6 @@ bool T8xxDAGToDAGISel::SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offse
     return false; // direct calls.
   }
 
-  /*
-   * Note: When the base operand is the frameindex, special
-   * instructions enable the use of additions without
-   * having an "add" instruction.
-   * I.e. add would only be needed, when the base register
-   * is a regular register.
-   */
-
-#if 0
-  if (Addr.getOpcode() == ISD::ADD) {
-    printf ("ISD:ADD\n");
-    if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
-      // TODO: Check, whether there is a limitation to 13 bit offsets
-      if (isInt<32>(CN->getSExtValue())) {
-        if (FrameIndexSDNode *FIN =
-                dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
-          // Constant offset from frame ref.
-          Base = CurDAG->getTargetFrameIndex(
-              FIN->getIndex(), TLI->getPointerTy(CurDAG->getDataLayout()));
-        } else {
-
-	  Base = Addr.getOperand(0);
-	  return true;
-        }
-        Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
-                                           MVT::i32);
-        return true;
-      }
-    }
-  }
-#endif
-  
-  /* This seems to be the case that admits regular "Registers" ad
-     base !?
-  Base = Addr;
-  Offset = CurDAG->getTargetConstant(0, Addr, MVT::i32);
-  return true;
-  */
   return false;
 }
 
@@ -208,6 +144,8 @@ bool T8xxDAGToDAGISel::SelectADDRrib(SDValue Addr, SDValue &Base, SDValue &Offse
 // Register + immediate
 
 bool T8xxDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &Base, SDValue &Offset) {
+
+
   if (Addr.getOpcode() == ISD::FrameIndex ||
       Addr.getOpcode() == ISD::TargetExternalSymbol ||
       Addr.getOpcode() == ISD::TargetGlobalAddress ||
@@ -229,15 +167,21 @@ bool T8xxDAGToDAGISel::SelectADDRr(SDValue Addr, SDValue &Base) {
     return false; // direct calls.
   }
 
-  printf ("Replacing ADDRr\n");
+  LLVM_DEBUG({
+      Addr->dump ();
+      dbgs() << "Replacing ADDRr\n";
+    });
+
   Base = Addr;
   return true;
 }
 
 
 void T8xxDAGToDAGISel::Select(SDNode *N) {
-  printf ("T8xxDAGToDAGIsel  %i\n", N->getOpcode());
-  N->dump ();
+  LLVM_DEBUG({
+      dbgs() << "T8xxDAGToDAGIsel  " << N->getOpcode() << "\n";
+      N->dump ();
+    });
 
   switch (N->getOpcode()) {
     /*
@@ -260,8 +204,10 @@ void T8xxDAGToDAGISel::Select(SDNode *N) {
     SelectCode(N);
   }
 
-  printf ("After Sel\n");
-  N->dump ();
+  LLVM_DEBUG({
+      dbgs() << "After Sel\n";
+      N->dump ();
+    });
 }
 
 

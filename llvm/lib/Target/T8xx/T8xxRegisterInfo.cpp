@@ -27,6 +27,8 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "t8xx-register"
+
 #define GET_REGINFO_TARGET_DESC
 #include "T8xxGenRegisterInfo.inc"
 
@@ -52,14 +54,15 @@ T8xxRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
 
 BitVector T8xxRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
-  //  const T8xxSubtarget &Subtarget = MF.getSubtarget<T8xxSubtarget>();
-
   return Reserved;
 }
 
 const TargetRegisterClass*
 T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
                                       unsigned Kind) const {
+  // The T8xx has only two types of registers. The integer
+  // operand stack and the floating point operand stack.
+  // Thus, the integer operand stack is used for pointers.
   return &T8xx::ORegRegClass;
 }
 
@@ -79,9 +82,14 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   bool bWordAlignedFO = false;
 
   // Note: Calculation of stack offsets happens in PrologEpilogInserter
-  
-  printf ("eliminateFrameIndex  FI: %i  OpNum: %i   SPAdj: %i  StackSize %li\n", FI, FIOperandNum, SPAdj, MFI.getStackSize());
-  MI.dump ();
+  LLVM_DEBUG({
+      dbgs() << "eliminateFrameIndex  FI: " <<
+	FI << "  OpNum: " <<
+	FIOperandNum << "   SPAdj: " <<
+	SPAdj << "  StackSize " <<
+	MFI.getStackSize() << "\n";
+      MI.dump ();
+    });
 
   // Determine if we can eliminate the index from this kind of instruction.
   unsigned ImmOpIdx = 0;
@@ -108,17 +116,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   for (int i = MFI.getObjectIndexBegin (); i < 0; ++i)
     fixed_obj_size += alignTo (MFI.getObjectSize (i), TFL->getStackAlign ());
 
-  /* TODO: maybe make an assertion of this. I.e. fixed_object_size
-     should be always aligned as the contributing elements are already
-     rounded up to alignment.
-  printf ("Fixed objects size = %i\n", fixed_obj_size);
-  fixed_obj_size = (fixed_obj_size + 3) / 4 * 4;
-  printf ("Aligned Fixed objects size = %i\n", fixed_obj_size);
-  */
-
-  // Dynamic stack realignment
-  Align MaxAlign = MFI.getMaxAlign();
-  
   // Find start of first "frame" object (parameters are treated separately)
   unsigned first_frame_pos = MFI.getStackSize ();
   for (int i = 0; i < MFI.getObjectIndexEnd (); ++i)
@@ -127,8 +124,10 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 	first_frame_pos = MFI.getObjectOffset (i);
 
   // Align first frame pos to required alignment of MachineFunction
+  Align MaxAlign = MFI.getMaxAlign();
   first_frame_pos = alignTo (first_frame_pos, MaxAlign);
-  printf ("Aligned Objects size = %i\n", first_frame_pos);
+
+  LLVM_DEBUG(dbgs() << "Aligned Objects size = " << first_frame_pos << "\n");
 
   // The fixed stack is positioned "above" the frame. If the stack
   // has an unaligned size (due to small objects like characters)
@@ -138,7 +137,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   int Offset = 0;
   if (FI < 0)
     // FI < 0   -> fixed stack objects (i.e. call parameters)
-    //    Offset = (MFI.getStackSize () - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
     Offset = (StackSizeAligned - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
   else
     // FI >= 0  -> stack frame objects (i.e. function variables and temporary stack objects)
@@ -148,7 +146,12 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
   Offset += MFI.getOffsetAdjustment ();
   
-  printf ("eliminateFrameIndex  FI: %i Offset: %li Size: %li StackSize %li  ImmOp %li  ResOffset %i\n", FI, MFI.getObjectOffset(FI), MFI.getObjectSize(FI), MFI.getStackSize(), ImmOp.getImm(), Offset);
+  LLVM_DEBUG(dbgs() << "eliminateFrameIndex FI: " << FI <<
+	     " Offset: " << MFI.getObjectOffset(FI) <<
+	     " Size: " << MFI.getObjectSize(FI) <<
+	     " StackSize " << MFI.getStackSize() <<
+	     " ImmOp " << ImmOp.getImm() <<
+	     " ResOffset " << Offset << "\n");
 
   // If FI is smaller 0, use the "spilled" WPtr
   if ((FI < 0) && MFI.shouldRealignStack())
@@ -168,9 +171,11 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       Offset = MFI.getObjectOffset(FI);
 
       // LDLP -> TODO
+      // Note: Unclear what the initial TODO was meant to be. Probably
+      // "aligned" offsets should be included in the intrinsic offset?
       if (MI.getOpcode() == T8xx::LDLP)
 	{
-	  // Save an embarrissing "adc 0" when offset is zero
+	  // Save an embarrassing "adc 0" when offset is zero
 	  if (Offset != 0)
 	    BuildMI(*MBB, *II, dl, TII.get(T8xx::ADC), T8xx::AREG)
 	      .addReg(T8xx::AREG)
@@ -205,8 +210,8 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       else
 	ImmOp.setImm(Offset);
     }
-      
-  printf ("After eliminateFrameIndex\n\n");
+  
+  LLVM_DEBUG(dbgs() << "After eliminateFrameIndex\n\n");
 
   return false;
 }
