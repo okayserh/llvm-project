@@ -15,8 +15,7 @@ void T8xxMachineFunctionInfo::anchor() { }
 
 T8xxMachineFunctionInfo::T8xxMachineFunctionInfo(const Function &F,
 						 const TargetSubtargetInfo *STI)
-  : GlobalBaseReg(0), VarArgsFrameOffset(0), SRetReturnReg(0),
-    IsLeafProc(false), WPtrStackSlot(-1)
+  : GlobalBaseReg(0), IsLeafProc(false), WPtrStackSlot(-1)
 {
 }
 

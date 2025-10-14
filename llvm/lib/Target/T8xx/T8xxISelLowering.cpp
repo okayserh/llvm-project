@@ -109,11 +109,6 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::i1, Promote);
   }
 
-  // We don't accept any truncstore of integer registers.
-  //  setTruncStoreAction(MVT::i32, MVT::i16, Custom);
-  // setTruncStoreAction(MVT::i64, MVT::i16, Expand);
-  //setTruncStoreAction(MVT::i64, MVT::i8, Expand);
-
   setTruncStoreAction(MVT::i32, MVT::i8, Legal);
 
   setMinFunctionAlignment(Align(4));
@@ -203,6 +198,10 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
+
+  // Operations for variadic arguments
+  setOperationAction(ISD::VASTART, MVT::Other, Custom);
+  setOperationAction({ISD::VAARG, ISD::VACOPY, ISD::VAEND}, MVT::Other, Expand);
 
 
   // ATOMIC Operations seem to "kill" the build.
@@ -314,6 +313,8 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     return LowerSELECT(Op, DAG);
   case ISD::BRCOND:
     return LowerBRCOND(Op, DAG);
+  case ISD::VASTART:
+    return LowerVASTART(Op, DAG);
 
   case ISD::GlobalAddress:
     LLVM_DEBUG(dbgs() << "####### Lower GlobalAddress  #########\n");
@@ -383,7 +384,6 @@ SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
 
   return (Op);
 }
-
 
 
 SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
@@ -492,6 +492,23 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 
   // Use the "negative" BRCOND.
   return DAG.getNode(T8xxISD::BRNCOND, DL, Op.getValueType(), Chain, NewCond, Dest);
+}
+
+
+// Copied from RISCVISelLowering.cpp
+SDValue T8xxTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
+
+  SDLoc DL(Op);
+  SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
+                                 getPointerTy(MF.getDataLayout()));
+
+  // vastart just stores the address of the VarArgsFrameIndex slot into the
+  // memory location argument.
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+  return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
+                      MachinePointerInfo(SV));
 }
 
 

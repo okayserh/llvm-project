@@ -22,13 +22,12 @@ namespace llvm {
   private:
     Register GlobalBaseReg;
 
-    /// VarArgsFrameOffset - Frame offset to start of varargs area.
-    int VarArgsFrameOffset;
-
-    /// SRetReturnReg - Holds the virtual register into which the sret
-    /// argument is passed.
-    Register SRetReturnReg;
-
+    // Taken from RISCV
+    /// FrameIndex for start of varargs area
+    int VarArgsFrameIndex = 0;
+    /// Size of the save area used for varargs
+    int VarArgsSaveSize = 0;
+    
     /// IsLeafProc - True if the function is a leaf procedure.
     bool IsLeafProc;
 
@@ -55,12 +54,13 @@ namespace llvm {
     Register getGlobalBaseReg() const { return GlobalBaseReg; }
     void setGlobalBaseReg(Register Reg) { GlobalBaseReg = Reg; }
 
-    int getVarArgsFrameOffset() const { return VarArgsFrameOffset; }
-    void setVarArgsFrameOffset(int Offset) { VarArgsFrameOffset = Offset; }
+    // Taken from RISCV
+    int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
+    void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }
 
-    Register getSRetReturnReg() const { return SRetReturnReg; }
-    void setSRetReturnReg(Register Reg) { SRetReturnReg = Reg; }
-
+    unsigned getVarArgsSaveSize() const { return VarArgsSaveSize; }
+    void setVarArgsSaveSize(int Size) { VarArgsSaveSize = Size; }
+    
     void setLeafProc(bool rhs) { IsLeafProc = rhs; }
     bool isLeafProc() const { return IsLeafProc; }
 
