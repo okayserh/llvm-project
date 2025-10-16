@@ -45,15 +45,7 @@ def CALLrel   : T8InstImm<0x9,
 
 def RETrel : T8InstOp8<0x20, (outs), (ins), "ret", []>;
 
-
-def AJW   : T8InstImm<0xB,
-		(outs),
-		(ins i32imm:$imm),
-		"ajw $imm",
-		[]>;
-
 def DUP :         T8InstOp8<0x5A, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1), "dup", []>;   // T800 only
-
 
 def DIFF :    T8InstOp4<0x4,
                 (outs OReg:$dst),

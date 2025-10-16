@@ -58,6 +58,16 @@ def SDT_AddWptr     : SDTypeProfile<1, 2, [SDTCisPtrTy<0>, SDTCisPtrTy<1>, SDTCi
 
 def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
 
+// Adjust workspace
+def SDT_AdjWptr : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
+def T8xxAdjWPTR : SDNode<"T8xxISD::AJW", SDT_AdjWptr, [SDNPHasChain]>;
+
+def AJW   : T8InstImm<0xB,
+		(outs),
+		(ins i32imm:$imm),
+		"ajw $imm",
+		[(T8xxAdjWPTR imm:$imm)]>;
+
 // Custom add for instruction pointer (Note: To avoid defining a new register class
 // for the instruction pointer, this is designed as a unary pattern
 def SDT_AddIptr     : SDTypeProfile<1, 1, [SDTCisPtrTy<0>, SDTCisPtrTy<1>]>;

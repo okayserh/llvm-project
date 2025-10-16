@@ -51,6 +51,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "LOAD_SYM";
   case T8xxISD::ADD_WPTR:
     return "ADD_WPTR";
+  case T8xxISD::AJW:
+    return "AJW";
   case T8xxISD::ADD_IPTR:
     return "ADD_IPTR";
   case T8xxISD::STL_PARM:
@@ -933,10 +935,6 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   CLI.IsTailCall = false;
 
-  if (isVarArg) {
-    llvm_unreachable("Unimplemented");
-  }
-
   LLVM_DEBUG(dbgs() << "LowerCall\n");
 
   // Analyze operands of the call, assigning locations to each operand.
@@ -1027,6 +1025,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       DAG.dump ();
     });
 
+
   // Build a sequence of copy-to-reg nodes chained together with token chain
   // and flag operands which copy the outgoing args into the appropriate regs.
   SDValue InFlag;
@@ -1050,6 +1049,19 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   Callee = DAG.getGlobalAddress(G->getGlobal(), Loc, PtrVT, 0);
   */
 
+  // For variable argument functions add a stack adjustment to allocate additional space
+  // on the stack.
+  if (ArgLocs.size () > (CLI.NumFixedArgs + 1))
+    {
+      assert(isVarArg && "Difference between Fixed Args and ArgLocs.size requires variable arguments");
+      SDValue Off = DAG.getSignedConstant(-(ArgLocs.size() - (CLI.NumFixedArgs + 1)), Loc,
+					  getPointerTy(DAG.getDataLayout()));
+      SDVTList VTs = DAG.getVTList(MVT::Other);
+      SDValue Ops[] = {Chain, Off};
+
+      Chain = DAG.getNode(T8xxISD::AJW, Loc, VTs, Ops);
+    }
+  
   // This works with a call instruction that directly takes
   // the address as parameter
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
@@ -1097,6 +1109,19 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     InFlag = Chain.getValue(1);
   }
 
+  // For variable argument functions the a stack was adjustment to allocate additional space
+  // for the variable parameters. Reverse this adjustment.
+  if (ArgLocs.size () > (CLI.NumFixedArgs + 1))
+    {
+      assert(isVarArg && "Difference between Fixed Args and ArgLocs.size requires variable arguments");
+      SDValue Off = DAG.getSignedConstant((ArgLocs.size() - (CLI.NumFixedArgs + 1)), Loc,
+					  getPointerTy(DAG.getDataLayout()));
+      SDVTList VTs = DAG.getVTList(MVT::Other);
+      SDValue Ops[] = {Chain, Off};
+
+      Chain = DAG.getNode(T8xxISD::AJW, Loc, VTs, Ops);
+    }
+  
   // Handle result values, copying them out of physregs into vregs that we
   // return.
   return LowerCallResult(Chain, InFlag, CallConv, isVarArg, Ins, Loc, DAG,
@@ -1108,8 +1133,11 @@ SDValue T8xxTargetLowering::LowerCallResult(
     SDValue Chain, SDValue InGlue, CallingConv::ID CallConv, bool isVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, SDLoc dl, SelectionDAG &DAG,
     SmallVectorImpl<SDValue> &InVals) const {
-  assert(!isVarArg && "Unsupported");
 
+  /*
+  assert(!isVarArg && "Unsupported");
+  */
+  
   // Assign locations to each value returned by this call.
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), RVLocs,
@@ -1148,6 +1176,9 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
   CCInfo.AnalyzeFormalArguments(Ins, CC_T8xx32);
 
   int i = 0;
+
+  // From RISCV: CCValAssign &VA = ArgLocs
+
   for (auto &VA : ArgLocs) {
     if (VA.isRegLoc()) {
       LLVM_DEBUG(dbgs() << "VA " << i++ << " is Reg\n");
@@ -1180,16 +1211,27 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
     const int FI = MF.getFrameInfo().CreateFixedObject(SizeInBits / 8, Offset, true);
     EVT PtrTy = getPointerTy(DAG.getDataLayout());
     SDValue FIPtr = DAG.getFrameIndex(FI, PtrTy);
-
-    /*
-    assert(VA.getValVT() == MVT::i32 &&
-           "Only support passing arguments as i32");
-    */
     SDValue Load = DAG.getLoad(VA.getValVT(), DL, Chain, FIPtr,
                                MachinePointerInfo());
-
     InVals.push_back(Load);
   }
+
+  // Deal with variable arguments
+  if (IsVarArg)
+    {
+      MachineFrameInfo &MFI = MF.getFrameInfo();
+      T8xxMachineFunctionInfo *TFI = MF.getInfo<T8xxMachineFunctionInfo>();
+      int FI;
+
+      // Needs to happen through the stack
+      int VaArgOffset = CCInfo.getStackSize();
+      //      FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset, true);
+      FI = MFI.CreateFixedObject(4, VaArgOffset, true);
+
+      // Record the frame index of the first variable argument
+      // which is a value necessary to VASTART.
+      TFI->setVarArgsFrameIndex(FI);
+    }
 
   return Chain;
 }
