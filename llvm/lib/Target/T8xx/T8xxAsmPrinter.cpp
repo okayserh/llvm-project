@@ -129,6 +129,18 @@ void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
 }
 
 
+// Note: This quick fix is related to switch/case statements, where
+// a jump table is created. When this method is not implemented as below,
+// no symbol is created for the first block of the target code areas
+// that the jump table points to. This then leads to an "undefined symbol" error
+// in clang/llc
+// TODO: Find a solution, which provides a proper result
+bool T8xxAsmPrinter::isBlockOnlyReachableByFallthrough(const MachineBasicBlock *MBB) const
+{
+  return false;
+}
+
+
 // Print a 'memsrc' operand which is a (Register, Offset) pair.
 void T8xxAsmPrinter::printAddrModeMemSrc(const MachineInstr *MI, int OpNum,
                                          raw_ostream &O) {
