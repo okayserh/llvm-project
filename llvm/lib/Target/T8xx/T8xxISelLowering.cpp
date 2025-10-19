@@ -979,11 +979,10 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     assert(VA.isMemLoc() &&
            "Only support passing arguments through registers or via the stack");
 
-    // TODO: Since the "registers" are actually on the stack, at this
+    // Since the "registers" are actually on the stack, at this
     // point it is not feasible to adjust the framepointer.
-    // Instead negative indices should be used for function parameters that should
+    // Negative are used for function parameters that should
     // be put on the stack
-
     assert (VA.getLocMemOffset() % 4 == 0 &&
 	    "Only 4 byte aligned offset allowed");
 
@@ -1025,7 +1024,6 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       DAG.dump ();
     });
 
-
   // Build a sequence of copy-to-reg nodes chained together with token chain
   // and flag operands which copy the outgoing args into the appropriate regs.
   SDValue InFlag;
@@ -1049,19 +1047,17 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   Callee = DAG.getGlobalAddress(G->getGlobal(), Loc, PtrVT, 0);
   */
 
-  // For variable argument functions add a stack adjustment to allocate additional space
-  // on the stack.
-  if (ArgLocs.size () > (CLI.NumFixedArgs + 1))
+  // For variable function arguments add a stack adjustment
+  // This will take care of variable argument stacks
+  if (isVarArg)
     {
-      assert(isVarArg && "Difference between Fixed Args and ArgLocs.size requires variable arguments");
-      SDValue Off = DAG.getSignedConstant(-(ArgLocs.size() - (CLI.NumFixedArgs + 1)), Loc,
-					  getPointerTy(DAG.getDataLayout()));
-      SDVTList VTs = DAG.getVTList(MVT::Other);
-      SDValue Ops[] = {Chain, Off};
-
-      Chain = DAG.getNode(T8xxISD::AJW, Loc, VTs, Ops);
+      SDValue Off2 = DAG.getSignedConstant(-(ArgLocs.size() + 1), Loc,
+					   getPointerTy(DAG.getDataLayout()));
+      SDVTList VTs2 = DAG.getVTList(MVT::Other);
+      SDValue Ops2[] = {Chain, Off2};
+      Chain = DAG.getNode(T8xxISD::AJW, Loc, VTs2, Ops2);
     }
-  
+
   // This works with a call instruction that directly takes
   // the address as parameter
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
@@ -1105,22 +1101,21 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   Chain = DAG.getCALLSEQ_END(Chain, DAG.getIntPtrConstant(NumBytes, Loc, true),
                              DAG.getIntPtrConstant(0, Loc, true), InFlag, Loc);
+
+  // For variable parameter calls, reset the stack adjustment after return from the call
+  if (isVarArg)
+    {
+      InFlag = Chain.getValue(1);
+      SDValue Off3 = DAG.getSignedConstant(ArgLocs.size() + 1, Loc,
+					   getPointerTy(DAG.getDataLayout()));
+      SDVTList VTs3 = DAG.getVTList(MVT::Other, MVT::Glue);
+      SDValue Ops3[] = {Chain, Off3, InFlag};
+      Chain = DAG.getNode(T8xxISD::AJW, Loc, VTs3, Ops3);
+    }
+
   if (!Ins.empty()) {
     InFlag = Chain.getValue(1);
   }
-
-  // For variable argument functions the a stack was adjustment to allocate additional space
-  // for the variable parameters. Reverse this adjustment.
-  if (ArgLocs.size () > (CLI.NumFixedArgs + 1))
-    {
-      assert(isVarArg && "Difference between Fixed Args and ArgLocs.size requires variable arguments");
-      SDValue Off = DAG.getSignedConstant((ArgLocs.size() - (CLI.NumFixedArgs + 1)), Loc,
-					  getPointerTy(DAG.getDataLayout()));
-      SDVTList VTs = DAG.getVTList(MVT::Other);
-      SDValue Ops[] = {Chain, Off};
-
-      Chain = DAG.getNode(T8xxISD::AJW, Loc, VTs, Ops);
-    }
   
   // Handle result values, copying them out of physregs into vregs that we
   // return.

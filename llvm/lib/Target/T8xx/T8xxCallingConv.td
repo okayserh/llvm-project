@@ -15,30 +15,26 @@
 //===----------------------------------------------------------------------===//
 
 def CC_T8xx32 : CallingConv<[
-  // i32 f32 arguments get passed in integer registers if there is space.
-//  CCIfType<[i32], CCAssignToReg<[R1, R2, R3]>>,
-
-  // Alternatively, they are assigned to the stack in 4-byte aligned units.
+  // Call arguments are assigned to the stack in 4-byte aligned units.
   // Note: CCAsignToStack <int size, int align>
   CCIfType<[i32], CCAssignToStack<4, 4>>,
   CCIfType<[i64], CCAssignToStack<8, 4>>,
-
   CCIfType<[f32], CCAssignToStack<4, 4>>,
-
   CCIfType<[f64], CCAssignToStack<8, 4>>
 ]>;
 
 def RetCC_T8xx32 : CallingConv<[
+  // i32 and smaller are returned in AREG  
   CCIfType<[i32], CCAssignToReg<[AREG]>>,
+
+  // i64 is returned on stack
   CCIfType<[i64], CCAssignToStack<8, 4>>,
 
+  // f32 is returned in FAREG
   CCIfType<[f32], CCAssignToReg<[FAREG]>>,
 
+  // f64 is returned in FAREG
   CCIfType<[f64], CCAssignToReg<[FAREG]>>,
-
-// Integer values get stored in stack slots that are 4 bytes in
-  // size and 4-byte aligned.
-//  CCIfType<[i32], CCAssignToStack<4, 4>>
 ]>;
 
 // TODO: Probably needs to span all integer registers

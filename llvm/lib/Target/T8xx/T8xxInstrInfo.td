@@ -60,7 +60,8 @@ def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
 
 // Adjust workspace
 def SDT_AdjWptr : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
-def T8xxAdjWPTR : SDNode<"T8xxISD::AJW", SDT_AdjWptr, [SDNPHasChain]>;
+def T8xxAdjWPTR : SDNode<"T8xxISD::AJW", SDT_AdjWptr,
+    		[SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
 def AJW   : T8InstImm<0xB,
 		(outs),
