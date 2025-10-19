@@ -140,7 +140,8 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
   LLVM_DEBUG (dbgs() << "Fixed Stack " <<
 	      FixedStackSize << "   Stack " <<
 	      StackSize << "   OffsetAdj " <<
-	      OffsetAdj << "\n");
+	      OffsetAdj << "   TMFI Var Arg Size " <<
+	      TMFI.getVarArgsSaveSize () << "\n");
 
   // If not stack alignment is needed, skip rest of prologue
   if ((FixedStackSize + StackSize) == 0) {
@@ -167,9 +168,15 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
     {
       // Dynamic realignment
       // Adjust WPtr by required space for parameters
-      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-	.addImm(-(FixedStackSize / 4))
-        .setMIFlag(MachineInstr::FrameSetup);
+      // Note: For VarArgs, the WPtr is already adjusted before the function call
+      // Therefore, it points correctly to the function parameter area and no further
+      // adjustment is necessary.
+      if (TMFI.getVarArgsSaveSize () == 0)
+	{
+	  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	    .addImm(-(FixedStackSize / 4))
+	    .setMIFlag(MachineInstr::FrameSetup);
+	}
 
       // Now adjust WPtr by required space for frame and add alignment as required
       // Start with WPtr in AReg
@@ -212,10 +219,20 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
     }
   else
     {
-      // Real adjustment via AJW
-      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-	.addImm(-((StackSize + OffsetAdj) / 4))
-        .setMIFlag(MachineInstr::FrameSetup);
+      if (TMFI.getVarArgsSaveSize () == 0)
+	{
+	  // Real adjustment via AJW
+	  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	    .addImm(-((StackSize + OffsetAdj) / 4))
+	    .setMIFlag(MachineInstr::FrameSetup);
+	}
+      else
+	{
+	  // Real adjustment via AJW
+	  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	    .addImm(-((StackSize - (FixedStackSize + 4) + OffsetAdj) / 4))
+	    .setMIFlag(MachineInstr::FrameSetup);
+	}
     }
 }
 
@@ -278,18 +295,32 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 	.addReg(T8xx::ABREG)
         .setMIFlag(MachineInstr::FrameSetup);
 
-      // Finally adjust by parameter space
-      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-	.addImm(FixedStackSize / 4)
-        .setMIFlag(MachineInstr::FrameSetup);
+      // Note for VarArgs, the WPtr is already adjusted before the function
+      // call and readjusted after the function call.
+      if (TMFI.getVarArgsSaveSize () == 0)
+	{
+	  // Finally adjust by parameter space
+	  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	    .addImm(FixedStackSize / 4)
+	    .setMIFlag(MachineInstr::FrameSetup);
+	}
     }
   else
     {
       // Restore the stack pointer to what it was at the beginning of the function.
-      /* Real stack adjustment */
-      BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-	.addImm((StackSize + OffsetAdj) / 4)
-        .setMIFlag(MachineInstr::FrameSetup);
+      if (TMFI.getVarArgsSaveSize () == 0)
+	{
+	  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	    .addImm((StackSize + OffsetAdj) / 4)
+	    .setMIFlag(MachineInstr::FrameSetup);
+	}
+      else
+	{
+	  // For VarArgs, just do the function space but not the function parameters (FixedStackSize)
+	  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
+	    .addImm(((StackSize - (FixedStackSize + 4) + OffsetAdj) / 4))
+	    .setMIFlag(MachineInstr::FrameSetup);
+	}
     }
 }
 

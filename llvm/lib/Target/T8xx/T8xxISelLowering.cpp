@@ -924,6 +924,10 @@ SDValue
 T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                   SmallVectorImpl<SDValue> &InVals) const {
   SelectionDAG &DAG = CLI.DAG;
+
+  MachineFunction &MF = DAG.getMachineFunction();
+  T8xxMachineFunctionInfo *TFI = MF.getInfo<T8xxMachineFunctionInfo>();
+
   SDLoc &Loc = CLI.DL;
   SmallVectorImpl<ISD::OutputArg> &Outs = CLI.Outs;
   SmallVectorImpl<SDValue> &OutVals = CLI.OutVals;
@@ -1226,6 +1230,10 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
       // Record the frame index of the first variable argument
       // which is a value necessary to VASTART.
       TFI->setVarArgsFrameIndex(FI);
+
+      // TODO: Just use this temporary to convey the information that varargs
+      // are used.
+      TFI->setVarArgsSaveSize(4);
     }
 
   return Chain;
