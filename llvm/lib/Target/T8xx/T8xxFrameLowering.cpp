@@ -230,7 +230,7 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 	{
 	  // Real adjustment via AJW
 	  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-	    .addImm(-((StackSize - (FixedStackSize + 4) + OffsetAdj) / 4))
+	    .addImm(-((StackSize - FixedStackSize + OffsetAdj) / 4))
 	    .setMIFlag(MachineInstr::FrameSetup);
 	}
     }
@@ -318,7 +318,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 	{
 	  // For VarArgs, just do the function space but not the function parameters (FixedStackSize)
 	  BuildMI(MBB, MBBI, dl, TII.get(T8xx::AJW))
-	    .addImm(((StackSize - (FixedStackSize + 4) + OffsetAdj) / 4))
+	    .addImm(((StackSize - FixedStackSize + OffsetAdj) / 4))
 	    .setMIFlag(MachineInstr::FrameSetup);
 	}
     }

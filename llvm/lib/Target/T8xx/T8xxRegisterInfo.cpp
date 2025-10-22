@@ -73,6 +73,8 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineInstr &MI = *II;
   const MachineFunction &MF = *MI.getParent()->getParent();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
+  const T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
+
   MachineOperand &FIOp = MI.getOperand(FIOperandNum);
   int FI = FIOp.getIndex();
 
@@ -136,8 +138,16 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   int Offset = 0;
   if (FI < 0)
-    // FI < 0   -> fixed stack objects (i.e. call parameters)
-    Offset = (StackSizeAligned - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
+    {
+      // FI < 0   -> fixed stack objects (i.e. call parameters)
+      Offset = (StackSizeAligned - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
+
+      // The + 4 are for one additional Workspace place to hold the return address when variable
+      // parameters are used.
+      // TODO: Replace 4 with a properly determined value representing one space on the workspace
+      if (TMFI.getVarArgsSaveSize () != 0)  // Var args
+	Offset += 4;
+    }
   else
     // FI >= 0  -> stack frame objects (i.e. function variables and temporary stack objects)
     Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
