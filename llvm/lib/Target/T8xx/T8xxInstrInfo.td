@@ -69,6 +69,17 @@ def AJW   : T8InstImm<0xB,
 		"ajw $imm",
 		[(T8xxAdjWPTR imm:$imm)]>;
 
+// Type definition for multi byte moves by MOVE instruction. This is crucial for
+// handling 16bit values.
+def SDT_Move : SDTypeProfile<0, 3,   // 3 inputs (SRC, DST, Count, Chain)
+[
+SDTCisVT<0, i32>, // Count
+SDTCisPtrTy<1>,   // DST
+SDTCisPtrTy<2>   // SRC
+]>; // Input chain
+
+def T8xxMOVE : SDNode<"T8xxISD::MOVE", SDT_Move, [SDNPHasChain, SDNPMayLoad, SDNPMayStore]>;
+
 // Custom add for instruction pointer (Note: To avoid defining a new register class
 // for the instruction pointer, this is designed as a unary pattern
 def SDT_AddIptr     : SDTypeProfile<1, 1, [SDTCisPtrTy<0>, SDTCisPtrTy<1>]>;
@@ -141,7 +152,6 @@ def MxStackJoin : SDTypeProfile<1, 2, [
 ]>;
 
 def MxJoin : SDNode<"T8xxISD::JOIN", MxStackJoin>;
-
 
 
 //===----------------------------------------------------------------------===//
@@ -262,6 +272,36 @@ def LDLPb   : T8Inst<(outs OReg:$rd),
 		let isPseudo = 1;
 }
 
+
+// Needed for 16 bit operations
+def MOVE :    T8InstOp8<0x4A, (outs), (ins OReg:$cnt, MemSrc:$dst_addr, MemSrc:$src_addr), "move",
+	 [(T8xxMOVE OReg:$cnt, ADDRr:$dst_addr, ADDRr:$src_addr)]>
+	 {
+	 let hasSideEffects = 1;
+	 }
+
+// 4 Byte aligned Frameindices
+def : Pat<(T8xxMOVE i32:$cnt, ADDRri:$dst_addr, ADDRr:$src_addr),
+      	   (MOVE i32:$cnt, (LDLP ADDRri:$dst_addr), ADDRr:$src_addr)>;
+
+def : Pat<(T8xxMOVE i32:$cnt, ADDRr:$dst_addr, ADDRri:$src_addr),
+      	   (MOVE i32:$cnt, ADDRr:$dst_addr, (LDLP ADDRri:$src_addr))>;
+
+def : Pat<(T8xxMOVE i32:$cnt, ADDRri:$dst_addr, ADDRri:$src_addr),
+      	   (MOVE i32:$cnt, (LDLP ADDRri:$dst_addr), (LDLP ADDRri:$src_addr))>;
+
+// 1 Byte aligned Frameindices
+def : Pat<(T8xxMOVE i32:$cnt, ADDRri8:$dst_addr, ADDRr:$src_addr),
+      	   (MOVE (LDLPb ADDRri8:$dst_addr), ADDRr:$src_addr, i32:$cnt)>;
+
+def : Pat<(T8xxMOVE i32:$cnt, ADDRr:$dst_addr, ADDRri8:$src_addr),
+      	   (MOVE i32:$cnt, ADDRr:$dst_addr, (LDLPb ADDRri8:$src_addr))>;
+
+def : Pat<(T8xxMOVE i32:$cnt, ADDRri8:$dst_addr, ADDRri8:$src_addr),
+      	   (MOVE i32:$cnt, (LDLPb ADDRri:$dst_addr), (LDLPb ADDRri:$src_addr))>;
+
+
+
 // Special instruction, which is solely used in CallLowering
 def AddWptrImm : T8Inst<(outs OReg:$dst),
     		    (ins WptrRegs:$src, i32imm:$val),
@@ -323,8 +363,6 @@ defm ROTR : T8BinaryOp<0x01, 0x22, "lshr", rotr>;
 defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
 */
 
-
-
 // Load i32 from frame index
 def LDL : T8InstImm<0x7,
 		(outs OReg:$val),
@@ -373,9 +411,11 @@ def : Pat<(sextloadi8 ADDRri:$addr),
 def : Pat<(sextloadi8 ADDRri8:$addr),
           (XWORD (LB (LDLPb ADDRri8:$addr) ), (LDC 128))>;
 
-//defm LDRzi16 : T8Load<"ldl $addr \n", zextloadi16>;
-//defm LDRsi16 : T8Load<"ldl $addr \n\tldc #32768 \n\txword \n", sextloadi16>;
-
+// "Inreg" extensions
+def : Pat<(sext_inreg (i32 OReg:$in), i16),
+          (XWORD $in, (LDC 32768))>;
+def : Pat<(sext_inreg (i32 OReg:$in), i8),
+          (XWORD $in, (LDC 128))>;
 
 // Store i32 onto frame
 // Note: previously STRi32regop
@@ -386,12 +426,18 @@ def STL : T8InstImm<0xD,
 		[(store i32:$val, ADDRri:$addr)]> {
 		}
 
+// TODO: The address pattern allows for 8 bit addresses in order to
+// match the DAG and get the test16.c to compile. However, this will not
+// work in the general case, since the STL requires a proper 4 Byte aligned
+// address to work.
+def : Pat<(truncstorei16 i32:$val, ADDRri8:$addr),
+          (STL (AND i32:$val, (LDC 65535) ), ADDRri:$addr )>;
+
 // This pattern is used for the treatment of call parameters
 // They are positioned relative to the WPTR but the framepointer
 // does support this kind of operation.
 def : Pat<(T8xxParmStack i32:$val, imm:$imm),
           (STL i32:$val, WPTR, imm:$imm )>;
-
 
 // Store i32 to global address
 def STNL : T8InstImm<0xE,

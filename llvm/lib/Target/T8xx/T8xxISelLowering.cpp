@@ -57,6 +57,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "ADD_IPTR";
   case T8xxISD::STL_PARM:
     return "STL_PARM";
+  case T8xxISD::MOVE:
+    return "MOVE";
   case T8xxISD::CMOV:
     return "CMOV";
   case T8xxISD::BRNCOND:
@@ -112,6 +114,10 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   }
 
   setTruncStoreAction(MVT::i32, MVT::i8, Legal);
+  setTruncStoreAction(MVT::i32, MVT::i16, Custom);
+  setLoadExtAction(ISD::EXTLOAD, MVT::i32, MVT::i16, Custom);
+  setLoadExtAction(ISD::SEXTLOAD, MVT::i32, MVT::i16, Custom);
+  setLoadExtAction(ISD::ZEXTLOAD, MVT::i32, MVT::i16, Custom);
 
   setMinFunctionAlignment(Align(4));
 
@@ -197,8 +203,8 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BITCAST,           MVT::i32, Expand);
 
   // T8xx doesn't have sext_inreg, replace them with shl/sra
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Legal);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Legal);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
 
   // Operations for variadic arguments
@@ -307,6 +313,11 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
   case ISD::STORE:
     LLVM_DEBUG(dbgs() << "#### Lower Store #####\n");
     return LowerSTORE(Op, DAG);
+
+  case ISD::LOAD:
+    LLVM_DEBUG(dbgs() << "#### Lower Load #####\n");
+    return LowerLOAD(Op, DAG);
+
   case ISD::SETCC:
     LLVM_DEBUG(dbgs() << "#### SETCC #####\n");
     return LowerSETCC(Op, DAG);
@@ -344,19 +355,120 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
 
 SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
 {
-  // First test ...
-  SDValue Op0 = Op.getOperand(0);
-  SDValue Op1 = Op.getOperand(1);
-  SDValue Op2 = Op.getOperand(2);
+  if (StoreSDNode *StoreOp = dyn_cast<StoreSDNode>(Op))
+    {
+      if (StoreOp->getMemoryVT().getScalarSizeInBits () == 16)
+	{
+	  SDLoc DL(Op);
 
-  LLVM_DEBUG({
-      Op0.dump ();
-      Op1.dump ();
-      Op2.dump ();
-    });
+	  // Note: The following steps have to be carried out:
+	  // Store in a 4 byte aligned temporary slot in the workspace
+	  // MOVE from the aligned source address towards the unaligned
+	  // final address. Truncation is automatically done, due to the
+	  // limited number of bytes copied.
+
+	  // --- 2. Allocate space in the stack (workframe) for the aligned target ---
+	  // Get a FrameIndex for a temporary 32-bit aligned location.
+	  // This is a common pattern for targets that can't handle unaligned memory.
+	  int FI = DAG.getMachineFunction().
+	    getFrameInfo().CreateStackObject(4, // Size in bytes for i16
+					     Align(4), // Required alignment for the load to the frame
+					     false); // isImmutable
+
+	  SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+
+	  // --- 4. Perform the aligned load from the workframe ---
+	  // Now perform the final aligned 16-bit load from the frame index
+	  SDValue Result = DAG.getStore(StoreOp->getChain(), DL, StoreOp->getValue(), FIPtr,
+					MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI), Align(4));
+
+	  LLVM_DEBUG({
+	      dbgs() << "Store node created\n";
+	      Result->dump ();
+	    });
+
+	  // --- 3. Perform the unaligned move (a smaller byte-by-byte store/load) ---
+	  SDValue MoveLen = DAG.getConstant(2, DL, MVT::i32);
+	  SDValue Ptr = StoreOp->getBasePtr ();
+	  SDValue Move = DAG.getNode(T8xxISD::MOVE, DL, MVT::Other, Result,
+				     MoveLen, Ptr, FIPtr);
+
+	  LLVM_DEBUG({
+	      dbgs() << "Move node created\n";
+	      Move->dump ();
+	    });
+
+	  return (Move);
+	}
+      else
+	return (Op);
+    }
 
   return (Op);
 }
+
+
+SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
+{
+  if (LoadSDNode *LoadOp = dyn_cast<LoadSDNode>(Op))
+    {
+      // Loads arbitrary memory location into 32 bit value
+      // Otherwise, skip ...
+      if (Op.getSimpleValueType() == MVT::i32)
+	{
+	  if (LoadOp->getMemoryVT().getScalarSizeInBits () == 16)
+	    {
+	      SDLoc DL(Op);
+	      // Note: The following steps have to be carried out:
+	      // MOVE from the unaligned source address towards a 4 byte aligned
+	      // temporary slot in the workspace. Then do a regular LDL with
+	      // possible EXT/SEXT/ZEXT.
+
+	      // --- 2. Allocate space in the stack (workframe) for the aligned target ---
+	      // Get a FrameIndex for a temporary 32-bit aligned location.
+	      // This is a common pattern for targets that can't handle unaligned memory.
+	      int FI = DAG.getMachineFunction().
+		getFrameInfo().CreateStackObject(4, // Size in bytes for i16
+						 Align(4), // Required alignment for the load to the frame
+						 false); // isImmutable
+
+	      SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+
+	      // --- 3. Perform the unaligned move (a smaller byte-by-byte store/load) ---
+	      SDValue MoveLen = DAG.getConstant(2, DL, MVT::i32);
+	      SDValue Ptr = LoadOp->getBasePtr ();
+	      SDValue Chain = LoadOp->getChain();  // Output chain from original LOAD node
+	      SDValue Move = DAG.getNode(T8xxISD::MOVE, DL, MVT::Other, Chain,
+					 MoveLen, FIPtr, Ptr);
+
+	      LLVM_DEBUG({
+		  dbgs() << "Move node created\n";
+		  Move->dump ();
+		});
+
+	      // --- 4. Perform the aligned load from the workframe ---
+	      // Now perform the final aligned 16-bit load from the frame index
+	      SDValue Result = DAG.getLoad(MVT::i32, DL, Move, FIPtr,
+					   MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
+
+	      LLVM_DEBUG({
+		  dbgs() << "Load node created\n";
+		  Result->dump ();
+		});
+
+	      return (Result);
+	    }
+	  else
+	    return (Op);
+	}
+      else
+	return (Op);
+    }
+
+  return (Op);
+}
+
+
 
 
 SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
@@ -1120,7 +1232,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (!Ins.empty()) {
     InFlag = Chain.getValue(1);
   }
-  
+
   // Handle result values, copying them out of physregs into vregs that we
   // return.
   return LowerCallResult(Chain, InFlag, CallConv, isVarArg, Ins, Loc, DAG,
@@ -1136,7 +1248,7 @@ SDValue T8xxTargetLowering::LowerCallResult(
   /*
   assert(!isVarArg && "Unsupported");
   */
-  
+
   // Assign locations to each value returned by this call.
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), RVLocs,

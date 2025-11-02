@@ -53,10 +53,15 @@ static std::string computeDataLayout(const Triple &T) {
   // Unaligned 16 bit integers need substantial effort to convert and retrieve
   // 32 bit is natural alignment
   // 64 bit needs to be carried out by lib functions etc., hence 32 bit alignment
-  Ret += "-i8:8:8-i16:32:32-i32:32:32-i64:32:32"; // 32 bit integers should naturally be aligned 32 bit
+  //  Ret += "-i8:8:8-i16:32:32-i32:32:32-i64:32:32"; // 32 bit integers should naturally be aligned 32 bit
 
+  // TODO: Temporary solution to deal with a problem in clang/CodeGen/CGRecordLayoutBuilder.cpp
+  // Somehow a larger alignment requirement than the class has to offer does lead to an error.
+  // However, having the 16 bit alignment might spoil other parts of the code.
+  Ret += "-i8:8:8-i16:16:16-i32:32:32-i64:32:32"; // 32 bit integers should naturally be aligned 32 bit
+  
   // On T8xx 64 floats are aligned to 32 bits
-  Ret += "-f64:32:32-f32:32";
+  Ret += "-f64:32:32-f32:32:32";
 
   // Native integer size is 32 Bit
   Ret += "-n32";

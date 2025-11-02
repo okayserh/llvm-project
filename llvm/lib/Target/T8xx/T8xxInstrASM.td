@@ -74,7 +74,6 @@ def RESETCH : T8InstOp8<0x12, (outs OReg:$dst), (ins OReg:$src), "resetch", []>;
 def MINT :    T8InstOp8<0x42, (outs OReg:$dst), (ins), "mint", []>;
 def BCNT :    T8InstOp8<0x34, (outs OReg:$dst), (ins OReg:$src), "bcnt", []>;
 def WCNT :    T8InstOp8<0x3F, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src), "wcnt", []>;
-def MOVE :    T8InstOp8<0x4A, (outs), (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$dst_addr), "move", []>;
 
 def BSUB :    T8InstOp4<0x2, (outs OReg:$dst), (ins OReg:$src1, OReg:$src2), "bsub", []>;   // Byte subscript
 def WSUB :    T8InstOp4<0xA, (outs OReg:$dst), (ins OReg:$src1, OReg:$src2), "wsub", []>;   // Word subscript
