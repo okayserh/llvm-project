@@ -370,10 +370,20 @@ SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
 	  // --- 2. Allocate space in the stack (workframe) for the aligned target ---
 	  // Get a FrameIndex for a temporary 32-bit aligned location.
 	  // This is a common pattern for targets that can't handle unaligned memory.
-	  int FI = DAG.getMachineFunction().
-	    getFrameInfo().CreateStackObject(4, // Size in bytes for i16
-					     Align(4), // Required alignment for the load to the frame
-					     false); // isImmutable
+	  MachineFunction &MF = DAG.getMachineFunction();
+	  T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
+
+	  // Check whether a workspace location was already allocated
+	  // as temporary storage for Move instructions
+	  int FI = FuncInfo->getMoveSlot();
+	  if (FI == 0)
+	    {
+	      FI = DAG.getMachineFunction().
+		getFrameInfo().CreateStackObject(4, // Size in bytes for i16
+						 Align(4), // Required alignment for the load to the frame
+						 false); // isImmutable
+	      FuncInfo->setMoveSlot(FI);
+	    }
 
 	  SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
 
@@ -427,10 +437,20 @@ SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 	      // --- 2. Allocate space in the stack (workframe) for the aligned target ---
 	      // Get a FrameIndex for a temporary 32-bit aligned location.
 	      // This is a common pattern for targets that can't handle unaligned memory.
-	      int FI = DAG.getMachineFunction().
-		getFrameInfo().CreateStackObject(4, // Size in bytes for i16
-						 Align(4), // Required alignment for the load to the frame
-						 false); // isImmutable
+	      MachineFunction &MF = DAG.getMachineFunction();
+	      T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
+	      
+	      // Check whether a workspace location was already allocated
+	      // as temporary storage for Move instructions
+	      int FI = FuncInfo->getMoveSlot();
+	      if (FI == 0)
+		{
+		  FI = DAG.getMachineFunction().
+		    getFrameInfo().CreateStackObject(4, // Size in bytes for i16
+						     Align(4), // Required alignment for the load to the frame
+						     false); // isImmutable
+		  FuncInfo->setMoveSlot(FI);
+		}
 
 	      SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
 

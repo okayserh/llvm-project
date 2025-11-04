@@ -34,6 +34,10 @@ namespace llvm {
     // A stack slot which is used to conserve the WPtr when function was entered
     int WPtrStackSlot;
 
+    // A stack slot which is used as temporary storage when a function needs to
+    // use "move" instructions to copy/align shorter ints or unaligned words.
+    int MoveStackSlot = 0;
+
     /// A mapping from CodeGen vreg index to a boolean value indicating whether
     /// the given register is considered to be "stackified", meaning it has been
     /// determined or made to meet the stack requirements:
@@ -67,6 +71,10 @@ namespace llvm {
     // Access to Stack slot for WPtr
     void setWPtrSlot(int slot) { WPtrStackSlot = slot; }
     int getWPtrSlot() const { return WPtrStackSlot; }
+
+    // Access to Stack slot for MOVE
+    void setMoveSlot(int slot) { MoveStackSlot = slot; }
+    int getMoveSlot() const { return MoveStackSlot; }
 
     // Copied from WebAssemblyMachineFunctionInfo.h
     void stackifyVReg(MachineRegisterInfo &MRI, unsigned VReg) {
