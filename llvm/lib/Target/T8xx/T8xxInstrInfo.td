@@ -71,14 +71,32 @@ def AJW   : T8InstImm<0xB,
 
 // Type definition for multi byte moves by MOVE instruction. This is crucial for
 // handling 16bit values.
-def SDT_Move : SDTypeProfile<0, 3,   // 3 inputs (SRC, DST, Count, Chain)
+def SDT_Move : SDTypeProfile<0, 3,   // 3 inputs (Count, SRC, DST)
 [
 SDTCisVT<0, i32>, // Count
 SDTCisPtrTy<1>,   // DST
 SDTCisPtrTy<2>   // SRC
 ]>; // Input chain
 
-def T8xxMOVE : SDNode<"T8xxISD::MOVE", SDT_Move, [SDNPHasChain, SDNPMayLoad, SDNPMayStore]>;
+def T8xxMOVE : SDNode<"T8xxISD::MOVE", SDT_Move, [SDNPHasChain, SDNPMayLoad, SDNPMayStore,
+    	       			       		  SDNPOptInGlue, SDNPOutGlue]>;
+
+
+// Note: This translates into a pseudo instruction, which is translated into a
+// MOVE, LDL and optionally a EXT/ZEXT/SEXT instruction.
+// For the second LDL, the used buffer needs to be kept as fourth parameter
+
+def SDT_MoveLoad : SDTypeProfile<1, 4,   // 1 output, 3 inputs (SRC, DST, Count)
+[
+SDTCisVT<0, i32>, // Result
+SDTCisVT<0, i32>, // Count
+SDTCisPtrTy<1>,   // AlignedBuffer
+SDTCisPtrTy<2>,   // SRC (Unaligned)
+SDTCisPtrTy<3>   // AlignedBuffer 2
+]>; // Input chain
+
+def T8xxMoveLoad : SDNode<"T8xxISD::MoveLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
+
 
 // Custom add for instruction pointer (Note: To avoid defining a new register class
 // for the instruction pointer, this is designed as a unary pattern
@@ -271,6 +289,26 @@ def LDLPb   : T8Inst<(outs OReg:$rd),
 		let isCodeGenOnly = 1;
 		let isPseudo = 1;
 }
+
+
+def MoveLoad : T8Inst<
+    (outs OReg:$res),
+    (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
+    "move_load",
+    [(set i32:$res, (T8xxMoveLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
+	 {
+	 let hasSideEffects = 1;
+	 let isPseudo = 1;
+	 }
+
+def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveLoad i32:$cnt, (LDLP ADDRri:$buf_addr), ADDRr:$src_addr, ADDRri:$buf_addr2)>;
+
+def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRri:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLP ADDRri:$src_addr), ADDRri:$buf_addr2)>;
+
+def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
 
 
 // Needed for 16 bit operations

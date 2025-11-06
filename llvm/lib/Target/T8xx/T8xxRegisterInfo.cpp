@@ -99,6 +99,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   default:
     // Not supported yet.
     return false;
+  case T8xx::MoveLoad:
   case T8xx::STL:
   case T8xx::LDL:
   case T8xx::LDLP:
@@ -179,6 +180,16 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 	.addImm(WPtrOffset / 4);
 
       Offset = MFI.getObjectOffset(FI);
+
+      // MoveLoad -> TODO
+      // The MoveLoad instruction uses a workspace location
+      // and therefore needs special treatment in this context as well.
+      // Probable solution might include not introducing the initial "LDL"
+      // before the MoveLoad instruction.
+      // MOVE ....
+      // LDL WPtrOffset (see above)
+      // LDNL Offset
+      // EXT/ZEXT/SEXT
 
       // LDLP -> TODO
       // Note: Unclear what the initial TODO was meant to be. Probably

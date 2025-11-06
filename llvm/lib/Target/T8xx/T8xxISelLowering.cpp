@@ -59,6 +59,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "STL_PARM";
   case T8xxISD::MOVE:
     return "MOVE";
+  case T8xxISD::MoveLoad:
+    return "MoveLoad";
   case T8xxISD::CMOV:
     return "CMOV";
   case T8xxISD::BRNCOND:
@@ -458,25 +460,17 @@ SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 	      SDValue MoveLen = DAG.getConstant(2, DL, MVT::i32);
 	      SDValue Ptr = LoadOp->getBasePtr ();
 	      SDValue Chain = LoadOp->getChain();  // Output chain from original LOAD node
-	      SDValue Move = DAG.getNode(T8xxISD::MOVE, DL, MVT::Other, Chain,
-					 MoveLen, FIPtr, Ptr);
+
+	      SDVTList VTs = DAG.getVTList(MVT::i32, MVT::Other);
+	      SDValue Move = DAG.getNode(T8xxISD::MoveLoad, DL, VTs,
+					 Chain, MoveLen, FIPtr, Ptr, FIPtr);
+
+	      return (Move);
 
 	      LLVM_DEBUG({
 		  dbgs() << "Move node created\n";
 		  Move->dump ();
 		});
-
-	      // --- 4. Perform the aligned load from the workframe ---
-	      // Now perform the final aligned 16-bit load from the frame index
-	      SDValue Result = DAG.getLoad(MVT::i32, DL, Move, FIPtr,
-					   MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
-
-	      LLVM_DEBUG({
-		  dbgs() << "Load node created\n";
-		  Result->dump ();
-		});
-
-	      return (Result);
 	    }
 	  else
 	    return (Op);
@@ -487,8 +481,6 @@ SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 
   return (Op);
 }
-
-
 
 
 SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const

@@ -32,6 +32,7 @@ namespace llvm {
     ADD_IPTR,
     STL_PARM,
     MOVE,
+    MoveLoad,
 
     // T8xx conditional moves.
     CMOV,

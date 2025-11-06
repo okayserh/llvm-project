@@ -381,6 +381,19 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   default:
     return false;
 
+  case T8xx::MoveLoad:
+    {
+      dbgs()<<"Expand MoveLoad\n";
+      MI.dump ();
+      int64_t FI = MI.getOperand(5).getImm ();
+      BuildMI (MBB, MI, DL, get(T8xx::MOVE)).addReg(T8xx::AREG).
+	addReg(T8xx::BREG).addReg(T8xx::CREG);
+      BuildMI (MBB, MI, DL, get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI);
+      MBB.erase(MI);
+      return true;
+    }
+    break;
+    
     // This is a special instruction to introduce a way to get effective addresses
     // that are not aligned
   case T8xx::AddWptrImm:
@@ -542,19 +555,9 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       if (MI.getOperand(0).isSymbol ())
 	BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addExternalSymbol(MI.getOperand(0).getSymbolName (), T8xxMCExpr::VK_T8xx_GLOBAL);
 
-      /* Stuff for IPTR relative adressing
-      BuildMI (MBB, MI, DL, get(T8xx::ADC), T8xx::AREG).addReg(T8xx::AREG).addImm(-4);
-      BuildMI (MBB, MI, DL, get(T8xx::LDPI), T8xx::AREG).addReg(T8xx::AREG);
-      */
       BuildMI (MBB, MI, DL, get(T8xx::GCALL), T8xx::ABREG).addReg(T8xx::AREG);
       BuildMI (MBB, MI, DL, get(T8xx::REV), T8xx::AREG).addReg(T8xx::ABREG);
       MBB.erase(MI);
-
-      /*
-      BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
-      BuildMI (MBB, MI, DL, get(T8xx::GCALL)).addReg(T8xx::AREG);
-      MBB.erase(MI);
-      */
       return true;
     }
     break;
