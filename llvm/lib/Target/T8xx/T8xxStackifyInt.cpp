@@ -73,7 +73,7 @@ namespace llvm {
       };
 
     T8xxRegStack mapRegisterStack (unsigned RegClassID);
-    
+
     // Attempt to implement the algorithm to determine the depth of
     // an expression as outlined in the transputer compiler writers
     // guide.
@@ -251,6 +251,12 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
   if (MachineInstr *Def = MRI.getUniqueVRegDef(Reg))
     return Def;
 
+  LLVM_DEBUG({
+      dbgs () << "getVRegDef not found in MRI " << Reg << "\n";
+      Insert->dump();
+    });
+
+  /* This should not be needed anymore. Everything should be SSA
   // MRI doesn't know what the Def is. Try asking LIS.
   if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
           LIS.getInstructionIndex(*Insert)))
@@ -263,6 +269,7 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
 
     return LIS.getInstructionFromIndex(ValNo->def);
     }
+  */
 
   return nullptr;
 }
@@ -452,7 +459,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 	  ItMi->dump ();
 	  dbgs() << "\n";
 	});
-      
+
       // If the instructions are already in the right sequence,
       // no splice is required
       if (std::next(ItDef) == ItMi)
@@ -484,7 +491,7 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 
 	      BuildMI(*(MBBI->getParent()), ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
 		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-		
+
 	      // Create new virtual register for clone
 	      DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).
 		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
@@ -565,7 +572,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	    {
 	      // When the register was already assigned to a temporary
 	      // stack slot, the depth does not need to be analysed.
-	      
+
 	      // TODO: Verify for floating points regs
 	      int SubE = 1;
 	      if (VRM.isAssignedReg(Reg))
@@ -714,6 +721,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	    case 'A':
 	    case 'B':
 	    case 'C': {
+	      LLVM_DEBUG(dbgs() << "Current Code " << (*str2code) << "\n");
+
 	      // Note Character denotes operand position!
 	      MachineOperand *Use = OpDepth[(*str2code) - 'A'].second;
 	      Register Reg = Use->getReg ();
@@ -744,27 +753,44 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      // Insert reversal of two top register stack positions
 	      // Required for BA case with non commuting operator
 	    case 'r': {
-	      // Assert somehow that only two operands are available
+	      // TODO: Implement some index checks to avoid buffer overflows etc.
+	      char ARegCode = (*(str2code-1));
+	      char BRegCode = ' ';
+	      if (((*(str2code-2)) >= 'A') &&
+		  ((*(str2code-2)) <= 'C'))
+		BRegCode = (*(str2code-2));
+	      else
+		BRegCode = (*(str2code-3));
 
-	      // Note Character denotes operand position!
-	      MachineOperand *Use1 = OpDepth[0].second;
+	      LLVM_DEBUG(dbgs() << "Reversal: AReg " << ARegCode << "  BReg " << BRegCode << "\n");
+
+	      // Generic implementation
+	      MachineOperand *Use1 = OpDepth[BRegCode - 'A'].second;
 	      Register Reg1 = Use1->getReg ();
-	      MachineOperand *Use2 = OpDepth[1].second;
+	      MachineOperand *Use2 = OpDepth[ARegCode - 'A'].second;
 	      Register Reg2 = Use2->getReg ();
 
 	      MachineBasicBlock::iterator MBBI = *MI;
 	      DebugLoc DL = MI->getDebugLoc();
 
+	      // Create a clone for storing the result of the "REV" instruction
+	      Register RegClone = MRI.cloneVirtualRegister (Reg1);
+	      Use2->setReg (RegClone);
+
+	      // Create an LReg for the result of the pseude "JOIN" instruction
 	      Register RegJoin;
 	      RegJoin = MRI.createVirtualRegister (&T8xx::LRegRegClass);
 
+	      // Update register information
 	      VRM.grow ();
 
+	      // Pseudo "JOIN"
 	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::JOIN),RegJoin)
-		.addReg (Reg1)
-		.addReg (Reg2);
+		.addReg (Reg2)
+		.addReg (Reg1);
 
-	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::REV),Reg2)
+	      // REV
+	      BuildMI(*MBB, MBBI, DL, TII->get(T8xx::REV),RegClone)
 		.addReg(RegJoin);
 	    }
 	      break;
@@ -1048,7 +1074,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   LLVM_DEBUG({
       dbgs() << "############ Register Map\n";
       VRM.dump ();
-      
+
       dbgs() << "############ LiveInterval Map\n";
       // LiveInterval dump
       LIS.dump ();
@@ -1267,6 +1293,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  stack_info_new[i].nondbg_uses++;
 	}
 
+      LLVM_DEBUG(dbgs() << "Defs\n");
       // Definitions of a register
       if (stack_info_new[i].nondbg_uses == 0)
 	{
@@ -1304,7 +1331,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	}
     });
 
-  
+
   // Collect instructions that only "consume" virtual registers.
   // Those instructions are the anchor points from which a recursive
   // rearrangement of the definitions is carried out.
@@ -1524,7 +1551,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
   } // MachineInstr
 
   } // MachineBasicBlock
-    
+
     LLVM_DEBUG(dbgs() << "############ Register Map\n");
 
   //  return Changed;

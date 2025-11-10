@@ -61,6 +61,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "MOVE";
   case T8xxISD::MoveLoad:
     return "MoveLoad";
+  case T8xxISD::StoreMove:
+    return "StoreMove";
   case T8xxISD::CMOV:
     return "CMOV";
   case T8xxISD::BRNCOND:
@@ -117,6 +119,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   setTruncStoreAction(MVT::i32, MVT::i8, Legal);
   setTruncStoreAction(MVT::i32, MVT::i16, Custom);
+  //setTruncStoreAction(MVT::i32, MVT::i16, Legal);
   setLoadExtAction(ISD::EXTLOAD, MVT::i32, MVT::i16, Custom);
   setLoadExtAction(ISD::SEXTLOAD, MVT::i32, MVT::i16, Custom);
   setLoadExtAction(ISD::ZEXTLOAD, MVT::i32, MVT::i16, Custom);
@@ -410,6 +413,22 @@ SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
 	      Move->dump ();
 	    });
 
+	  /*
+	  dbgs() << "StoreMove node created\n";
+	  Op->dump ();
+	  
+	  // --- 3. Perform the unaligned move (a smaller byte-by-byte store/load) ---
+	  SDValue MoveLen = DAG.getConstant(2, DL, MVT::i32);
+	  SDValue Ptr = StoreOp->getBasePtr ();
+	  SDValue Chain = StoreOp->getChain();  // Output chain from original LOAD node
+	  
+	  SDVTList VTs = DAG.getVTList(MVT::Other);
+	  SDValue Move = DAG.getNode(T8xxISD::StoreMove, DL, VTs,
+				     StoreOp->getValue(), MoveLen, FIPtr, Ptr);
+
+	  StoreOp->getValue().dump();
+	  */
+	  
 	  return (Move);
 	}
       else

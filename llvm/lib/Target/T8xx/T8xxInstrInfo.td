@@ -89,13 +89,31 @@ def T8xxMOVE : SDNode<"T8xxISD::MOVE", SDT_Move, [SDNPHasChain, SDNPMayLoad, SDN
 def SDT_MoveLoad : SDTypeProfile<1, 4,   // 1 output, 3 inputs (SRC, DST, Count)
 [
 SDTCisVT<0, i32>, // Result
-SDTCisVT<0, i32>, // Count
-SDTCisPtrTy<1>,   // AlignedBuffer
-SDTCisPtrTy<2>,   // SRC (Unaligned)
-SDTCisPtrTy<3>   // AlignedBuffer 2
+SDTCisVT<1, i32>, // Count
+SDTCisPtrTy<2>,   // AlignedBuffer
+SDTCisPtrTy<3>,   // SRC (Unaligned)
+SDTCisPtrTy<4>   // AlignedBuffer 2
 ]>; // Input chain
 
 def T8xxMoveLoad : SDNode<"T8xxISD::MoveLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
+
+
+// Note: This translates into a pseudo instruction, which is translated into a
+// STL, MOVE. Truncation should automatically happen through the limited number of bytes in the "move"
+// instruction.
+// For the STL, the used buffer needs to be kept as fourth parameter
+/*
+def SDT_StoreMove : SDTypeProfile<0, 4,   // 0 output, 5 inputs (SRC, DST, Count)
+[
+SDTCisInt<0>,     // Value
+SDTCisVT<1, i32>, // Count
+SDTCisPtrTy<2>,   // AlignedBuffer
+SDTCisPtrTy<3>    // SRC (Unaligned)
+//,SDTCisPtrTy<4>   // AlignedBuffer 2
+]>; // Input chain
+
+def T8xxStoreMove : SDNode<"T8xxISD::StoreMove", SDT_StoreMove, [SDNPHasChain, SDNPMayStore]>;
+*/
 
 
 // Custom add for instruction pointer (Note: To avoid defining a new register class
@@ -311,6 +329,36 @@ def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRri:$b
       	   (MoveLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
 
 
+/*
+def StoreMove : T8Inst<
+    (outs),
+    (ins OReg:$val, i32imm:$cnt, MemSrc:$buf_addr, MemSrc:$dst_addr, (WPtrSrc $rs, $imm):$buf_addr2),
+    "store_move $cnt",
+    [(T8xxStoreMove OReg:$val, imm:$cnt, ADDRr:$buf_addr, ADDRr:$dst_addr, ADDRri:$buf_addr2)]>
+	 {
+	 let hasSideEffects = 1;
+	 let isPseudo = 1;
+	 }
+def StoreMove : T8Inst<
+    (outs),
+    (ins OReg:$val, OReg:$cnt, MemSrc:$buf_addr, MemSrc:$dst_addr),
+    "store_move $cnt",
+    [(T8xxStoreMove i32:$val, i32:$cnt, ADDRr:$buf_addr, ADDRr:$dst_addr)]>
+	 {
+	 let hasSideEffects = 1;
+	 let isPseudo = 1;
+	 }
+
+def : Pat<(T8xxStoreMove OReg:$val, i32:$cnt, ADDRri:$buf_addr, ADDRri:$dst_addr),
+      	   (StoreMove OReg:$val, i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLP ADDRri:$dst_addr))>;
+
+def : Pat<(T8xxStoreMove OReg:$val, imm:$cnt, ADDRri:$buf_addr, ADDRr:$dst_addr),
+      	   (StoreMove OReg:$val, imm:$cnt, (LDLP ADDRri:$buf_addr), ADDRr:$dst_addr)>;
+
+def : Pat<(T8xxStoreMove OReg:$val, imm:$cnt, ADDRri:$buf_addr, ADDRri8:$dst_addr),
+      	   (StoreMove OReg:$val, imm:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$dst_addr))>;
+*/
+
 // Needed for 16 bit operations
 def MOVE :    T8InstOp8<0x4A, (outs), (ins OReg:$cnt, MemSrc:$dst_addr, MemSrc:$src_addr), "move",
 	 [(T8xxMOVE OReg:$cnt, ADDRr:$dst_addr, ADDRr:$src_addr)]>
@@ -468,8 +516,10 @@ def STL : T8InstImm<0xD,
 // match the DAG and get the test16.c to compile. However, this will not
 // work in the general case, since the STL requires a proper 4 Byte aligned
 // address to work.
+/*
 def : Pat<(truncstorei16 i32:$val, ADDRri8:$addr),
           (STL (AND i32:$val, (LDC 65535) ), ADDRri:$addr )>;
+	  */
 
 // This pattern is used for the treatment of call parameters
 // They are positioned relative to the WPTR but the framepointer
