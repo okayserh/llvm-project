@@ -52,7 +52,7 @@ def FPRMREG : T8xxReg<8, "FPROUND">, DwarfRegNum<[27]>;
 def WptrRegs : RegisterClass<"T8xx", [i32], 32,
                             (add WPTR)>;
 
-def OReg : RegisterClass<"T8xx", [i32], 32,
+def OReg : RegisterClass<"T8xx", [i32, i16], 32,
      	                  (add AREG, BREG, CREG)>;
 
 // Note, the "low word" is usually AReg, the "high word" is usually BReg

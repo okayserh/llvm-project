@@ -283,13 +283,13 @@ def ADC  : T8InstImm<0x8,
 		(outs OReg:$dst),
        	 	(ins OReg:$src1, i32imm:$imm),
 		"adc $imm",
-		[(set OReg:$dst, (add OReg:$src1, imm:$imm))]>;
+		[(set i32:$dst, (add OReg:$src1, imm:$imm))]>;
 
 def LDC  : T8InstImm<0x4,
 		(outs OReg:$dst),
        	 	(ins i32imm:$imm),
 		"ldc $imm",
-		[(set OReg:$dst, imm:$imm)]>;
+		[(set i32:$dst, imm:$imm)]>;
 
 
 // Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
@@ -437,7 +437,7 @@ def XOR : T8BinaryOp8<0x33, "xor", xor>;  // #53
 def OR  : T8BinaryOp8<0x4B, "or", or>;  // #53
 def AND : T8BinaryOp8<0x46, "and", and>;  // #53
 
-def : Pat<(sra OReg:$src, OReg:$cnt),
+def : Pat<(i32 (sra (i32 OReg:$src), (i32 OReg:$cnt))),
 	  (LSHR (XDBLE OReg:$src), OReg:$cnt)>;
 
 /* Define via patterns */
@@ -473,28 +473,28 @@ def LB : T8InstOp4<0x1,
 		[(set i32:$val, (extloadi8 ADDRr:$addr))]> {
 		}
 
-def : Pat<(extloadi8 ADDRri:$addr),
+def : Pat<(i32 (extloadi8 ADDRri:$addr)),
           (LB (LDLP ADDRri:$addr) )>;
 
-def : Pat<(extloadi8 ADDRri8:$addr),
+def : Pat<(i32 (extloadi8 ADDRri8:$addr)),
           (LB (LDLPb ADDRri8:$addr) )>;
 
-def : Pat<(zextloadi8 ADDRr:$addr),
+def : Pat<(i32 (zextloadi8 ADDRr:$addr)),
           (LB ADDRr:$addr)>;
 
-def : Pat<(zextloadi8 ADDRri:$addr),
+def : Pat<(i32 (zextloadi8 ADDRri:$addr)),
           (LB (LDLP ADDRri:$addr) )>;
 
-def : Pat<(zextloadi8 ADDRri8:$addr),
+def : Pat<(i32 (zextloadi8 ADDRri8:$addr)),
           (LB (LDLPb ADDRri8:$addr) )>;
 
-def : Pat<(sextloadi8 ADDRr:$addr),
+def : Pat<(i32 (sextloadi8 ADDRr:$addr)),
           (XWORD (LB ADDRr:$addr), (LDC 128))>;
 
-def : Pat<(sextloadi8 ADDRri:$addr),
+def : Pat<(i32 (sextloadi8 ADDRri:$addr)),
           (XWORD (LB (LDLP ADDRri:$addr) ), (LDC 128))>;
 
-def : Pat<(sextloadi8 ADDRri8:$addr),
+def : Pat<(i32 (sextloadi8 ADDRri8:$addr)),
           (XWORD (LB (LDLPb ADDRri8:$addr) ), (LDC 128))>;
 
 // "Inreg" extensions
@@ -502,6 +502,13 @@ def : Pat<(sext_inreg (i32 OReg:$in), i16),
           (XWORD $in, (LDC 32768))>;
 def : Pat<(sext_inreg (i32 OReg:$in), i8),
           (XWORD $in, (LDC 128))>;
+
+def : Pat<(i32 (zext (i16 OReg:$in))),
+          (AND $in, (LDC 65535))>;
+/*
+def : Pat<(i32 (zext (i8 OReg:$in))),
+          (AND $in, (LDC 255))>;
+*/
 
 // Store i32 onto frame
 // Note: previously STRi32regop
@@ -584,19 +591,19 @@ def GT :      T8InstOp4<0x9,
 // Note: The double EQC is needed since DIFF yields a result != 0
 // for true. However, certain operations expect 0 for false and 1 for true.
 // TODO: Could be optimized in conjunction with a CJ instruction.
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETNE),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETNE)),
            (EQC (EQC (DIFF $rhs, $lhs), 0), 0)>;
 
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETEQ),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETEQ)),
            (EQC (DIFF $rhs, $lhs), 0)>;
 
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLT),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLT)),
            (GT $rhs, $lhs)>;
 
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETGE),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETGE)),
            (EQC (GT $rhs, $lhs), 0)>;
 
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLE),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETLE)),
            (EQC (GT $lhs, $rhs), 0)>;
 
 def LDIFF :   T8InstOp8<0x4F,
@@ -634,24 +641,24 @@ def JOIN :  T8Inst<(outs LReg:$dst),
 
 
 // Unsigned comparisons are a bit more complex
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGT),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGT)),
            (EQC (REV (LDIFF $rhs, $lhs, (LDC 1))), 0)>;   // ab in reference
 
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULT),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULT)),
            (EQC (REV (LDIFF $lhs, $rhs, (LDC 1))), 0)>;   // ba in reference
 
 // Greater Equal is NOT Less Than
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGE),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUGE)),
            (REV (LDIFF $lhs, $rhs, (LDC 1)))>;  // ba in reference
 
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULE),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETULE)),
            (REV (LDIFF $rhs, $lhs, (LDC 1)))>;      // ab in reference
 
 // Note: Same as SETEQ
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUEQ),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUEQ)),
            (EQC (DIFF $lhs, $rhs), 0)>;
 // Note: Same as SETNE
-def : Pat<(setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUNE),
+def : Pat<(i32 (setcc (i32 OReg:$lhs), (i32 OReg:$rhs), SETUNE)),
            (DIFF $lhs, $rhs)>;
 
 

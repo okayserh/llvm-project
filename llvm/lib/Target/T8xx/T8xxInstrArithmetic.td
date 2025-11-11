@@ -232,7 +232,7 @@ def FPR32TOI32 :   T8Inst<(outs OReg:$dst),
 // The Inmos C compiler generates the same code to convert a
 // floating point number into an unsigned value.
 // Note: Was tested with an example and seems to work.
-def : Pat<(fp_to_uint (f32 FPReg:$src)),
+def : Pat<(i32 (fp_to_uint (f32 FPReg:$src))),
           (FPR32TOI32 $src)>;
 
 def FPR64TOI32 :   T8Inst<(outs OReg:$dst),
@@ -244,7 +244,7 @@ def FPR64TOI32 :   T8Inst<(outs OReg:$dst),
     let isPseudo = 1;
 }
 
-def : Pat<(fp_to_uint (f64 DFPReg:$src)),
+def : Pat<(i32 (fp_to_uint (f64 DFPReg:$src))),
           (FPR64TOI32 $src)>;
 
 
@@ -301,24 +301,24 @@ def FPGTDB :      T8InstOp8<0x94,
 		  (i32 (setcc f64:$lhs, f64:$rhs, SETGT)))]>;
 
 // Other "don't care" comparisons will be created by patterns
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETNE),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETNE)),
            (EQC (FPEQSN $lhs, $rhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETNE),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETNE)),
            (EQC (FPEQDB $lhs, $rhs), 0)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETGE),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETGE)),
            (EQC (FPGTSN $rhs, $lhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETGE),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETGE)),
            (EQC (FPGTDB $rhs, $lhs), 0)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETLT),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETLT)),
            (FPGTSN $rhs, $lhs)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETLT),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETLT)),
            (FPGTDB $rhs, $lhs)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETLE),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETLE)),
            (EQC (FPGTSN $lhs, $rhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETLE),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETLE)),
            (EQC (FPGTDB $lhs, $rhs), 0)>;
 
 
@@ -356,47 +356,47 @@ defm FPOLE : T8PseudoCmpOp<SETOLE>;
 defm FPOEQ : T8PseudoCmpOp<SETOEQ>;
 defm FPONE : T8PseudoCmpOp<SETONE>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOLT),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOLT)),
            (FPOGTSN $rhs, $lhs)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOLT),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOLT)),
            (FPOGTDB $rhs, $lhs)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOGE),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOGE)),
            (FPOLESN $rhs, $lhs)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE)),
            (FPOLEDB $rhs, $lhs)>;
 
 
 // Pattern fors the unordered variants. These are created from
 // the ordered variants by Morgans rule.
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUEQ),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUEQ)),
            (EQC (FPONESN $lhs, $rhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUEQ),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUEQ)),
            (EQC (FPONEDB $lhs, $rhs), 0)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUGT),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUGT)),
            (EQC (FPOGTSN $rhs, $lhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUGT),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUGT)),
            (EQC (FPOGTDB $rhs, $lhs), 0)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUGE),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUGE)),
            (EQC (FPOGTSN $lhs, $rhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUGE),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUGE)),
            (EQC (FPOGTDB $lhs, $rhs), 0)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETULT),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETULT)),
            (EQC (FPOGTSN $lhs, $rhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETULT),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETULT)),
            (EQC (FPOGTDB $lhs, $rhs), 0)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETULE),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETULE)),
            (EQC (FPOGTSN $rhs, $lhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETULE),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETULE)),
            (EQC (FPOGTDB $rhs, $lhs), 0)>;
 
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUNE),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUNE)),
            (EQC (FPOEQSN $lhs, $rhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUNE),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUNE)),
            (EQC (FPOEQDB $lhs, $rhs), 0)>;
 
 
@@ -421,9 +421,9 @@ def FPORDEREDDB :   T8InstOp8<0x92,
 	      (i32 (setcc f64:$lhs, f64:$rhs, SETO)))]>;
 
 // Check for unordered is just the inverse
-def : Pat<(setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUO),
+def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETUO)),
            (EQC (FPORDEREDSN $lhs, $rhs), 0)>;
-def : Pat<(setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUO),
+def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUO)),
            (EQC (FPORDEREDDB $lhs, $rhs), 0)>;
 
 
