@@ -33,42 +33,32 @@ define dso_local i32 @test16(i32 noundef %0, i32 noundef %1) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -9
 ; CHECK: ldl 7
-; CHECK: stl 4
-; CHECK: ldl 4
-; CHECK: ldc 17
+; CHECK: stl 5
+; CHECK: ldl 5
+; CHECK: ldc 1
 ; CHECK: shl
-; CHECK: ldc 16
-; CHECK: sra
+; CHECK: ldc 32768
+; CHECK: xword
 ; CHECK: ldl 8
 ; CHECK: add
-; CHECK: stl 5
-; CHECK: ldlp 1
 ; CHECK: stl 6
-; CHECK: ldl 5
-; CHECK: ldc 8
-; CHECK: shr
 ; CHECK: ldl 6
-; CHECK: ldc 1
-; CHECK: or
-; CHECK: sb
-; CHECK: ldl 5
+; CHECK: stl 4
+; CHECK: ldlp 4
+; CHECK: ldlp 1
+; CHECK: ldc 2
+; CHECK: move
 ; CHECK: ldl 6
-; CHECK: sb
-; CHECK: ldl 5
+; CHECK: ldc 32768
+; CHECK: xword
+; CHECK: stl 2
+; CHECK: ldl 6
 ; CHECK: ldlp 3
 ; CHECK: sb
+; CHECK: ldl 6
+; CHECK: ldc 128
+; CHECK: xword
 ; CHECK: ldl 5
-; CHECK: ldc 16
-; CHECK: shl
-; CHECK: ldc 16
-; CHECK: sra
-; CHECK: stl 2
-; CHECK: ldl 5
-; CHECK: ldc 24
-; CHECK: shl
-; CHECK: ldc 24
-; CHECK: sra
-; CHECK: ldl 4
 ; CHECK: mul
 ; CHECK: ajw 9
 ; CHECK: ldl 0

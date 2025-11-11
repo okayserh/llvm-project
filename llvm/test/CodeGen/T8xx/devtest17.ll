@@ -35,66 +35,50 @@ define dso_local i32 @test17(i16 noundef signext %0) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -1
 ; CHECK: ldlp 0
-; CHECK: adc -84
+; CHECK: adc -60
 ; CHECK: ldc 15
 ; CHECK: not
 ; CHECK: and
 ; CHECK: gajw
-; CHECK: stl 17
-; CHECK: ldl 17
+; CHECK: stl 11
+; CHECK: ldl 11
 ; CHECK: ldnl 0
-; CHECK: stl 13
+; CHECK: stl 9
 ; CHECK: ldlp 1
-; CHECK: stl 14
-; CHECK: ldl 13
-; CHECK: ldl 14
-; CHECK: sb
-; CHECK: ldl 14
-; CHECK: ldc 1
-; CHECK: or
-; CHECK: stl 15
-; CHECK: ldl 13
-; CHECK: ldc 8
-; CHECK: shr
-; CHECK: ldl 15
-; CHECK: sb
+; CHECK: stl 10
+; CHECK: ldlp 9
+; CHECK: ldl 10
+; CHECK: ldc 2
+; CHECK: move
 ; CHECK: ldc 0
 ; CHECK-LABEL: .LBB0_1:
-; CHECK: stl 12
+; CHECK: stl 8
 ; CHECK: ldc 8
-; CHECK: ldl 12
+; CHECK: ldl 8
 ; CHECK: gt
 ; CHECK: cj .LBB0_3
-; CHECK: ldl 12
-; CHECK: ldc 2
+; CHECK: ldc 44
+; CHECK: stl 9
+; CHECK: ldl 8
+; CHECK: ldc 1
 ; CHECK: shl
 ; CHECK: ldlp 4
 ; CHECK: rev
 ; CHECK: add
-; CHECK: stl 16
-; CHECK: ldc 44
-; CHECK: ldl 16
-; CHECK: sb
-; CHECK: ldl 16
-; CHECK: ldc 1
-; CHECK: or
-; CHECK: ldc 0
+; CHECK: ldlp 9
 ; CHECK: rev
-; CHECK: sb
-; CHECK: ldl 12
+; CHECK: ldc 2
+; CHECK: move
+; CHECK: ldl 8
 ; CHECK: adc 1
 ; CHECK: j .LBB0_1
 ; CHECK-LABEL: .LBB0_3:
-; CHECK: ldl 15
-; CHECK: lb
-; CHECK: ldc 128
-; CHECK: xword
-; CHECK: ldc 8
-; CHECK: shl
-; CHECK: ldl 14
-; CHECK: lb
-; CHECK: or
-; CHECK: ldl 17
+; CHECK: ldl 10
+; CHECK: ldlp 9
+; CHECK: ldc 2
+; CHECK: move
+; CHECK: ldl 9
+; CHECK: ldl 11
 ; CHECK: gajw
 ; CHECK: rev
 ; CHECK: ajw 1
