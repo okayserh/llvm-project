@@ -61,8 +61,10 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "MOVE";
   case T8xxISD::MoveLoad:
     return "MoveLoad";
-  case T8xxISD::StoreMove:
-    return "StoreMove";
+  case T8xxISD::MoveSEXTLoad:
+    return "MoveSEXTLoad";
+  case T8xxISD::MoveZEXTLoad:
+    return "MoveZEXTLoad";
   case T8xxISD::CMOV:
     return "CMOV";
   case T8xxISD::BRNCOND:
@@ -211,6 +213,11 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Legal);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Legal);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
+
+  setOperationAction(ISD::SIGN_EXTEND, MVT::i16, Legal);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i16, Legal);
+  setOperationAction(ISD::SIGN_EXTEND, MVT::i32, Legal);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i32, Legal);
 
   // Operations for variadic arguments
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
@@ -416,19 +423,19 @@ SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
 	  /*
 	  dbgs() << "StoreMove node created\n";
 	  Op->dump ();
-	  
+
 	  // --- 3. Perform the unaligned move (a smaller byte-by-byte store/load) ---
 	  SDValue MoveLen = DAG.getConstant(2, DL, MVT::i32);
 	  SDValue Ptr = StoreOp->getBasePtr ();
 	  SDValue Chain = StoreOp->getChain();  // Output chain from original LOAD node
-	  
+
 	  SDVTList VTs = DAG.getVTList(MVT::Other);
 	  SDValue Move = DAG.getNode(T8xxISD::StoreMove, DL, VTs,
 				     StoreOp->getValue(), MoveLen, FIPtr, Ptr);
 
 	  StoreOp->getValue().dump();
 	  */
-	  
+
 	  return (Move);
 	}
       else
@@ -460,7 +467,7 @@ SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 	      // This is a common pattern for targets that can't handle unaligned memory.
 	      MachineFunction &MF = DAG.getMachineFunction();
 	      T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
-	      
+
 	      // Check whether a workspace location was already allocated
 	      // as temporary storage for Move instructions
 	      int FI = FuncInfo->getMoveSlot();
@@ -480,16 +487,16 @@ SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 	      SDValue Ptr = LoadOp->getBasePtr ();
 	      SDValue Chain = LoadOp->getChain();  // Output chain from original LOAD node
 
+	      unsigned MoveOpcode = T8xxISD::MoveLoad;
+	      if (LoadOp->getExtensionType () == ISD::SEXTLOAD)
+		MoveOpcode = T8xxISD::MoveSEXTLoad;
+	      if (LoadOp->getExtensionType () == ISD::ZEXTLOAD)
+		MoveOpcode = T8xxISD::MoveZEXTLoad;
+
 	      SDVTList VTs = DAG.getVTList(MVT::i32, MVT::Other);
-	      SDValue Move = DAG.getNode(T8xxISD::MoveLoad, DL, VTs,
+	      SDValue Move = DAG.getNode(MoveOpcode, DL, VTs,
 					 Chain, MoveLen, FIPtr, Ptr, FIPtr);
-
 	      return (Move);
-
-	      LLVM_DEBUG({
-		  dbgs() << "Move node created\n";
-		  Move->dump ();
-		});
 	    }
 	  else
 	    return (Op);

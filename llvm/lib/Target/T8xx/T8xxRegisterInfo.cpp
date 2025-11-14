@@ -48,7 +48,7 @@ const uint32_t *
 T8xxRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                         CallingConv::ID CC) const {
   // This is defined in CallingConv.td via
-  // def CC_Save : CalleeSavedRegs<(add R4, R5, R6, R7, R8, R9)>;  
+  // def CC_Save : CalleeSavedRegs<(add R4, R5, R6, R7, R8, R9)>;
   return CC_Save_RegMask;
 }
 
@@ -80,7 +80,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   // Needed to get infos about stack alignment
   const T8xxFrameLowering *TFL = getFrameLowering(MF);
-  
+
   bool bWordAlignedFO = false;
 
   // Note: Calculation of stack offsets happens in PrologEpilogInserter
@@ -100,12 +100,14 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     // Not supported yet.
     return false;
   case T8xx::MoveLoad:
+  case T8xx::MoveSEXTLoad:
+  case T8xx::MoveZEXTLoad:
   case T8xx::STL:
   case T8xx::LDL:
   case T8xx::LDLP:
     bWordAlignedFO = true;
     [[fallthrough]];
-    
+
   case T8xx::LDLPb:
     ImmOpIdx = FIOperandNum + 1;
     break;
@@ -156,7 +158,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // Add offset for WPTR Loc 0 (used internally)
   // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
   Offset += MFI.getOffsetAdjustment ();
-  
+
   LLVM_DEBUG(dbgs() << "eliminateFrameIndex FI: " << FI <<
 	     " Offset: " << MFI.getObjectOffset(FI) <<
 	     " Size: " << MFI.getObjectSize(FI) <<
@@ -171,7 +173,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       DebugLoc dl = MI.getDebugLoc();
       const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
       const T8xxMachineFunctionInfo &TMFI = *MF.getInfo<T8xxMachineFunctionInfo> ();
-      
+
       // Directly replace with $areg = LDL $wptr, <xx>
       int WPtrOffset = MFI.getObjectOffset(TMFI.getWPtrSlot ()) - first_frame_pos;
       WPtrOffset += MFI.getOffsetAdjustment ();
@@ -231,7 +233,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       else
 	ImmOp.setImm(Offset);
     }
-  
+
   LLVM_DEBUG(dbgs() << "After eliminateFrameIndex\n\n");
 
   return false;

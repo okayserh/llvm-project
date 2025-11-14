@@ -96,7 +96,8 @@ SDTCisPtrTy<4>   // AlignedBuffer 2
 ]>; // Input chain
 
 def T8xxMoveLoad : SDNode<"T8xxISD::MoveLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
-
+def T8xxMoveSEXTLoad : SDNode<"T8xxISD::MoveSEXTLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
+def T8xxMoveZEXTLoad : SDNode<"T8xxISD::MoveZEXTLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
 
 // Note: This translates into a pseudo instruction, which is translated into a
 // STL, MOVE. Truncation should automatically happen through the limited number of bytes in the "move"
@@ -328,36 +329,45 @@ def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRri:$src_addr, ADDRri:$bu
 def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRri:$buf_addr2),
       	   (MoveLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
 
-
-/*
-def StoreMove : T8Inst<
-    (outs),
-    (ins OReg:$val, i32imm:$cnt, MemSrc:$buf_addr, MemSrc:$dst_addr, (WPtrSrc $rs, $imm):$buf_addr2),
-    "store_move $cnt",
-    [(T8xxStoreMove OReg:$val, imm:$cnt, ADDRr:$buf_addr, ADDRr:$dst_addr, ADDRri:$buf_addr2)]>
-	 {
-	 let hasSideEffects = 1;
-	 let isPseudo = 1;
-	 }
-def StoreMove : T8Inst<
-    (outs),
-    (ins OReg:$val, OReg:$cnt, MemSrc:$buf_addr, MemSrc:$dst_addr),
-    "store_move $cnt",
-    [(T8xxStoreMove i32:$val, i32:$cnt, ADDRr:$buf_addr, ADDRr:$dst_addr)]>
+def MoveSEXTLoad : T8Inst<
+    (outs OReg:$res),
+    (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
+    "move_sext_load",
+    [(set i32:$res, (T8xxMoveSEXTLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
 	 {
 	 let hasSideEffects = 1;
 	 let isPseudo = 1;
 	 }
 
-def : Pat<(T8xxStoreMove OReg:$val, i32:$cnt, ADDRri:$buf_addr, ADDRri:$dst_addr),
-      	   (StoreMove OReg:$val, i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLP ADDRri:$dst_addr))>;
+def : Pat<(T8xxMoveSEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveSEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), ADDRr:$src_addr, ADDRri:$buf_addr2)>;
 
-def : Pat<(T8xxStoreMove OReg:$val, imm:$cnt, ADDRri:$buf_addr, ADDRr:$dst_addr),
-      	   (StoreMove OReg:$val, imm:$cnt, (LDLP ADDRri:$buf_addr), ADDRr:$dst_addr)>;
+def : Pat<(T8xxMoveSEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveSEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLP ADDRri:$src_addr), ADDRri:$buf_addr2)>;
 
-def : Pat<(T8xxStoreMove OReg:$val, imm:$cnt, ADDRri:$buf_addr, ADDRri8:$dst_addr),
-      	   (StoreMove OReg:$val, imm:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$dst_addr))>;
-*/
+def : Pat<(T8xxMoveSEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveSEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
+
+
+def MoveZEXTLoad : T8Inst<
+    (outs OReg:$res),
+    (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
+    "move_sext_load",
+    [(set i32:$res, (T8xxMoveZEXTLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
+	 {
+	 let hasSideEffects = 1;
+	 let isPseudo = 1;
+	 }
+
+def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveZEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), ADDRr:$src_addr, ADDRri:$buf_addr2)>;
+
+def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveZEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLP ADDRri:$src_addr), ADDRri:$buf_addr2)>;
+
+def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRri:$buf_addr2),
+      	   (MoveZEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
+
 
 // Needed for 16 bit operations
 def MOVE :    T8InstOp8<0x4A, (outs), (ins OReg:$cnt, MemSrc:$dst_addr, MemSrc:$src_addr), "move",
@@ -385,7 +395,6 @@ def : Pat<(T8xxMOVE i32:$cnt, ADDRr:$dst_addr, ADDRri8:$src_addr),
 
 def : Pat<(T8xxMOVE i32:$cnt, ADDRri8:$dst_addr, ADDRri8:$src_addr),
       	   (MOVE i32:$cnt, (LDLPb ADDRri:$dst_addr), (LDLPb ADDRri:$src_addr))>;
-
 
 
 // Special instruction, which is solely used in CallLowering

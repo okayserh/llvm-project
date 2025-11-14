@@ -382,6 +382,8 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     return false;
 
   case T8xx::MoveLoad:
+  case T8xx::MoveSEXTLoad:
+  case T8xx::MoveZEXTLoad:
     {
       dbgs()<<"Expand MoveLoad\n";
       MI.dump ();
@@ -389,11 +391,24 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       BuildMI (MBB, MI, DL, get(T8xx::MOVE)).addReg(T8xx::AREG).
 	addReg(T8xx::BREG).addReg(T8xx::CREG);
       BuildMI (MBB, MI, DL, get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI);
+
+      if (MI.getOpcode() == T8xx::MoveSEXTLoad)
+	{
+	  BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addImm(32768);
+	  BuildMI (MBB, MI, DL, get(T8xx::XWORD), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
+	}
+
+      if (MI.getOpcode() == T8xx::MoveZEXTLoad)
+	{
+	  BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addImm(65535);
+	  BuildMI (MBB, MI, DL, get(T8xx::AND), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
+	}
+
       MBB.erase(MI);
       return true;
     }
     break;
-    
+
     // This is a special instruction to introduce a way to get effective addresses
     // that are not aligned
   case T8xx::AddWptrImm:

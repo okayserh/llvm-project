@@ -33,7 +33,8 @@ namespace llvm {
     STL_PARM,
     MOVE,
     MoveLoad,
-    StoreMove,
+    MoveSEXTLoad,
+    MoveZEXTLoad,
 
     // T8xx conditional moves.
     CMOV,
