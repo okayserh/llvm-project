@@ -290,6 +290,11 @@ unsigned T8xxInstrInfo::insertBranch(MachineBasicBlock &MBB,
 MachineBasicBlock *
 T8xxInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
   assert(MI.getDesc().isBranch() && "Unexpected opcode!");
+
+  LLVM_DEBUG({
+      MI.dump ();
+    });
+
   // The branch target is always the last operand.
   int NumOp = MI.getNumExplicitOperands();
   return MI.getOperand(NumOp - 1).getMBB();

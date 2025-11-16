@@ -777,6 +777,7 @@ def BRIND  : T8Inst<(outs),
 {
    let isTerminator = 1;
    let isBranch = 1;
+   let isIndirectBranch = 1;
    let isBarrier = 1;
    let isCodeGenOnly = 1;
    let isPseudo = 1;
