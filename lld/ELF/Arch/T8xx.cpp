@@ -101,7 +101,11 @@ bool T8xx::needsThunk(RelExpr expr, RelType type, const InputFile *file,
   return false;
 }
 
-static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode)
+//#define NO_T8XX_RELAX
+
+#ifndef NO_T8XX_RELAX
+// Filling prefix instructions with relaxation
+static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode, uint32_t len)
 {
   int indx = 0;
 
@@ -110,6 +114,7 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode)
   uint32_t imm_dec = (imm < 0 ? (~imm) : imm) & 0xFFFFFFFFu;
   uint32_t imm_and = 0xF0000000u;
   bool enc_beg = false;
+
   for (; i > 0; --i)
     {
       // Determine 4 bits for pfix/nfix command
@@ -122,7 +127,7 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode)
 	loc[indx++] = static_cast<uint8_t> (0x20 | (imm_res >> (4 * i)));
 
       // First nonzero bits discovered
-      if ((imm_res || ((imm < 0) && i == 1)) && !enc_beg)
+      if ((i < len) && !enc_beg)
 	{
 	  enc_beg = true;
 	  if (imm < 0)
@@ -138,10 +143,41 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode)
   loc[indx] = (opcode & 0xF0) | (imm_dec & 0xF);
 
   // Debug output
+  /*
+  for (i = 0; i <= indx; ++i)
+    printf ("%02x ", loc[i]);
+  printf ("\n");
+  */
+}
+
+#else
+static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode, uint32_t len)
+{
+  int indx = 0;
+
+  uint32_t *p_imm = (uint32_t *)&imm;
+
+  // Add pfix and nfix as required
+  int i = 7;
+  uint32_t imm_dec = *p_imm;
+  uint32_t imm_and = 0xF0000000u;
+
+  for (; i > 0; --i)
+    {
+      // Determine 4 bits for pfix/nfix command
+      uint32_t imm_res = imm_dec & imm_and;
+      imm_and >>= 4;
+      loc[indx++] = static_cast<uint8_t> (0x20 | (imm_res >> (4 * i)));
+    }
+
+  loc[indx] = (opcode & 0xF0) | (imm_dec & 0xF);
+
+  // Debug output
   for (i = 0; i <= indx; ++i)
     printf ("%02x ", loc[i]);
   printf ("\n");
 }
+#endif
 
 
 // This function is for absolute value, like in binary expressions
@@ -149,6 +185,11 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode)
 static uint32_t calc_pfix_len_abs (const int64_t val)
 {
   uint32_t req_bytes = 8;
+
+#ifdef NO_T8XX_RELAX
+  return (req_bytes);
+#endif
+
   if (isInt<29>(val))
     req_bytes = 7;
   if (isInt<25>(val))
@@ -179,6 +220,10 @@ static uint32_t calc_pfix_len_abs (const int64_t val)
 static uint32_t calc_pfix_len_pcrel (const int64_t val)
 {
   uint32_t req_bytes = 8;
+
+#ifdef NO_T8XX_RELAX
+  return (req_bytes);
+#endif
   if (isInt<29>(val - 7))
     req_bytes = 7;
   if (isInt<25>(val - 6))
@@ -197,7 +242,7 @@ static uint32_t calc_pfix_len_pcrel (const int64_t val)
 }
 
 void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
-  printf ("Relocation Type %i  Value %x\n", rel.type, val);
+  //  printf ("Relocation Type %i  Value %x\n", rel.type, val);
 
   switch (rel.type) {
   case R_T8XX_ALIGN:
@@ -220,7 +265,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       int32_t sval = SignExtend32 ((uint32_t)(rel.addend & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_abs (rel.addend);
       //      printf ("Rel-Type %i  VAL %lu  SVal %i  Len %lu\n", rel.type, val, sval, len);
-      fill_pnfix (loc, sval, loc[len-1]);
+      fill_pnfix (loc, sval, loc[len-1], len);
     }
     break;
 
@@ -228,7 +273,8 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_pcrel (val);
-      fill_pnfix (loc, sval - len, loc[len-1]);
+      printf ("J/CJ, Len : %u  ", len);
+      fill_pnfix (loc, sval - len, loc[len-1], len);
     }
     break;
 
@@ -237,7 +283,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_pcrel (val - 2);
       // The "-2" is two bytes for the "ldpi" instruction after the ldc.
-      fill_pnfix (loc, sval - 2 - len, loc[len-1]);
+      fill_pnfix (loc, sval - 2 - len, loc[len-1], len);
     }
     break;
 
@@ -278,9 +324,11 @@ static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc
   const int64_t displace = dest - loc;
 
   printf ("relaxNPFix Displace %li\n", displace);
+  /*
   printf ("Symbol %s\n", toStr(ctx, sym).c_str ());
   printf ("Sym Type %i  bind %i\n", sym.type, sym.binding);
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n\n", sym.getVA(ctx), loc, r.addend);
+  */
 
   uint32_t req_bytes = calc_pfix_len_pcrel (dest);
 
@@ -363,6 +411,8 @@ static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
   const int64_t displace = dest - loc;
 
   uint32_t req_bytes = calc_pfix_len_pcrel (displace);
+
+  printf ("relaxJump Displace %li\n", displace);
 
   // Relocation is kept as it is
   remove = 8 - req_bytes;
