@@ -140,31 +140,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   unsigned StackSizeAligned = alignTo (MFI.getStackSize (), TFL->getStackAlign ());
 
   int Offset = 0;
-  if (FI < 0)
-    {
-      // FI < 0   -> fixed stack objects (i.e. call parameters)
-      Offset = (StackSizeAligned - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
-
-      // The + 4 are for one additional Workspace place to hold the return address when variable
-      // parameters are used.
-      // TODO: Replace 4 with a properly determined value representing one space on the workspace
-      if (TMFI.getVarArgsSaveSize () != 0)  // Var args
-	Offset += 4;
-    }
-  else
-    // FI >= 0  -> stack frame objects (i.e. function variables and temporary stack objects)
-    Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
-
-  // Add offset for WPTR Loc 0 (used internally)
-  // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
-  Offset += MFI.getOffsetAdjustment ();
-
-  LLVM_DEBUG(dbgs() << "eliminateFrameIndex FI: " << FI <<
-	     " Offset: " << MFI.getObjectOffset(FI) <<
-	     " Size: " << MFI.getObjectSize(FI) <<
-	     " StackSize " << MFI.getStackSize() <<
-	     " ImmOp " << ImmOp.getImm() <<
-	     " ResOffset " << Offset << "\n");
 
   // If FI is smaller 0, use the "spilled" WPtr
   if ((FI < 0) && MFI.shouldRealignStack())
@@ -182,6 +157,8 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 	.addImm(WPtrOffset / 4);
 
       Offset = MFI.getObjectOffset(FI);
+      if (TMFI.getVarArgsSaveSize () != 0)
+	Offset += 4;
 
       // MoveLoad -> TODO
       // The MoveLoad instruction uses a workspace location
@@ -223,8 +200,34 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   else
     // Regular case for frame and parameters when no alignment > 4 is requested
     {
-      FIOp.ChangeToRegister(T8xx::WPTR, false);
+      if (FI < 0)
+	{
+	  // FI < 0   -> fixed stack objects (i.e. call parameters)
+	  Offset = (StackSizeAligned - fixed_obj_size) + MFI.getObjectOffset(FI) + ImmOp.getImm();
+	  
+	  // The + 4 are for one additional Workspace place to hold the return address when variable
+	  // parameters are used.
+	  // TODO: Replace 4 with a properly determined value representing one space on the workspace
+	  if (TMFI.getVarArgsSaveSize () != 0)
+	    Offset += 4;
+	}
+      else
+	// FI >= 0  -> stack frame objects (i.e. function variables and temporary stack objects)
+	Offset = MFI.getObjectOffset(FI) - first_frame_pos + ImmOp.getImm() ;
 
+      // Add offset for WPTR Loc 0 (used internally)
+      // Note: This is set in "emit_prologue" (T8xxFrameLowering.cpp)
+      Offset += MFI.getOffsetAdjustment ();
+
+      LLVM_DEBUG(dbgs() << "eliminateFrameIndex FI: " << FI <<
+		 " Offset: " << MFI.getObjectOffset(FI) <<
+		 " Size: " << MFI.getObjectSize(FI) <<
+		 " StackSize " << MFI.getStackSize() <<
+		 " ImmOp " << ImmOp.getImm() <<
+		 " ResOffset " << Offset << "\n");
+
+      // Emit changed instruction
+      FIOp.ChangeToRegister(T8xx::WPTR, false);
       if (bWordAlignedFO)
 	{
 	  assert ((Offset % 4 == 0) && "Framepointer offset must be word aligned!");

@@ -1205,7 +1205,14 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // This will take care of variable argument stacks
   if (isVarArg)
     {
+      int NBytes = (int)(NumBytes >> 2);
+      LLVM_DEBUG(dbgs() << "Var Arg Stacksize " << NBytes);
+      LLVM_DEBUG(dbgs() << "ArgLocs  " << ArgLocs.size () << "\n");
+
+      /* Old version, did work for integer
       SDValue Off2 = DAG.getSignedConstant(-(ArgLocs.size() + 1), Loc,
+      getPointerTy(DAG.getDataLayout())); */
+      SDValue Off2 = DAG.getSignedConstant(-(NBytes + 1), Loc,
 					   getPointerTy(DAG.getDataLayout()));
       SDVTList VTs2 = DAG.getVTList(MVT::Other);
       SDValue Ops2[] = {Chain, Off2};
@@ -1260,8 +1267,13 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (isVarArg)
     {
       InFlag = Chain.getValue(1);
+
+      SDValue Off3 = DAG.getSignedConstant(((NumBytes >> 2) + 1), Loc,
+					   getPointerTy(DAG.getDataLayout()));
+	/*
       SDValue Off3 = DAG.getSignedConstant(ArgLocs.size() + 1, Loc,
 					   getPointerTy(DAG.getDataLayout()));
+	*/
       SDVTList VTs3 = DAG.getVTList(MVT::Other, MVT::Glue);
       SDValue Ops3[] = {Chain, Off3, InFlag};
       Chain = DAG.getNode(T8xxISD::AJW, Loc, VTs3, Ops3);

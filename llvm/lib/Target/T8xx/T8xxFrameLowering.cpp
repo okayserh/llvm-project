@@ -283,6 +283,7 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
 	.addFrameIndex(TMFI.getWPtrSlot ())
 	.addImm(0)
 	.setMIFlag(MachineInstr::FrameSetup);
+
       // Set WPtr to "old" WPtr
       BuildMI(MBB, MBBI, dl, TII.get(T8xx::GAJW), T8xx::ABREG)
 	.addReg(T8xx::AREG)
