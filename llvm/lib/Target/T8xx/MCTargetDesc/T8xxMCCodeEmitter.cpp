@@ -130,8 +130,6 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
   // The other instructions are the 15 instructions which take an immediate.
 
   // The required prefix instructions will be generated in this method.
-  //  printf ("Encoding %lu   Size %i\n", Bits, Size);
-  //  MI.dump ();
 
   // T8xx immediate functions
   if ((Size == 1) && ((Bits & 0xFF) < 0xF0))
@@ -176,7 +174,6 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
 		}
 
 	      Bits |= imm_dec & 0xF;
-	      //	      printf ("Opcode %lu   Imm %li\n", Bits, imm);
 	    }
 
 	  if (MO->isExpr ())
@@ -186,7 +183,7 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
 	      for (int i = 0; i < 7; ++i)
 		EmitByte (0x20, CB);
 
-	      printf ("Opcode %lu, Expression found\n", Bits);
+	      LLVM_DEBUG(dbgs() << "Opcode " << Bits << ", Expression found\n");
 	      MO->getExpr ()->dump ();
 	    }
 	}
@@ -214,19 +211,20 @@ getExprOpValue(const MCInst &MI,
 
   if (Kind == MCExpr::Binary) {
     const MCBinaryExpr *BinExpr = cast<MCBinaryExpr>(Expr);
-    printf ("Encountered binary LHS %i   RHS %i\n",
-	    BinExpr->getLHS()->getKind (),
-	    BinExpr->getRHS()->getKind ());
+    LLVM_DEBUG(dbgs() << "Encountered binary LHS "
+	       << BinExpr->getLHS()->getKind () << "   RHS "
+	       << BinExpr->getRHS()->getKind () << "\n");
 
     int64_t Res = 0;
-    if (BinExpr->getLHS()->evaluateAsAbsolute(Res))
-      printf ("LHS Eval %li\n", Res);
-    if (BinExpr->getRHS()->evaluateAsAbsolute(Res))
-      printf ("RHS Eval %li\n", Res);
+    LLVM_DEBUG({
+	if (BinExpr->getLHS()->evaluateAsAbsolute(Res))
+	  dbgs () << "LHS Eval " << Res << "\n";
+	if (BinExpr->getRHS()->evaluateAsAbsolute(Res))
+	  dbgs () << "RHS Eval " << Res << "\n";
+	BinExpr->getLHS()->dump();
+	BinExpr->getRHS()->dump();
+      });
     
-    BinExpr->getLHS()->dump();
-    BinExpr->getRHS()->dump();
-
     switch (BinExpr->getOpcode ())
       {
       case MCBinaryExpr::Opcode::Add:
@@ -250,7 +248,6 @@ getExprOpValue(const MCInst &MI,
 	Ctx.reportError(Expr->getLoc(), "unsupported binary expression");
       }
     
-
     /*
     unsigned Res =
         getExprOpValue(cast<MCBinaryExpr>(Expr)->getLHS(), Fixups, STI);

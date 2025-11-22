@@ -46,7 +46,7 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
   if (Kind >= FirstLiteralRelocationKind)
     return Kind - FirstLiteralRelocationKind;
 
-  printf ("getRelocType %i\n", (int)Kind);
+  //  printf ("getRelocType %i\n", (int)Kind);
 
   if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Fixup.getValue())) {
     if (SExpr->getKind() == T8xxMCExpr::VK_T8xx_IPTRREL)

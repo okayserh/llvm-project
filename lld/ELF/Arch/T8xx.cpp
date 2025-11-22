@@ -221,6 +221,13 @@ static uint32_t calc_pfix_len_pcrel (const int64_t val)
 {
   uint32_t req_bytes = 8;
 
+  // TODO: It seems like the resulting code
+  // 20 af for a jump distance of 17 (from the
+  // beginning of the instruction) does not
+  // make much sense.
+  // Check, whether this could be implemented more
+  // intelligent.
+
 #ifdef NO_T8XX_RELAX
   return (req_bytes);
 #endif
@@ -273,7 +280,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
       uint32_t len = calc_pfix_len_pcrel (val);
-      printf ("J/CJ, Len : %u  ", len);
+      //      printf ("J/CJ, Len : %u  ", len);
       fill_pnfix (loc, sval - len, loc[len-1], len);
     }
     break;
@@ -323,7 +330,7 @@ static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc
   const uint64_t dest = sym.getVA(ctx) + r.addend;
   const int64_t displace = dest - loc;
 
-  printf ("relaxNPFix Displace %li\n", displace);
+  //printf ("relaxNPFix Displace %li\n", displace);
   /*
   printf ("Symbol %s\n", toStr(ctx, sym).c_str ());
   printf ("Sym Type %i  bind %i\n", sym.type, sym.binding);

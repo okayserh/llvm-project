@@ -283,7 +283,6 @@ namespace {
       unsigned NumBytes = getFixupKindNumBytes(Fixup.getKind());
       unsigned Offset = Fixup.getOffset();
 
-      printf ("NumBytes %u  Offset %u\n", NumBytes, Offset);
       if (!IsResolved)
 	return;          // If it is not resolved, leave it as is
 
