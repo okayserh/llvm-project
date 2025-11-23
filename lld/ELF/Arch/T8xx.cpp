@@ -173,9 +173,11 @@ static void fill_pnfix (uint8_t *loc, int32_t imm, uint8_t opcode, uint32_t len)
   loc[indx] = (opcode & 0xF0) | (imm_dec & 0xF);
 
   // Debug output
+  /*
   for (i = 0; i <= indx; ++i)
     printf ("%02x ", loc[i]);
   printf ("\n");
+  */
 }
 #endif
 
@@ -333,7 +335,7 @@ static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc
   //printf ("relaxNPFix Displace %li\n", displace);
   /*
   printf ("Symbol %s\n", toStr(ctx, sym).c_str ());
-  printf ("Sym Type %i  bind %i\n", sym.type, sym.binding);
+  //printf ("Sym Type %i  bind %i\n", sym.type, sym.binding);
   printf ("Sym Value %08x   Loc %08x    Dest  %08x\n\n", sym.getVA(ctx), loc, r.addend);
   */
 
@@ -611,7 +613,7 @@ void T8xx::finalizeRelax(int passes) const {
 	    case R_T8XX_ADDR_SUB:
 	      {
 		uint32_t len = calc_pfix_len_abs (aux.writes[i]);
-		printf ("Finalize SUB %i   Size %i  Rem %i\n", aux.writes[i], size, remove);
+		//		printf ("Finalize SUB %i   Size %i  Rem %i\n", aux.writes[i], size, remove);
 		rels[i].addend = aux.writes[i];
 	      }
 	      break;
