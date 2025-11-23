@@ -145,7 +145,13 @@ void T8xxFrameLowering::emitPrologue(MachineFunction &MF,
 
   // If not stack alignment is needed, skip rest of prologue
   if ((FixedStackSize + StackSize) == 0) {
-    return;
+    // Note: This is required when a short function without additional
+    // stack requirements calls another function. The return address
+    // is stored on the stack and is overwritten!
+    // TODO: Optimization could include a check whether any functions are called
+    // within this function.
+    StackSize = 4;
+    //    return;
   }
 
   // Attempt to adjust stack offset
@@ -265,7 +271,13 @@ void T8xxFrameLowering::emitEpilogue(MachineFunction &MF,
   uint64_t OffsetAdj = MFI.getOffsetAdjustment ();
 
   if ((FixedStackSize + StackSize) == 0) {
-    return;
+    // Note: This is required when a short function without additional
+    // stack requirements calls another function. The return address
+    // is stored on the stack and is overwritten!
+    // TODO: Optimization could include a check whether any functions are called
+    // within this function.
+    StackSize = 4;
+    //    return;
   }
 
   // The backend has to take care that the requested alignment is met

@@ -419,8 +419,6 @@ static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
 
   uint32_t req_bytes = calc_pfix_len_pcrel (displace);
 
-  printf ("relaxJump Displace %li\n", displace);
-
   // Relocation is kept as it is
   remove = 8 - req_bytes;
   if (req_bytes < 8)
