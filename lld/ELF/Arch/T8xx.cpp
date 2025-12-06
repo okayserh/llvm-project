@@ -53,7 +53,7 @@ public:
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
 
-  void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const override;
+  void relocateAlloc(InputSection &sec, uint8_t *buf) const override;
   bool relaxOnce(int pass) const override;
   void finalizeRelax(int passes) const override;
 
@@ -309,7 +309,7 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
 }
 
 
-void T8xx::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
+void T8xx::relocateAlloc(InputSection &sec, uint8_t *buf) const {
   uint64_t secAddr = sec.getOutputSection()->addr;
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;

@@ -11,8 +11,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "T8xxMCAsmInfo.h"
-#include "T8xxMCExpr.h"
-//#include "llvm/ADT/Triple.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCStreamer.h"
@@ -39,6 +37,7 @@ T8xxELFMCAsmInfo::T8xxELFMCAsmInfo(const Triple &TheTriple) {
   UsesELFSectionDirectiveForBSS = true;
 }
 
+/*
 const MCExpr*
 T8xxELFMCAsmInfo::getExprForPersonalitySymbol(const MCSymbol *Sym,
                                                unsigned Encoding,
@@ -62,4 +61,15 @@ T8xxELFMCAsmInfo::getExprForFDESymbol(const MCSymbol *Sym,
                                MCSymbolRefExpr::create(Sym, Ctx), Ctx);
   }
   return MCAsmInfo::getExprForFDESymbol(Sym, Encoding, Streamer);
+}
+*/
+
+void T8xxELFMCAsmInfo::printSpecifierExpr(raw_ostream &OS,
+                                           const MCSpecifierExpr &Expr) const {
+  StringRef S = T8xx::getSpecifierName(Expr.getSpecifier());
+  if (!S.empty())
+    OS << '%' << S << '(';
+  printExpr(OS, *Expr.getSubExpr());
+  if (!S.empty())
+    OS << ')';
 }

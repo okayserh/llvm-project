@@ -12,7 +12,6 @@
 
 #include "T8xxInstrInfo.h"
 #include "T8xx.h"
-#include "MCTargetDesc/T8xxMCExpr.h"
 #include "T8xxMachineFunctionInfo.h"
 #include "T8xxSubtarget.h"
 #include "llvm/ADT/STLExtras.h"
@@ -35,9 +34,9 @@ using namespace llvm;
 // Pin the vtable to this file.
 void T8xxInstrInfo::anchor() {}
 
-T8xxInstrInfo::T8xxInstrInfo(T8xxSubtarget &ST)
-    : T8xxGenInstrInfo(T8xx::ADJCALLSTACKDOWN, T8xx::ADJCALLSTACKUP), RI(),
-      Subtarget(ST) {}
+T8xxInstrInfo::T8xxInstrInfo(T8xxSubtarget &STI)
+  : T8xxGenInstrInfo(STI, RegInfo, T8xx::ADJCALLSTACKDOWN, T8xx::ADJCALLSTACKUP),
+    RegInfo(), STI(STI) {}
 
 /// isLoadFromStackSlot - If the specified machine instruction is a direct
 /// load from a stack slot, return the virtual or physical register number of
@@ -305,35 +304,29 @@ T8xxInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
 
 void T8xxInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator I,
-                                 const DebugLoc &DL, MCRegister DestReg,
-                                 MCRegister SrcReg, bool KillSrc,
+                                 const DebugLoc &DL, Register DestReg,
+                                 Register SrcReg, bool KillSrc,
                                  bool RenamableDest, bool RenamableSrc) const {
-  /*
-  const MachineFunction *MF = MBB.getParent();
-  const MachineRegisterInfo &MRI = MF->getRegInfo();
-  const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
-
-  uint16_t hweSrcReg = TRI->getEncodingValue (SrcReg);
-  uint16_t hweDstReg = TRI->getEncodingValue (DestReg);
-  */
 }
 
 void T8xxInstrInfo::
-storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
+storeRegToStackSlot(MachineBasicBlock &MBB,
+		    MachineBasicBlock::iterator I,
                     Register SrcReg, bool isKill, int FI,
                     const TargetRegisterClass *RC,
-                    const TargetRegisterInfo *TRI,
-		    Register VReg) const {
+		    Register VReg,
+		    MachineInstr::MIFlag Flags) const {
   BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::STL)).addReg(SrcReg, getKillRegState(true))
     .addFrameIndex(FI).addImm(0);
 }
 
 void T8xxInstrInfo::
-loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
+loadRegFromStackSlot(MachineBasicBlock &MBB,
+		     MachineBasicBlock::iterator I,
                      Register DestReg, int FI,
                      const TargetRegisterClass *RC,
-                     const TargetRegisterInfo *TRI,
-		     Register VReg) const {
+		     Register VReg,
+		     MachineInstr::MIFlag Flags) const {
   if (RC == &T8xx::ORegRegClass)
     BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL), DestReg).addFrameIndex(FI).addImm(0);
   else
@@ -571,9 +564,9 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 
       // Load offset to global address into AREG and correct by bytecount of LDPI and GCALL
       if (MI.getOperand(0).isGlobal ())
-	BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addGlobalAddress(MI.getOperand(0).getGlobal (), 0, T8xxMCExpr::VK_T8xx_GLOBAL);
+	BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addGlobalAddress(MI.getOperand(0).getGlobal (), 0, T8xxII::MO_GLOBAL);
       if (MI.getOperand(0).isSymbol ())
-	BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addExternalSymbol(MI.getOperand(0).getSymbolName (), T8xxMCExpr::VK_T8xx_GLOBAL);
+	BuildMI (MBB, MI, DL, get(T8xx::LDC), T8xx::AREG).addExternalSymbol(MI.getOperand(0).getSymbolName (), T8xxII::MO_GLOBAL);
 
       BuildMI (MBB, MI, DL, get(T8xx::GCALL), T8xx::ABREG).addReg(T8xx::AREG);
       BuildMI (MBB, MI, DL, get(T8xx::REV), T8xx::AREG).addReg(T8xx::ABREG);

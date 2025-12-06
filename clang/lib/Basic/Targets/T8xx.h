@@ -41,8 +41,9 @@ public:
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override;
 
-  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
-    return std::nullopt;
+  llvm::SmallVector<Builtin::InfosShard> getTargetBuiltins() const override {
+    // FIXME: Implement!
+    return {};
   }
 
   BuiltinVaListKind getBuiltinVaListKind() const override {
@@ -60,7 +61,17 @@ public:
   }
 
   ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
-    return std::nullopt;
+    // FIXME: Does not make sens, since there's not real GCC equivalent for T8xx
+    static const TargetInfo::GCCRegAlias O32RegAliases[] = {
+        {{"r0"}, "r0"},  {{"r1"}, "r1"},         {{"r2"}, "r2"},
+        {{"r3"}, "r3"},  {{"r4"}, "r4"},         {{"r5"}, "r5"},
+        {{"r6"}, "r6"},  {{"r7"}, "r7"},         {{"r8"}, "r8"},
+        {{"r9"}, "r9"},  {{"r10"}, "r10"},       {{"r11"}, "r11"},
+        {{"r12"}, "r12"}, {{"r13"}, "r13"},      {{"r14"}, "r14"},
+        {{"r15"}, "r15"}, {{"FAreg"}, "FAreg"},  {{"FBreg"}, "FBreg"},
+        {{"FCreg"}, "FCreg"}
+    };
+    return llvm::ArrayRef(O32RegAliases);
   }
 
   bool validateAsmConstraint(const char *&Name,

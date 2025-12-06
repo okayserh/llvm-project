@@ -77,6 +77,7 @@ namespace llvm {
     int getMoveSlot() const { return MoveStackSlot; }
 
     // Copied from WebAssemblyMachineFunctionInfo.h
+    /*
     void stackifyVReg(MachineRegisterInfo &MRI, unsigned VReg) {
       assert(MRI.getUniqueVRegDef(VReg));
       auto I = Register::virtReg2Index(VReg);
@@ -95,7 +96,7 @@ namespace llvm {
 	return false;
       return VRegStackified.test(I);
     }
-
+    */
 
   };
 }

@@ -13,7 +13,6 @@
 
 #include "T8xxAsmPrinter.h"
 #include "MCTargetDesc/T8xxInstPrinter.h"
-#include "MCTargetDesc/T8xxMCExpr.h"
 #include "MCTargetDesc/T8xxTargetStreamer.h"
 #include "T8xx.h"
 #include "T8xxInstrInfo.h"
@@ -64,9 +63,16 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
                                    raw_ostream &O) {
   const DataLayout &DL = getDataLayout();
   const MachineOperand &MO = MI->getOperand (opNum);
-  T8xxMCExpr::VariantKind TF = (T8xxMCExpr::VariantKind) MO.getTargetFlags();
 
-  bool CloseParen = T8xxMCExpr::printVariantKind(O, TF);
+  bool closeP = false;
+  if (MO.getTargetFlags ())
+    closeP = true;
+
+  switch (MO.getTargetFlags()) {
+  case T8xxII::MO_GLOBAL:    O << "%global("; break;
+  case T8xxII::MO_IPTRREL:   O << "%iptr_jmp("; break;
+  case T8xxII::MO_PCREL_SYM: O << "%iptr_sym("; break;
+  }
 
   switch (MO.getType()) {
   case MachineOperand::MO_Register:
@@ -78,7 +84,6 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
     break;
 
   case MachineOperand::MO_Immediate:
-    LLVM_DEBUG(dbgs() << "MO Immediate" << MO.getImm ());
     O << MO.getImm();
     break;
   case MachineOperand::MO_MachineBasicBlock:
@@ -103,7 +108,8 @@ void T8xxAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
   default:
     llvm_unreachable("<unknown operand type>");
   }
-  if (CloseParen) O << ")";
+
+  if (closeP) O << ")";
 }
 
 void T8xxAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,

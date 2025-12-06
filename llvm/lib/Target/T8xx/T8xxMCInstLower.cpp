@@ -13,7 +13,6 @@
 
 #include "T8xx.h"
 #include "T8xxAsmPrinter.h"
-#include "MCTargetDesc/T8xxMCExpr.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -32,11 +31,10 @@ using namespace llvm;
 
 MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
 
-  T8xxMCExpr::VariantKind Kind =
-    (T8xxMCExpr::VariantKind)MO.getTargetFlags();
+  unsigned TargetFlags = MO.getTargetFlags();
   const MCSymbol *Symbol = nullptr;
 
-  LLVM_DEBUG(dbgs() << "LowerSymbolOperand Kind " << (int)Kind <<
+  LLVM_DEBUG(dbgs() << "LowerSymbolOperand TargetFlags " << TargetFlags <<
 	     "  Type " << (int)MO.getType() << "\n");
   
   switch(MO.getType()) {
@@ -67,13 +65,18 @@ MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
   }
 
   // Attempt to create proper symbols
-  if (Kind == T8xxMCExpr::VK_T8xx_None)
-    {
-      MCSymbolRefExpr::VariantKind Kind2 = MCSymbolRefExpr::VK_None;
-      const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, Kind2, OutContext);
+
+  // TODO: See how this code translates in the new LLVM structure
+  
+  //  if (Kind == T8xxMCExpr::VK_T8xx_None)
+  //    {
+  //    MCSymbolRefExpr::VariantKind Kind2 = MCSymbolRefExpr::VK_None;
+      const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, OutContext);
       return MCOperand::createExpr(Expr);
-    }
-  else
+//    }
+
+    /*
+   else
     {
       const MCSymbolRefExpr *MCSym = MCSymbolRefExpr::create(Symbol,
                                                          OutContext);
@@ -81,6 +84,7 @@ MCOperand T8xxAsmPrinter::LowerSymbolOperand(const MachineOperand &MO) {
 						  OutContext);
       return MCOperand::createExpr(expr);
     }
+  */
 }
 
 bool T8xxAsmPrinter::lowerOperand(const MachineOperand &MO,

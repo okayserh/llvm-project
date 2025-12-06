@@ -39,7 +39,7 @@ def FPERRREG : T8xxReg<8, "FPERR">, DwarfRegNum<[27]>;
 
 // Floating Point Rounding Mode (2 Bit register,
 // ToNearest, ToZero, ToPlusInfinity, ToMinusInfinity)
-def FPRMREG : T8xxReg<8, "FPROUND">, DwarfRegNum<[27]>;
+def FPRMREG : T8xxReg<9, "FPROUND">, DwarfRegNum<[28]>;
 
 // Register classes.
 

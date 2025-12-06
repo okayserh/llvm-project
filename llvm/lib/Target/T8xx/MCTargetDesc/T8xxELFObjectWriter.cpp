@@ -9,9 +9,9 @@
 #include "MCTargetDesc/T8xxFixupKinds.h"
 #include "MCTargetDesc/T8xxMCExpr.h"
 #include "MCTargetDesc/T8xxMCTargetDesc.h"
-#include "llvm/ADT/STLExtras.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCELFObjectWriter.h"
-#include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -29,34 +29,46 @@ namespace {
     ~T8xxELFObjectWriter() override = default;
 
   protected:
-    unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
-                          const MCFixup &Fixup, bool IsPCRel) const override;
+    unsigned getRelocType(const MCFixup &, const MCValue &,
+                          bool IsPCRel) const override;
 
-    bool needsRelocateWithSymbol(const MCValue & Val, const MCSymbol &Sym,
+    bool needsRelocateWithSymbol(const MCValue & Val,
                                  unsigned Type) const override;
 
   };
 }
 
-unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
-                                            const MCValue &Target,
-                                            const MCFixup &Fixup,
-                                            bool IsPCRel) const {
+unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
+                                           const MCValue &Target,
+                                           bool IsPCRel) const {
   MCFixupKind Kind = Fixup.getKind();
-  if (Kind >= FirstLiteralRelocationKind)
-    return Kind - FirstLiteralRelocationKind;
+  auto Spec = Target.getSpecifier();
 
-  //  printf ("getRelocType %i\n", (int)Kind);
+  // Note: Other backends filter for TLS and set the symbol type accordingly
+  
+  if (mc::isRelocation(Kind))
+    return Kind;
 
-  if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Fixup.getValue())) {
+  // Reference code from SparcELFObjectwriter
+  /*
+  if (const auto *SExpr = dyn_cast<MCSpecifierExpr>(Fixup.getValue())) {
+    if (SExpr->getSpecifier() == ELF::R_SPARC_DISP32)
+      return ELF::R_SPARC_DISP32;
+  }
+  */
+
+  /* Old code
+    if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Fixup.getValue())) {
     if (SExpr->getKind() == T8xxMCExpr::VK_T8xx_IPTRREL)
       return ELF::R_T8XX_ADDR;
-  }
+      }
+  */
 
   if (IsPCRel) {
-    switch(Fixup.getTargetKind()) {
+    switch(Kind) {
     default:
       llvm_unreachable("Unimplemented fixup -> relocation");
+      return  ELF::R_T8XX_NONE;
     case FK_Data_1:                  return ELF::R_T8XX_ADDR;
     case FK_Data_2:                  return ELF::R_T8XX_ADDR;
     case FK_Data_4:                  return ELF::R_T8XX_ADDR_NPFIX;
@@ -66,13 +78,12 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
       // some of these relocations are not PC relative. Needs to be ordered properly.
       //    case T8xx::fixup_t8xx_pcrel_sym: return ELF::R_T8XX_LDPI_SYM;
     case T8xx::fixup_t8xx_jump: return ELF::R_T8XX_JUMP;
-
     case T8xx::fixup_t8xx_pcrel_sym: return ELF::R_T8XX_LDPI_SYM;
 
     }
   }
 
-  switch(Fixup.getTargetKind()) {
+  switch(Fixup.getKind()) {
   default:
     llvm_unreachable("Unimplemented fixup -> relocation");
   case FK_NONE:                  return ELF::R_T8XX_NONE;
@@ -99,7 +110,6 @@ unsigned T8xxELFObjectWriter::getRelocType(MCContext &Ctx,
 }
 
 bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCValue &/*Val*/,
-						  const MCSymbol &/*Sym*/,
                                                  unsigned Type) const {
   switch (Type) {
     default:

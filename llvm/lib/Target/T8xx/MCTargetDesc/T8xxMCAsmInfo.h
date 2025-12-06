@@ -25,15 +25,23 @@ class T8xxELFMCAsmInfo : public MCAsmInfoELF {
 public:
   explicit T8xxELFMCAsmInfo(const Triple &TheTriple);
 
+  /*
   const MCExpr*
   getExprForPersonalitySymbol(const MCSymbol *Sym, unsigned Encoding,
                               MCStreamer &Streamer) const override;
   const MCExpr* getExprForFDESymbol(const MCSymbol *Sym,
                                     unsigned Encoding,
                                     MCStreamer &Streamer) const override;
-
+  */
+  void printSpecifierExpr(raw_ostream &OS,
+                          const MCSpecifierExpr &Expr) const override;
 };
 
+namespace T8xx {
+uint16_t parseSpecifier(StringRef name);
+StringRef getSpecifierName(uint16_t S);
+} // namespace Sparc
+  
 } // end namespace llvm
 
 #endif // LLVM_LIB_TARGET_T8XX_MCTARGETDESC_T8XXMCASMINFO_H

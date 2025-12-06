@@ -61,6 +61,8 @@ def T8xxAsmWriter : AsmWriter {
   int Variant = 0;
 }
 
+defm : RemapAllTargetPseudoPointerOperands<OReg>;
+
 def T8xx : Target {
   // Pull in Instruction Info:
   let InstructionSet = T8xxInstrInfo;

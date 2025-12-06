@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "T8xxISelLowering.h"
-#include "MCTargetDesc/T8xxMCExpr.h"
 #include "T8xxMachineFunctionInfo.h"
 #include "T8xxRegisterInfo.h"
 #include "T8xxTargetMachine.h"
@@ -99,19 +98,19 @@ static bool isCMOVPseudo(MachineInstr &MI) {
 
 T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
                                          const T8xxSubtarget &STI)
-    : TargetLowering(TM), Subtarget(&STI) {
+  : TargetLowering(TM, STI), Subtarget(STI) {
   MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
 
   // Set up the register classes.
   addRegisterClass(MVT::i32, &T8xx::ORegRegClass);
 
-  if (Subtarget->useFPU ())
+  if (Subtarget.useFPU ())
     {
       addRegisterClass(MVT::f32, &T8xx::FPRegRegClass);
       addRegisterClass(MVT::f64, &T8xx::DFPRegRegClass);
     }
 
-  computeRegisterProperties(Subtarget->getRegisterInfo());
+  computeRegisterProperties(Subtarget.getRegisterInfo());
 
   for (auto VT : MVT::integer_valuetypes()) {
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
@@ -129,7 +128,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setMinFunctionAlignment(Align(4));
 
   // TODO: Test ...
-  if (Subtarget->useFPU ())
+  if (Subtarget.useFPU ())
     {
       // Transputer does not have floating-point extending loads.
       for (MVT VT : MVT::fp_valuetypes()) {
@@ -227,7 +226,7 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   // ATOMIC Operations seem to "kill" the build.
   /*
   setOperationAction(ISD::ATOMIC_FENCE,   MVT::Other,
-                       Subtarget->hasAnyDataBarrier() ? Custom : Expand);
+                       Subtarget.hasAnyDataBarrier() ? Custom : Expand);
 
     // Set them all for libcall, which will force libcalls.
     setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i32, LibCall);
@@ -293,17 +292,17 @@ If you're developing an LLVM backend for a new architecture, you would implement
 }
 
 bool T8xxTargetLowering::useSoftFloat() const {
-  if (Subtarget->useSoftFloat ())
+  if (Subtarget.useSoftFloat ())
     LLVM_DEBUG(dbgs() << "use Softfloat : true\n");
   else
     LLVM_DEBUG(dbgs() << "use Softfloat : false\n");
 
-  if (Subtarget->useFPU ())
+  if (Subtarget.useFPU ())
     LLVM_DEBUG(dbgs() << "use FPU : true\n");
   else
     LLVM_DEBUG(dbgs() << "use FPU : false\n");
 
-  return Subtarget->useSoftFloat();
+  return Subtarget.useSoftFloat();
 }
 
 
@@ -692,7 +691,7 @@ SDValue T8xxTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) co
   // TODO: Just a first try to see how things work.
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
-  Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32, 0, T8xxMCExpr::VK_T8xx_GLOBAL);
+  Result = DAG.getTargetGlobalAddress(GlobalAddr->getGlobal(), SDLoc(Op), MVT::i32, 0, T8xxII::MO_GLOBAL);
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
 
   if (Offset != 0)
@@ -724,7 +723,7 @@ SDValue T8xxTargetLowering::LowerConstantPool(SDValue Op, SelectionDAG& DAG) con
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
   Result = DAG.getTargetConstantPool(CP->getConstVal(), CP->getValueType(0),
-				     CP->getAlign(), CP->getOffset(), T8xxMCExpr::VK_T8xx_SYMREL);
+				     CP->getAlign(), CP->getOffset(), T8xxII::MO_PCREL_SYM);
 
   EVT VT = Op.getValueType();
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
@@ -745,7 +744,7 @@ SDValue T8xxTargetLowering::LowerJumpTable(SDValue Op, SelectionDAG& DAG) const
   // TODO: Just a first try to see how things work.
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
-  Result = DAG.getTargetJumpTable(CP->getIndex(), CP->getValueType(0), T8xxMCExpr::VK_T8xx_SYMREL);
+  Result = DAG.getTargetJumpTable(CP->getIndex(), CP->getValueType(0), T8xxII::MO_PCREL_SYM);
 
   EVT VT = getPointerTy(DAG.getDataLayout ());
   Result = DAG.getNode(T8xxISD::LOAD_SYM,
@@ -768,7 +767,7 @@ SDValue T8xxTargetLowering::LowerBlockAddress(SDValue Op, SelectionDAG& DAG) con
   // Ideally a later version should be able to build position independent code as well
   // as code for a fixed address.
   Result = DAG.getTargetBlockAddress(CP->getBlockAddress(), CP->getValueType(0),
-				     CP->getOffset (), T8xxMCExpr::VK_T8xx_GLOBAL);
+				     CP->getOffset (), T8xxII::MO_GLOBAL);
 
   EVT VT = Op.getValueType();
   Result = DAG.getNode(T8xxISD::LOAD_SYM, SDLoc(Op), VT, Result);
@@ -783,7 +782,7 @@ SDValue T8xxTargetLowering::LowerBlockAddress(SDValue Op, SelectionDAG& DAG) con
 MachineBasicBlock *
 T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
                                       MachineBasicBlock *MBB) const {
-  const TargetInstrInfo *TII = Subtarget->getInstrInfo();
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   LLVM_DEBUG({
@@ -909,7 +908,7 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
 MachineBasicBlock *
 T8xxTargetLowering::EmitLoweredFPSetCC(MachineInstr &MI,
 				       MachineBasicBlock *MBB) const {
-  const TargetInstrInfo *TII = Subtarget->getInstrInfo();
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   LLVM_DEBUG({
@@ -1224,12 +1223,12 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
     {
       LLVM_DEBUG(dbgs() << "Lower Call: GlobalAddressSDNode\n");
-      Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0, T8xxMCExpr::VK_T8xx_IPTRREL);
+      Callee = DAG.getTargetGlobalAddress(G->getGlobal(), Loc, MVT::i32, 0, T8xxII::MO_IPTRREL);
     }
   else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee))
     {
       LLVM_DEBUG(dbgs() << "Lower Call: ExternalSymbolSDNode\n");
-      Callee = DAG.getTargetExternalSymbol(E->getSymbol(), MVT::i32, T8xxMCExpr::VK_T8xx_IPTRREL);
+      Callee = DAG.getTargetExternalSymbol(E->getSymbol(), MVT::i32, T8xxII::MO_IPTRREL);
     }
 
   std::vector<SDValue> Ops;
@@ -1408,7 +1407,8 @@ SDValue T8xxTargetLowering::LowerFormalArguments(
 
 bool T8xxTargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool isVarArg,
-    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {
+    const SmallVectorImpl<ISD::OutputArg> &Outs,
+    LLVMContext &Context, const Type *RetTy) const {
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg, MF, RVLocs, Context);
   return CCInfo.CheckReturn(Outs, RetCC_T8xx32);

@@ -36,8 +36,8 @@ namespace llvm {
       fixup_t8xx_align,
 
       // Marker
-      LastTargetFixupKind,
-      NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind
+      fixup_t8xx_invalid,
+      NumTargetFixupKinds = fixup_t8xx_invalid - FirstTargetFixupKind
     };
   }
 }

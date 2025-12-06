@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "T8xxTargetObjectFile.h"
-#include "MCTargetDesc/T8xxMCExpr.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
 #include "llvm/CodeGen/TargetLowering.h"
@@ -31,6 +30,7 @@ bool T8xxELFTargetObjectFile::shouldPutJumpTableInFunctionSection(bool UsesLabel
 }
 
 
+/*
 const MCExpr *T8xxELFTargetObjectFile::getTTypeGlobalReference(
     const GlobalValue *GV, unsigned Encoding, const TargetMachine &TM,
     MachineModuleInfo *MMI, MCStreamer &Streamer) const {
@@ -58,3 +58,4 @@ const MCExpr *T8xxELFTargetObjectFile::getTTypeGlobalReference(
   return TargetLoweringObjectFileELF::getTTypeGlobalReference(GV, Encoding, TM,
                                                               MMI, Streamer);
 }
+*/

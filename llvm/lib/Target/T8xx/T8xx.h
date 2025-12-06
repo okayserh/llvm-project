@@ -14,8 +14,7 @@
 #ifndef LLVM_LIB_TARGET_T8XX_T8XX_H
 #define LLVM_LIB_TARGET_T8XX_T8XX_H
 
-#include "MCTargetDesc/T8xxMCTargetDesc.h"
-#include "llvm/Support/ErrorHandling.h"
+#include "MCTargetDesc/T8xxBaseInfo.h"
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {

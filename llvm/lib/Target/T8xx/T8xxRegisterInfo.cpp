@@ -58,8 +58,7 @@ BitVector T8xxRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 }
 
 const TargetRegisterClass*
-T8xxRegisterInfo::getPointerRegClass(const MachineFunction &MF,
-                                      unsigned Kind) const {
+T8xxRegisterInfo::getPointerRegClass(unsigned Kind) const {
   // The T8xx has only two types of registers. The integer
   // operand stack and the floating point operand stack.
   // Thus, the integer operand stack is used for pointers.

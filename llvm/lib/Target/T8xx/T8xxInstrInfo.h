@@ -13,6 +13,7 @@
 #ifndef LLVM_LIB_TARGET_T8XX_T8XXINSTRINFO_H
 #define LLVM_LIB_TARGET_T8XX_T8XXINSTRINFO_H
 
+#include "T8xx.h"
 #include "T8xxRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 
@@ -23,10 +24,10 @@ namespace llvm {
 
 class T8xxSubtarget;
 
-/// SPII - This namespace holds all of the target specific flags that
+/// T8xxII - This namespace holds all of the target specific flags that
 /// instruction info tracks.
 ///
-namespace SPII {
+namespace T8xxII {
   enum {
     Pseudo = (1<<0),
     Load = (1<<1),
@@ -37,8 +38,8 @@ namespace SPII {
 
 
 class T8xxInstrInfo : public T8xxGenInstrInfo {
-  const T8xxRegisterInfo RI;
-  const T8xxSubtarget& Subtarget;
+  const T8xxRegisterInfo RegInfo;
+  const T8xxSubtarget& STI;
   virtual void anchor();
 
   void storeRegStack (MachineInstr &MI, const unsigned int OpNum,
@@ -48,13 +49,13 @@ class T8xxInstrInfo : public T8xxGenInstrInfo {
 			const bool negate, const bool diff) const;
 
 public:
-  explicit T8xxInstrInfo(T8xxSubtarget &ST);
+  explicit T8xxInstrInfo(T8xxSubtarget &STI);
 
   /// getRegisterInfo - TargetInstrInfo is a superset of MRegister info.  As
   /// such, whenever a client has an instance of instruction info, it should
   /// always be able to get register info as well (through this method).
   ///
-  const T8xxRegisterInfo &getRegisterInfo() const { return RI; }
+  const T8xxRegisterInfo &getRegisterInfo() const { return RegInfo; }
 
   /// isLoadFromStackSlot - If the specified machine instruction is a direct
   /// load from a stack slot, return the virtual or physical register number of
@@ -90,7 +91,7 @@ public:
 
 
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
-                   const DebugLoc &DL, MCRegister DestReg, MCRegister SrcReg,
+                   const DebugLoc &DL, Register DestReg, Register SrcReg,
                    bool KillSrc, bool RenamableDest = false,
                    bool RenamableSrc = false) const override;
 
@@ -98,15 +99,15 @@ public:
                            MachineBasicBlock::iterator MBBI,
                            Register SrcReg, bool isKill, int FrameIndex,
                            const TargetRegisterClass *RC,
-                           const TargetRegisterInfo *TRI,
-			   Register VReg) const override;
+			   Register VReg,
+			   MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
 
   void loadRegFromStackSlot(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator MBBI,
                             Register DestReg, int FrameIndex,
                             const TargetRegisterClass *RC,
-                            const TargetRegisterInfo *TRI,
-			    Register VReg) const override;
+			    Register VReg,
+			    MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
 
   // Lower pseudo instructions after register allocation.
   bool expandPostRAPseudo(MachineInstr &MI) const override;

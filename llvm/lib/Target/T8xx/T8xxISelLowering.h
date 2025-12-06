@@ -47,7 +47,7 @@ namespace llvm {
   }
 
   class T8xxTargetLowering : public TargetLowering {
-    const T8xxSubtarget *Subtarget;
+    const T8xxSubtarget &Subtarget;
   public:
     T8xxTargetLowering(const TargetMachine &TM, const T8xxSubtarget &STI);
 
@@ -103,7 +103,7 @@ namespace llvm {
     bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
                         bool isVarArg,
                         const SmallVectorImpl<ISD::OutputArg> &Outs,
-                        LLVMContext &Context) const override;
+                        LLVMContext &Context, const Type *RetTy) const override;
 
     //    SDValue LowerFMUL(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSTORE(SDValue Op, SelectionDAG &DAG) const;

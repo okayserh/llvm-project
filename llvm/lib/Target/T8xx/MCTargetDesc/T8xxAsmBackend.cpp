@@ -14,7 +14,6 @@
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCValue.h"
@@ -86,10 +85,6 @@ namespace {
       : MCAsmBackend(llvm::endianness::little),
           TheTarget(T), Is64Bit(false) {}
 
-    unsigned getNumFixupKinds() const override {
-      return T8xx::NumTargetFixupKinds;
-    }
-
     std::optional<MCFixupKind> getFixupKind(StringRef Name) const override {
       unsigned Type;
       Type = llvm::StringSwitch<unsigned>(Name)
@@ -105,30 +100,34 @@ namespace {
       return static_cast<MCFixupKind>(FirstLiteralRelocationKind + Type);
     }
 
-    const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override {
-      const static MCFixupKindInfo Infos[T8xx::NumTargetFixupKinds] = {
+    MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override {
+      const static MCFixupKindInfo Infos[] = {
+      // This table *must* be in the order that the fixup_* kinds are defined in
+      // T8xxFixupKinds.h.
+      //
         // name                offset bits  flags
         { "fixup_t8xx_addr",    0,      64,  0},
         { "fixup_t8xx_addr_npfix",0,    32,  0},
-        { "fixup_t8xx_jump",    0,      64,  MCFixupKindInfo::FKF_IsPCRel },
-        { "fixup_t8xx_pcrel_sym", 0,    64,  MCFixupKindInfo::FKF_IsPCRel },
+        { "fixup_t8xx_jump",    0,      64,  0},
+        { "fixup_t8xx_pcrel_sym", 0,    64,  0},
         { "fixup_t8xx_addr_base", 0,    64,  0},
         { "fixup_t8xx_addr_add", 0,    64,  0},
         { "fixup_t8xx_addr_sub", 0,    64,  0},
         { "fixup_t8xx_align",    0,     0,  0},
       };
+      static_assert((std::size(Infos)) == T8xx::NumTargetFixupKinds,
+		    "Not all fixup kinds added to Infos array");
 
       // Fixup kinds from .reloc directive are like R_SPARC_NONE. They do
       // not require any extra processing.
-      if (Kind >= FirstLiteralRelocationKind)
-        return MCAsmBackend::getFixupKindInfo(FK_NONE);
+      if (mc::isRelocation(Kind))
+	return {};
 
       if (Kind < FirstTargetFixupKind)
         return MCAsmBackend::getFixupKindInfo(Kind);
 
-      assert(unsigned(Kind - FirstTargetFixupKind) < getNumFixupKinds() &&
+      assert(unsigned(Kind - FirstTargetFixupKind) < T8xx::NumTargetFixupKinds &&
              "Invalid kind!");
-
       return Infos[Kind - FirstTargetFixupKind];
     }
 
@@ -137,10 +136,9 @@ namespace {
     // This is called from MCAssembler.evaluateFixup. If this target specific
     // method returns "true", the relocation is presumably left for the linker!
     //
-
-    bool shouldForceRelocation(const MCAssembler &Asm, const MCFixup &Fixup,
-                               const MCValue &Target,
-			       const MCSubtargetInfo *STI) override {
+    /*
+    bool shouldForceRelocation(const MCFixup &Fixup,
+                               const MCValue &Target) override {
       if (Fixup.getKind() >= FirstLiteralRelocationKind)
         return true;
       switch ((T8xx::Fixups)Fixup.getKind()) {
@@ -157,10 +155,10 @@ namespace {
 	return true;
       }
     }
-
+    */
 
     // Relaxation is completely handled in the linker
-    bool mayNeedRelaxation(const MCInst &Inst,
+    bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
 			   const MCSubtargetInfo &STI) const override {
       return false;
     }
@@ -168,11 +166,10 @@ namespace {
 
     /// Target specific predicate for whether a given fixup requires the
     /// associated instruction to be relaxed.
-    bool fixupNeedsRelaxationAdvanced(const MCAssembler &Asm,
-                                            const MCFixup &Fixup, bool Resolved,
-                                            uint64_t Value,
-                                            const MCRelaxableFragment *DF,
-                                            const bool WasForced) const override
+    bool fixupNeedsRelaxationAdvanced(const MCFragment &,
+				      const MCFixup &Fixup,
+				      const MCValue &, uint64_t Value,
+				      bool Resolved) const override
     {
       int64_t Offset = int64_t(Value);
       printf ("fixupAdvanced %li", Offset);
@@ -197,7 +194,7 @@ namespace {
 
     bool fixupNeedsRelaxation(const MCFixup &Fixup,
                                     uint64_t Value) const override {
-      printf ("Fixup needs relax %i  %lu\n", (int)Fixup.getTargetKind (), Value);
+      //      printf ("Fixup needs relax %i  %lu\n", (int)Fixup.getTargetKind (), Value);
       int64_t Offset = int64_t(Value);
 
       return false;
@@ -216,7 +213,7 @@ namespace {
       return true;
     }
 
-
+    /*
     // Linker relaxation may change code size. We have to insert Nops
     // for .align directive when linker relaxation enabled. So then Linker
     // could satisfy alignment by removing Nops.
@@ -261,6 +258,8 @@ namespace {
       return true;
     }
 
+    */
+
   };
 
   class ELFT8xxAsmBackend : public T8xxAsmBackend {
@@ -269,10 +268,9 @@ namespace {
     ELFT8xxAsmBackend(const Target &T, Triple::OSType OSType) :
       T8xxAsmBackend(T), OSType(OSType) { }
 
-    void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
-                    const MCValue &Target, MutableArrayRef<char> Data,
-                    uint64_t Value, bool IsResolved,
-                    const MCSubtargetInfo *STI) const override {
+    void applyFixup(const MCFragment &, const MCFixup &Fixup,
+                    const MCValue &Target,
+		    uint8_t *Data, uint64_t Value, bool IsResolved) override {
 
       if (Fixup.getKind() >= FirstLiteralRelocationKind)
         return;
@@ -308,5 +306,7 @@ MCAsmBackend *llvm::createT8xxAsmBackend(const Target &T,
                                           const MCSubtargetInfo &STI,
                                           const MCRegisterInfo &MRI,
                                           const MCTargetOptions &Options) {
+  const Triple &TT = STI.getTargetTriple();
+  uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TT.getOS());
   return new ELFT8xxAsmBackend(T, STI.getTargetTriple().getOS());
 }

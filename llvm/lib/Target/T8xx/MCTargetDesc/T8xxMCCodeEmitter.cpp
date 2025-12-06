@@ -99,8 +99,26 @@ public:
 
 
 };
-
 } // end anonymous namespace
+
+
+MCCodeEmitter *llvm::createT8xxMCCodeEmitter(const MCInstrInfo &MCII,
+                                              MCContext &Ctx) {
+  // Endianess to be determined. In "T8xxTargetMachine", big endian "E" is specified
+  // little endian would be "e".
+  return new T8xxMCCodeEmitter(MCII, Ctx, false);
+}
+
+static void addFixup(SmallVectorImpl<MCFixup> &Fixups, uint32_t Offset,
+                     const MCExpr *Value, uint16_t Kind) {
+  bool PCRel = false;
+  switch (Kind) {
+  case T8xx::fixup_t8xx_jump:
+  case T8xx::fixup_t8xx_pcrel_sym:
+    PCRel = true;
+  }
+  Fixups.push_back(MCFixup::create(Offset, Value, Kind, PCRel));
+}
 
 void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
                                            SmallVectorImpl<char> &CB,
@@ -230,17 +248,17 @@ getExprOpValue(const MCInst &MI,
       case MCBinaryExpr::Opcode::Add:
 	{
 	  MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_addr_base);
-	  Fixups.push_back(MCFixup::create(0, BinExpr->getLHS(), Kind, MI.getLoc()));
+	  addFixup(Fixups, 0, BinExpr->getLHS(), Kind);
 	  Kind = MCFixupKind(T8xx::fixup_t8xx_addr_add);
-	  Fixups.push_back(MCFixup::create(0, BinExpr->getRHS(), Kind, MI.getLoc()));
+	  addFixup(Fixups, 0, BinExpr->getRHS(), Kind);
 	}
 	break;
       case MCBinaryExpr::Opcode::Sub:
 	{
 	  MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_addr_base);
-	  Fixups.push_back(MCFixup::create(0, BinExpr->getLHS(), Kind, MI.getLoc()));
+	  addFixup(Fixups, 0, BinExpr->getLHS(), Kind);
 	  Kind = MCFixupKind(T8xx::fixup_t8xx_addr_sub);
-	  Fixups.push_back(MCFixup::create(0, BinExpr->getRHS(), Kind, MI.getLoc()));
+	  addFixup(Fixups, 0, BinExpr->getRHS(), Kind);
 	}
 	break;
 
@@ -273,7 +291,7 @@ getExprOpValue(const MCInst &MI,
       case T8xxMCExpr::VK_T8xx_SYMREL:
 	{
 	  FixupKind = T8xx::fixup_t8xx_pcrel_sym;
-    	  Fixups.push_back(MCFixup::create(0, T8xxExpr, MCFixupKind(FixupKind), MI.getLoc()));
+	  addFixup(Fixups, 0, T8xxExpr, MCFixupKind(FixupKind));
 	  return (0);
 	  printf ("Target Expr: T8xx_SYMREL\n");
 	}
@@ -281,7 +299,7 @@ getExprOpValue(const MCInst &MI,
       case T8xxMCExpr::VK_T8xx_GLOBAL:
 	{
 	  FixupKind = T8xx::fixup_t8xx_addr;
-    	  Fixups.push_back(MCFixup::create(0, T8xxExpr, MCFixupKind(FixupKind), MI.getLoc()));
+	  addFixup(Fixups, 0, T8xxExpr, MCFixupKind(FixupKind));
 	  return (0);
 	}
 	printf ("Target Expr: T8xx_GLOBAL\n");
@@ -316,18 +334,8 @@ getExprOpValue(const MCInst &MI,
 
   if (Kind == MCExpr::SymbolRef)
     {
-      const MCSymbolRefExpr *SymRef = cast<MCSymbolRefExpr>(Expr);
-      switch (SymRef->getKind ())
-	{
-	case MCSymbolRefExpr::VariantKind::VK_None:
-	  {
-	    MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_addr);
-	    Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
-	  }
-	  break;
-	default:
-	  Ctx.reportError(Expr->getLoc(), "unhandled symbol type");
-	}
+      MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_addr);
+      addFixup(Fixups, 0, Expr, Kind);
     }
   return 0;
 }
@@ -376,17 +384,9 @@ getCallTargetOpValue(const MCInst &MI, unsigned OpNo,
   const MCExpr *Expr = MO.getExpr();
 
   MCFixupKind Kind = MCFixupKind(T8xx::fixup_t8xx_jump);
-  Fixups.push_back(MCFixup::create(0, Expr, Kind, MI.getLoc()));
+  addFixup(Fixups, 0, Expr, Kind);
 
   return 0;
 }
 
-
 #include "T8xxGenMCCodeEmitter.inc"
-
-MCCodeEmitter *llvm::createT8xxMCCodeEmitter(const MCInstrInfo &MCII,
-                                              MCContext &Ctx) {
-  // Endianess to be determined. In "T8xxTargetMachine", big endian "E" is specified
-  // little endian would be "e".
-  return new T8xxMCCodeEmitter(MCII, Ctx, false);
-}

@@ -94,6 +94,7 @@ class T8InstImm<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> patte
    let DecoderMethod = "decodeImm";
 }
 
+/*
 class T8InstImmP8<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
    : T8Inst16<outs, ins, asmstr, pattern> {
    bits<8> imm;
@@ -226,7 +227,7 @@ class T8InstImmP32<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pa
    let DecoderMethod = "decodeImm";
    let DecoderNamespace = "PFIX7";
 }
-
+*/
 
 class T8InstOp4<bits<4> opval2, dag outs, dag ins, string asmstr, list<dag> pattern>
    : T8Inst8<outs, ins, asmstr, pattern> {
@@ -254,6 +255,7 @@ class T8InstFPU4<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> patt
    let Inst{19- 16} = opval;
    let Inst{15-  8} = 0x2A;
    let Inst{7 -  0} = 0xFB;
+   let DecoderMethod = "decodeRegStack";
 }
 
 class T8InstFPU8<bits<8> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
@@ -264,4 +266,5 @@ class T8InstFPU8<bits<8> opval, dag outs, dag ins, string asmstr, list<dag> patt
    let Inst{19- 16} = opval{3-0};
    let Inst{15-  8} = 0x2A;
    let Inst{7 -  0} = 0xFB;
+   let DecoderMethod = "decodeRegStack";
 }
