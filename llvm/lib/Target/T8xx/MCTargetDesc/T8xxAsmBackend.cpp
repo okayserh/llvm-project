@@ -7,7 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/T8xxFixupKinds.h"
-#include "MCTargetDesc/T8xxMCExpr.h"
 #include "MCTargetDesc/T8xxMCTargetDesc.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCAsmBackend.h"

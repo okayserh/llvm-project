@@ -10,11 +10,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/T8xxBaseInfo.h"
 #include "MCTargetDesc/T8xxFixupKinds.h"
-#include "T8xxMCExpr.h"
+#include "MCTargetDesc/T8xxMCAsmInfo.h"
 #include "T8xxMCTargetDesc.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
@@ -223,6 +225,7 @@ getExprOpValue(const MCInst &MI,
     return Res;
 
   MCExpr::ExprKind Kind = Expr->getKind();
+
   if (Kind == MCExpr::Constant) {
     return cast<MCConstantExpr>(Expr)->getValue();
   }
@@ -276,19 +279,19 @@ getExprOpValue(const MCInst &MI,
     return 0;
   }
 
-  if (Kind == MCExpr::Target) {
-    const T8xxMCExpr *T8xxExpr = cast<T8xxMCExpr>(Expr);
+  if (Kind == MCExpr::Specifier) {
+    const auto *T8xxExpr = cast<MCSpecifierExpr>(Expr);
     T8xx::Fixups FixupKind = T8xx::Fixups (0);
 
-    switch (T8xxExpr->getKind ())
+    switch (T8xxExpr->getSpecifier())
       {
-      case T8xxMCExpr::VK_T8xx_None:
+      case T8xx::S_None:
 	printf ("Target Expr: T8xx_None\n");
 	break;
-      case T8xxMCExpr::VK_T8xx_IPTRREL:
+      case ELF::R_T8XX_JUMP:
 	printf ("Target Expr: T8xx_IPTRREL\n");
 	break;
-      case T8xxMCExpr::VK_T8xx_SYMREL:
+      case ELF::R_T8XX_LDPI_SYM:
 	{
 	  FixupKind = T8xx::fixup_t8xx_pcrel_sym;
 	  addFixup(Fixups, 0, T8xxExpr, MCFixupKind(FixupKind));
@@ -296,7 +299,7 @@ getExprOpValue(const MCInst &MI,
 	  printf ("Target Expr: T8xx_SYMREL\n");
 	}
 	break;
-      case T8xxMCExpr::VK_T8xx_GLOBAL:
+      case ELF::R_T8XX_ADDR:
 	{
 	  FixupKind = T8xx::fixup_t8xx_addr;
 	  addFixup(Fixups, 0, T8xxExpr, MCFixupKind(FixupKind));
@@ -304,31 +307,11 @@ getExprOpValue(const MCInst &MI,
 	}
 	printf ("Target Expr: T8xx_GLOBAL\n");
 	break;
-      case T8xxMCExpr::VK_T8xx_GLOBAL_NPFIX:
+      case ELF::R_T8XX_ADDR_NPFIX:
 	printf ("Target Expr: T8xx_GLOBAL_NPFIX\n");
 	break;
       }
 
-    // TODO:
-    /*
-    Mips::Fixups FixupKind = Mips::Fixups(0);
-    switch (MipsExpr->getKind()) {
-    case MipsMCExpr::MEK_None:
-    case MipsMCExpr::MEK_Special:
-      llvm_unreachable("Unhandled fixup kind!");
-      break;
-    case MipsMCExpr::MEK_TPREL_LO:
-      FixupKind = isMicroMips(STI) ? Mips::fixup_MICROMIPS_TLS_TPREL_LO16
-                                   : Mips::fixup_Mips_TPREL_LO;
-      break;
-    case MipsMCExpr::MEK_NEG:
-      FixupKind =
-          isMicroMips(STI) ? Mips::fixup_MICROMIPS_SUB : Mips::fixup_Mips_SUB;
-      break;
-    }
-    Fixups.push_back(MCFixup::create(0, MipsExpr, MCFixupKind(FixupKind)));
-    return 0;
-    */
     llvm_unreachable("Unhandled expression!");
   }
 

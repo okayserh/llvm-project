@@ -7,7 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/T8xxFixupKinds.h"
-#include "MCTargetDesc/T8xxMCExpr.h"
 #include "MCTargetDesc/T8xxMCTargetDesc.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCELFObjectWriter.h"
@@ -111,6 +110,8 @@ unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
 
 bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCValue &/*Val*/,
                                                  unsigned Type) const {
+  printf ("needsRelocateWithSymbol %u\n", Type);
+
   switch (Type) {
     default:
       return false;

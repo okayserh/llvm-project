@@ -14,6 +14,7 @@
 #define LLVM_LIB_TARGET_T8XX_MCTARGETDESC_T8XXMCASMINFO_H
 
 #include "llvm/MC/MCAsmInfoELF.h"
+#include "llvm/MC/MCFixup.h"
 
 namespace llvm {
 
@@ -38,6 +39,12 @@ public:
 };
 
 namespace T8xx {
+using Specifier = uint16_t;
+  enum {   // Not really needed for T8xx
+  S_None,
+  S_ADDR = FirstTargetFixupKind,
+};
+  
 uint16_t parseSpecifier(StringRef name);
 StringRef getSpecifierName(uint16_t S);
 } // namespace Sparc
