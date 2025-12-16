@@ -33,26 +33,6 @@ using namespace llvm;
 #define GET_REGINFO_MC_DESC
 #include "T8xxGenRegisterInfo.inc"
 
-static MCAsmInfo *createT8xxMCAsmInfo(const MCRegisterInfo &MRI,
-                                       const Triple &TT,
-                                       const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new T8xxELFMCAsmInfo(TT);
-  unsigned Reg = MRI.getDwarfRegNum(T8xx::AREG, true); // TODO: Replace O6 with R6 to remove compiler error, but functionality is questionable
-  //  MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 0);
-  //  MAI->addInitialFrameState(Inst);
-  return MAI;
-}
-
-static MCAsmInfo *createT8xxV9MCAsmInfo(const MCRegisterInfo &MRI,
-                                         const Triple &TT,
-                                         const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new T8xxELFMCAsmInfo(TT);
-  unsigned Reg = MRI.getDwarfRegNum(T8xx::AREG, true); // TODO: see above
-  MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 2047);
-  MAI->addInitialFrameState(Inst);
-  return MAI;
-}
-
 static MCInstrInfo *createT8xxMCInstrInfo() {
   MCInstrInfo *X = new MCInstrInfo();
   InitT8xxMCInstrInfo(X);
@@ -68,6 +48,17 @@ static MCRegisterInfo *createT8xxMCRegisterInfo(const Triple &TT) {
   return X;
 }
 
+static MCAsmInfo *createT8xxMCAsmInfo(const MCRegisterInfo &MRI,
+                                       const Triple &TT,
+                                       const MCTargetOptions &Options) {
+  MCAsmInfo *MAI = new T8xxELFMCAsmInfo(TT);
+
+  unsigned Reg = MRI.getDwarfRegNum(T8xx::AREG, true);
+  //  MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 0);
+  //  MAI->addInitialFrameState(Inst);
+  return MAI;
+}
+
 static MCSubtargetInfo *
 createT8xxMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
   if (CPU.empty())
@@ -77,17 +68,20 @@ createT8xxMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
 }
 
 static MCTargetStreamer *
-createObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
-  return new T8xxTargetELFStreamer(S);
+createT8xxObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
+  const Triple &TT = STI.getTargetTriple();
+  if (TT.isOSBinFormatELF())
+    return new T8xxTargetELFStreamer(S);
+  return nullptr;
 }
 
-static MCTargetStreamer *createTargetAsmStreamer(MCStreamer &S,
+static MCTargetStreamer *createT8xxTargetAsmStreamer(MCStreamer &S,
                                                  formatted_raw_ostream &OS,
                                                  MCInstPrinter *InstPrint) {
   return new T8xxTargetAsmStreamer(S, OS);
 }
 
-static MCTargetStreamer *createNullTargetStreamer(MCStreamer &S) {
+static MCTargetStreamer *createT8xxNullTargetStreamer(MCStreamer &S) {
   return new T8xxTargetStreamer(S);
 }
 
@@ -122,13 +116,13 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeT8xxTargetMC() {
 
     // Register the object target streamer.
     TargetRegistry::RegisterObjectTargetStreamer(*T,
-                                                 createObjectTargetStreamer);
+                                                 createT8xxObjectTargetStreamer);
 
     // Register the asm streamer.
-    TargetRegistry::RegisterAsmTargetStreamer(*T, createTargetAsmStreamer);
+    TargetRegistry::RegisterAsmTargetStreamer(*T, createT8xxTargetAsmStreamer);
 
     // Register the null streamer.
-    TargetRegistry::RegisterNullTargetStreamer(*T, createNullTargetStreamer);
+    TargetRegistry::RegisterNullTargetStreamer(*T, createT8xxNullTargetStreamer);
 
     // Register the MCInstPrinter
     TargetRegistry::RegisterMCInstPrinter(*T, createT8xxMCInstPrinter);

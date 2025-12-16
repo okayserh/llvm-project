@@ -104,7 +104,6 @@ public:
     Parser.addAliasForDirective(".uahalf", ".2byte");
     Parser.addAliasForDirective(".word", ".4byte");
     Parser.addAliasForDirective(".uaword", ".4byte");
-    //    Parser.addAliasForDirective(".nword", is64Bit() ? ".8byte" : ".4byte");
 
     // Initialize the set of available features.
     setAvailableFeatures(ComputeAvailableFeatures(getSTI().getFeatureBits()));
@@ -472,18 +471,8 @@ parseDirective(AsmToken DirectiveID)
 {
   StringRef IDVal = DirectiveID.getString();
 
-  if (IDVal == ".register") {
-    // For now, ignore .register directive.
-    Parser.eatToEndOfStatement();
-    return ParseStatus::Success;
-  }
-  if (IDVal == ".proc") {
-    // For compatibility, ignore this directive.
-    // (It's supposed to be an "optimization" in the Sun assembler)
-    Parser.eatToEndOfStatement();
-    return ParseStatus::Success;    
-  }
-
+  dbgs() << "parseDirective: " << IDVal << "\n";  
+  
   // Let the MC layer to handle other directives.
   return ParseStatus::NoMatch;
 }
@@ -569,18 +558,6 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
     if (getParser().parseExpression(EVal, E))
       break;
 
-    // TODO: Unclear why a T8xxMCExpr is needed? (Was copied from SPARC Code)
-    // The standard MCExpr should do fine?
-    /*
-    int64_t Res;
-    if (!EVal->evaluateAsAbsolute(Res)) {
-      T8xxMCExpr::VariantKind Kind = T8xxMCExpr::VK_T8xx_GLOBAL;
-      printf ("parseT8xxOperand, Identifier   Expr Kind %i\n", EVal->getKind ());
-      EVal->dump ();
-
-      EVal = T8xxMCExpr::create(Kind, EVal, getContext());
-    }
-    */
     Op = T8xxOperand::CreateImm(EVal, S, E);
     break;
   }
@@ -595,6 +572,8 @@ T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
   // Thus, this method also looks for instructions, where the "ParserMatchClass"
   // has been defined. In our case this is the T8xxWPtrSrcAsmOperand.
   ParseStatus Res = MatchOperandParserImpl(Operands, Mnemonic);
+
+  dbgs() << "parseOp\n";
 
   // If there wasn't a custom match, try the generic matcher below. Otherwise,
   // there was a match, but an error occurred, in which case, just return that

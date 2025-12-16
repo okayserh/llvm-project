@@ -221,6 +221,8 @@ getExprOpValue(const MCInst &MI,
                const MCSubtargetInfo &STI) const {
   int64_t Res;
 
+  dbgs() << "getExprOpValue\n";
+
   if (Expr->evaluateAsAbsolute(Res))
     return Res;
 

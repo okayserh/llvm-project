@@ -36,6 +36,8 @@ public:
   */
   void printSpecifierExpr(raw_ostream &OS,
                           const MCSpecifierExpr &Expr) const override;
+  bool evaluateAsRelocatableImpl(const MCSpecifierExpr &Expr, MCValue &Res,
+                                 const MCAssembler *Asm) const override;
 };
 
 namespace T8xx {

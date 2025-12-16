@@ -22,7 +22,7 @@ using namespace llvm;
 void T8xxELFMCAsmInfo::anchor() {}
 
 T8xxELFMCAsmInfo::T8xxELFMCAsmInfo(const Triple &TheTriple) {
-  IsLittleEndian = true; // TODO: Remove -> Should be the default?
+  IsLittleEndian = TheTriple.isLittleEndian();
 
   Data16bitsDirective = "\t.half\t";
   Data32bitsDirective = "\t.word\t";
@@ -32,37 +32,16 @@ T8xxELFMCAsmInfo::T8xxELFMCAsmInfo(const Triple &TheTriple) {
   CommentString = "//";
   SupportsDebugInformation = true;
 
-  ExceptionsType = ExceptionHandling::DwarfCFI;
+  // TODO: Note, the "DwarfCFI" comes presumably from the Sparc "template"
+  // This must correspond to the ExceptionHandling defined in "TargetParser/Triple.cpp".
+  // Probably the t8xx architecture currently gets "None".
+
+  //  ExceptionsType = ExceptionHandling::DwarfCFI;
+  ExceptionsType = ExceptionHandling::None;
 
   UsesELFSectionDirectiveForBSS = true;
 }
 
-/*
-const MCExpr*
-T8xxELFMCAsmInfo::getExprForPersonalitySymbol(const MCSymbol *Sym,
-                                               unsigned Encoding,
-                                               MCStreamer &Streamer) const {
-  if (Encoding & dwarf::DW_EH_PE_pcrel) {
-    MCContext &Ctx = Streamer.getContext();
-    return T8xxMCExpr::create(T8xxMCExpr::VK_T8xx_IPTRREL,
-                               MCSymbolRefExpr::create(Sym, Ctx), Ctx);
-  }
-
-  return MCAsmInfo::getExprForPersonalitySymbol(Sym, Encoding, Streamer);
-}
-
-const MCExpr*
-T8xxELFMCAsmInfo::getExprForFDESymbol(const MCSymbol *Sym,
-                                       unsigned Encoding,
-                                       MCStreamer &Streamer) const {
-  if (Encoding & dwarf::DW_EH_PE_pcrel) {
-    MCContext &Ctx = Streamer.getContext();
-    return T8xxMCExpr::create(T8xxMCExpr::VK_T8xx_IPTRREL,
-                               MCSymbolRefExpr::create(Sym, Ctx), Ctx);
-  }
-  return MCAsmInfo::getExprForFDESymbol(Sym, Encoding, Streamer);
-}
-*/
 
 void T8xxELFMCAsmInfo::printSpecifierExpr(raw_ostream &OS,
                                            const MCSpecifierExpr &Expr) const {
@@ -72,4 +51,12 @@ void T8xxELFMCAsmInfo::printSpecifierExpr(raw_ostream &OS,
   printExpr(OS, *Expr.getSubExpr());
   if (!S.empty())
     OS << ')';
+}
+
+
+bool T8xxELFMCAsmInfo::evaluateAsRelocatableImpl(const MCSpecifierExpr &Expr, MCValue &Res,
+						 const MCAssembler *Asm) const
+{
+  dbgs() << "EvaluatAsReloc\n";
+  return (true);
 }

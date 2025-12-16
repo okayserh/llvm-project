@@ -30,11 +30,13 @@ class Target;
 
 MCCodeEmitter *createT8xxMCCodeEmitter(const MCInstrInfo &MCII,
                                         MCContext &Ctx);
+
 MCAsmBackend *createT8xxAsmBackend(const Target &T, const MCSubtargetInfo &STI,
                                     const MCRegisterInfo &MRI,
                                     const MCTargetOptions &Options);
+
 std::unique_ptr<MCObjectTargetWriter> createT8xxELFObjectWriter(bool Is64Bit,
-                                                                 uint8_t OSABI);
+                                                                uint8_t OSABI);
 } // End llvm namespace
 
 // Defines symbolic names for T8xx registers.  This defines a mapping from

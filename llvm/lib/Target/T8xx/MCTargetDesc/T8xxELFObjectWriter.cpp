@@ -27,10 +27,8 @@ namespace {
 
     ~T8xxELFObjectWriter() override = default;
 
-  protected:
     unsigned getRelocType(const MCFixup &, const MCValue &,
                           bool IsPCRel) const override;
-
     bool needsRelocateWithSymbol(const MCValue & Val,
                                  unsigned Type) const override;
 
@@ -44,9 +42,13 @@ unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
   auto Spec = Target.getSpecifier();
 
   // Note: Other backends filter for TLS and set the symbol type accordingly
+
+  dbgs () << "getRelocType" << Kind << "\n";
   
   if (mc::isRelocation(Kind))
     return Kind;
+
+    dbgs () << "getRelocType -> Fallthrough\n";
 
   // Reference code from SparcELFObjectwriter
   /*
@@ -110,8 +112,9 @@ unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
 
 bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCValue &/*Val*/,
                                                  unsigned Type) const {
-  printf ("needsRelocateWithSymbol %u\n", Type);
-
+  dbgs ()<<  "needsRelocateWithSymbol: " << Type << "\n";
+  return (true);
+  
   switch (Type) {
     default:
       return false;

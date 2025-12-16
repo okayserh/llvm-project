@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "MCTargetDesc/T8xxFixupKinds.h"
-#include "MCTargetDesc/T8xxMCTargetDesc.h"
+#include "T8xxAsmBackend.h"
+#include "T8xxFixupKinds.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
@@ -20,6 +20,76 @@
 #include "llvm/Support/EndianStream.h"
 
 using namespace llvm;
+
+T8xxAsmBackend::T8xxAsmBackend(const MCSubtargetInfo &STI, uint8_t OSABI,
+			       const MCTargetOptions &Options)
+      : MCAsmBackend(llvm::endianness::little),
+	STI(STI), OSABI(OSABI), Is64Bit(false), TargetOptions(Options)	
+{
+}
+
+std::optional<MCFixupKind> T8xxAsmBackend::getFixupKind(StringRef Name) const {
+  if (STI.getTargetTriple().isOSBinFormatELF()) {
+    unsigned Type;
+    Type = llvm::StringSwitch<unsigned>(Name)
+#define ELF_RELOC(X, Y) .Case(#X, Y)
+#include "llvm/BinaryFormat/ELFRelocs/T8xx.def"
+#undef ELF_RELOC
+      .Case("BFD_RELOC_NONE", ELF::R_T8XX_NONE)
+      .Case("BFD_RELOC_8",  ELF::R_T8XX_8)
+      .Case("BFD_RELOC_16", ELF::R_T8XX_16)
+      .Case("BFD_RELOC_32", ELF::R_T8XX_32)
+      .Default(-1u);
+    if (Type == -1u)
+      return static_cast<MCFixupKind>(FirstLiteralRelocationKind + Type);
+  }
+  return std::nullopt;
+}
+
+MCFixupKindInfo T8xxAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
+  const static MCFixupKindInfo Infos[] = {
+    // This table *must* be in the order that the fixup_* kinds are defined in
+    // T8xxFixupKinds.h.
+    //
+    // name                offset bits  flags
+    { "fixup_t8xx_addr",    0,      64,  0},
+    { "fixup_t8xx_addr_npfix",0,    32,  0},
+    { "fixup_t8xx_jump",    0,      64,  0},
+    { "fixup_t8xx_pcrel_sym", 0,    64,  0},
+    { "fixup_t8xx_addr_base", 0,    64,  0},
+    { "fixup_t8xx_addr_add", 0,    64,  0},
+    { "fixup_t8xx_addr_sub", 0,    64,  0},
+    { "fixup_t8xx_align",    0,     0,  0},
+  };
+  static_assert((std::size(Infos)) == T8xx::NumTargetFixupKinds,
+		"Not all fixup kinds added to Infos array");
+
+  // Fixup kinds from .reloc directive are like R_SPARC_NONE. They do
+  // not require any extra processing.
+  dbgs () << "getFixupKindInfo\n";
+
+  if (mc::isRelocation(Kind))
+    return {};
+  
+  if (Kind < FirstTargetFixupKind)
+    return MCAsmBackend::getFixupKindInfo(Kind);
+  
+  assert(unsigned(Kind - FirstTargetFixupKind) < T8xx::NumTargetFixupKinds &&
+	 "Invalid kind!");
+  return Infos[Kind - FirstTargetFixupKind];
+}
+
+bool T8xxAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
+				  const MCSubtargetInfo *STI) const {
+  // Note: Transputer instruction set does not explicity provide
+  // a "NOP" instruction. However, the 0x00 will be j 0, which
+  // makes a jump to the next instruction, thereby being
+  // equivalent to a NOP instruction.
+  for (uint64_t i = 0; i != Count; ++i)
+    support::endian::write<uint8_t>(OS, 0x00, Endian);
+
+  return true;
+}
 
 static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
   switch (Kind) {
@@ -49,263 +119,122 @@ static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
   }
 }
 
-/// getFixupKindNumBytes - The number of bytes the fixup may change.
-static unsigned getFixupKindNumBytes(unsigned Kind) {
-  switch (Kind) {
-  default:
-    llvm_unreachable("Unknown fixup kind!");
-
-  case FK_Data_1:
-    return 1;
-
-  case FK_Data_2:
-    return 2;
-
-  case FK_Data_4:
-  case T8xx::fixup_t8xx_addr_npfix:
-    return 4;
-
-  case FK_Data_8:
-  case T8xx::fixup_t8xx_addr:
-  case T8xx::fixup_t8xx_jump:
-  case T8xx::fixup_t8xx_pcrel_sym:
-    return 8;
-  }
+std::optional<bool> T8xxAsmBackend::evaluateFixup(const MCFragment &, MCFixup &Fixup, MCValue &Target,
+						  uint64_t &Value)
+{
+  dbgs () << "evaluateFixup " << Fixup.getKind() << "  Value  " << Value << "\n";
+  // TBD
+  return {};
 }
 
-namespace {
-  class T8xxAsmBackend : public MCAsmBackend {
-  protected:
-    const Target &TheTarget;
-    bool Is64Bit;
-
-  public:
-    T8xxAsmBackend(const Target &T)
-      : MCAsmBackend(llvm::endianness::little),
-          TheTarget(T), Is64Bit(false) {}
-
-    std::optional<MCFixupKind> getFixupKind(StringRef Name) const override {
-      unsigned Type;
-      Type = llvm::StringSwitch<unsigned>(Name)
-#define ELF_RELOC(X, Y) .Case(#X, Y)
-#include "llvm/BinaryFormat/ELFRelocs/T8xx.def"
-#undef ELF_RELOC
-                 .Case("BFD_RELOC_NONE", ELF::R_T8XX_NONE)
-                 .Case("BFD_RELOC_16", ELF::R_T8XX_16)
-                 .Case("BFD_RELOC_32", ELF::R_T8XX_32)
-                 .Default(-1u);
-      if (Type == -1u)
-        return std::nullopt;
-      return static_cast<MCFixupKind>(FirstLiteralRelocationKind + Type);
+bool T8xxAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
+			      const MCValue &Target, uint64_t &FixedValue,
+			      bool IsResolved) {
+  uint64_t FixedValueA, FixedValueB;
+  if (Target.getSubSym()) {
+    dbgs () << "Target.getSubSym()\n";
+    
+    assert(Target.getSpecifier() == 0 &&
+	   "relocatable SymA-SymB cannot have relocation specifier");
+    unsigned TA = 0, TB = 0;
+    switch (Fixup.getKind()) {
+    case llvm::FK_Data_1:
+      TA = ELF::R_T8XX_ADD8;
+      TB = ELF::R_T8XX_SUB8;
+      break;
+    case llvm::FK_Data_2:
+      TA = ELF::R_T8XX_ADD16;
+      TB = ELF::R_T8XX_SUB16;
+      break;
+    case llvm::FK_Data_4:
+      TA = ELF::R_T8XX_ADD32;
+      TB = ELF::R_T8XX_SUB32;
+      break;
+    default:
+      llvm_unreachable("unsupported fixup size");
     }
-
-    MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override {
-      const static MCFixupKindInfo Infos[] = {
-      // This table *must* be in the order that the fixup_* kinds are defined in
-      // T8xxFixupKinds.h.
-      //
-        // name                offset bits  flags
-        { "fixup_t8xx_addr",    0,      64,  0},
-        { "fixup_t8xx_addr_npfix",0,    32,  0},
-        { "fixup_t8xx_jump",    0,      64,  0},
-        { "fixup_t8xx_pcrel_sym", 0,    64,  0},
-        { "fixup_t8xx_addr_base", 0,    64,  0},
-        { "fixup_t8xx_addr_add", 0,    64,  0},
-        { "fixup_t8xx_addr_sub", 0,    64,  0},
-        { "fixup_t8xx_align",    0,     0,  0},
-      };
-      static_assert((std::size(Infos)) == T8xx::NumTargetFixupKinds,
-		    "Not all fixup kinds added to Infos array");
-
-      // Fixup kinds from .reloc directive are like R_SPARC_NONE. They do
-      // not require any extra processing.
-      if (mc::isRelocation(Kind))
-	return {};
-
-      if (Kind < FirstTargetFixupKind)
-        return MCAsmBackend::getFixupKindInfo(Kind);
-
-      assert(unsigned(Kind - FirstTargetFixupKind) < T8xx::NumTargetFixupKinds &&
-             "Invalid kind!");
-      return Infos[Kind - FirstTargetFixupKind];
-    }
-
-    //
-    // Note:
-    // This is called from MCAssembler.evaluateFixup. If this target specific
-    // method returns "true", the relocation is presumably left for the linker!
-    //
+    MCValue A = MCValue::get(Target.getAddSym(), nullptr, Target.getConstant());
+    MCValue B = MCValue::get(Target.getSubSym());
+    auto FA = MCFixup::create(Fixup.getOffset(), nullptr, TA);
+    auto FB = MCFixup::create(Fixup.getOffset(), nullptr, TB);
+    Asm->getWriter().recordRelocation(F, FA, A, FixedValueA);
+    Asm->getWriter().recordRelocation(F, FB, B, FixedValueB);
+    FixedValue = FixedValueA - FixedValueB;
+    return false;
+  }
+  
+  // If linker relaxation is enabled and supported by the current fixup, then we
+  // always want to generate a relocation.
+  /*
+    bool NeedsRelax = Fixup.isLinkerRelaxable() &&
+    relaxableFixupNeedsRelocation(Fixup.getKind());
+    if (NeedsRelax)
+    IsResolved = false;
+    
+    if (IsResolved && Fixup.isPCRel())
+    IsResolved = isPCRelFixupResolved(Target.getAddSym(), F);
+  */
+  IsResolved = false;
+  
+  if (!IsResolved) {
+    // Some Fixups require a VENDOR relocation, record it (directly) before we
+    // add the relocation.
+    //	maybeAddVendorReloc(F, Fixup);
+    
+    Asm->getWriter().recordRelocation(F, Fixup, Target, FixedValue);
+    
     /*
-    bool shouldForceRelocation(const MCFixup &Fixup,
-                               const MCValue &Target) override {
-      if (Fixup.getKind() >= FirstLiteralRelocationKind)
-        return true;
-      switch ((T8xx::Fixups)Fixup.getKind()) {
-      default:
-        return false;
-      case T8xx::fixup_t8xx_jump:
-      case T8xx::fixup_t8xx_addr:
-      case T8xx::fixup_t8xx_addr_npfix:
-      case T8xx::fixup_t8xx_pcrel_sym:
-      case T8xx::fixup_t8xx_addr_base:
-      case T8xx::fixup_t8xx_addr_add:
-      case T8xx::fixup_t8xx_addr_sub:
-      case T8xx::fixup_t8xx_align:
-	return true;
+      if (NeedsRelax) {
+      // Some Fixups get a RELAX relocation, record it (directly) after we add
+      // the relocation.
+      MCFixup RelaxFixup =
+      MCFixup::create(Fixup.getOffset(), nullptr, ELF::R_RISCV_RELAX);
+      MCValue RelaxTarget = MCValue::get(nullptr);
+      uint64_t RelaxValue;
+      Asm->getWriter().recordRelocation(F, RelaxFixup, RelaxTarget, RelaxValue);
       }
-    }
     */
+  }
+  
+  return false;
+}
 
-    // Relaxation is completely handled in the linker
-    bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
-			   const MCSubtargetInfo &STI) const override {
-      return false;
-    }
+void T8xxAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
+				const MCValue &Target, uint8_t *Data,
+				uint64_t Value, bool IsResolved) {
+  printf ("apply Fixup  %i  %lu\n", Fixup.getKind(), Value);
+  
+  IsResolved = addReloc(F, Fixup, Target, Value, IsResolved);
+  if (!IsResolved)
+    return;
+  
+  /*
+  unsigned NumBytes = getFixupKindNumBytes(Fixup.getKind());
+  unsigned Offset = Fixup.getOffset();
+  
+  if (!IsResolved)
+    return;          // If it is not resolved, leave it as is
+  
+  // For each byte of the fragment that the fixup touches, mask in the bits
+  // from the fixup value. The Value has been "split up" into the
+  // appropriate bitfields above.
+  for (unsigned i = 0; i != NumBytes; ++i) {
+    unsigned Idx = Endian == llvm::endianness::little ? i : (NumBytes - 1) - i;
+    Data[Offset + Idx] |= uint8_t((Value >> (i * 8)) & 0xff);
+  }
+  */
+}
 
-
-    /// Target specific predicate for whether a given fixup requires the
-    /// associated instruction to be relaxed.
-    bool fixupNeedsRelaxationAdvanced(const MCFragment &,
-				      const MCFixup &Fixup,
-				      const MCValue &, uint64_t Value,
-				      bool Resolved) const override
-    {
-      int64_t Offset = int64_t(Value);
-      printf ("fixupAdvanced %li", Offset);
-      if (!Resolved)
-	printf ("not resolved\n");
-      else
-	printf ("resolved\n");
-
-      /* This is the original code of the MCAsmBackend class
-      if (!Resolved)
-	return true;
-      */
-
-      // If the fixup cannot be resolved, we cannot do anything with
-      // relaxation!?
-      if (!Resolved)
-	return false;
-
-      return fixupNeedsRelaxation(Fixup, Value);
-    }
-
-
-    bool fixupNeedsRelaxation(const MCFixup &Fixup,
-                                    uint64_t Value) const override {
-      //      printf ("Fixup needs relax %i  %lu\n", (int)Fixup.getTargetKind (), Value);
-      int64_t Offset = int64_t(Value);
-
-      return false;
-    }
-
-
-    bool writeNopData(raw_ostream &OS, uint64_t Count,
-                      const MCSubtargetInfo *STI) const override {
-      // Note: Transputer instruction set does not explicity provide
-      // a "NOP" instruction. However, the 0x00 will be j 0, which
-      // makes a jump to the next instruction, thereby being
-      // equivalent to a NOP instruction.
-      for (uint64_t i = 0; i != Count; ++i)
-        support::endian::write<uint8_t>(OS, 0x00, Endian);
-
-      return true;
-    }
-
-    /*
-    // Linker relaxation may change code size. We have to insert Nops
-    // for .align directive when linker relaxation enabled. So then Linker
-    // could satisfy alignment by removing Nops.
-    // The function return the total Nops Size we need to insert.
-    bool shouldInsertExtraNopBytesForCodeAlign(
-       const MCAlignFragment &AF, unsigned &Size) {
-
-      unsigned MinNopLen = 1;
-
-      if (AF.getAlignment() <= MinNopLen) {
-	return false;
-      } else {
-	Size = AF.getAlignment().value() - MinNopLen;
-	return true;
-      }
-    }
-
-    // We need to insert R_RISCV_ALIGN relocation type to indicate the
-    // position of Nops and the total bytes of the Nops have been inserted
-    // when linker relaxation enabled.
-    // The function insert fixup_riscv_align fixup which eventually will
-    // transfer to R_RISCV_ALIGN relocation type.
-    bool shouldInsertFixupForCodeAlign(MCAssembler &Asm,
-				       MCAlignFragment &AF) {
-      // Calculate total Nops we need to insert. If there are none to insert
-      // then simply return.
-      unsigned Count;
-      if (!shouldInsertExtraNopBytesForCodeAlign(AF, Count) || (Count == 0))
-	return false;
-      
-      MCContext &Ctx = Asm.getContext();
-      const MCExpr *Dummy = MCConstantExpr::create(0, Ctx);
-      // Create fixup_riscv_align fixup.
-      MCFixup Fixup =
-	MCFixup::create(0, Dummy, MCFixupKind(T8xx::fixup_t8xx_align), SMLoc());
-      
-      uint64_t FixedValue = 0;
-      MCValue NopBytes = MCValue::get(Count);
-      
-      Asm.getWriter().recordRelocation(Asm, &AF, Fixup, NopBytes, FixedValue);
-      
-      return true;
-    }
-
-    */
-
-  };
-
-  class ELFT8xxAsmBackend : public T8xxAsmBackend {
-    Triple::OSType OSType;
-  public:
-    ELFT8xxAsmBackend(const Target &T, Triple::OSType OSType) :
-      T8xxAsmBackend(T), OSType(OSType) { }
-
-    void applyFixup(const MCFragment &, const MCFixup &Fixup,
-                    const MCValue &Target,
-		    uint8_t *Data, uint64_t Value, bool IsResolved) override {
-
-      if (Fixup.getKind() >= FirstLiteralRelocationKind)
-        return;
-      Value = adjustFixupValue(Fixup.getKind(), Value);
-      if (!Value)
-	return;           // Doesn't change encoding.
-
-      unsigned NumBytes = getFixupKindNumBytes(Fixup.getKind());
-      unsigned Offset = Fixup.getOffset();
-
-      if (!IsResolved)
-	return;          // If it is not resolved, leave it as is
-
-      // For each byte of the fragment that the fixup touches, mask in the bits
-      // from the fixup value. The Value has been "split up" into the
-      // appropriate bitfields above.
-      for (unsigned i = 0; i != NumBytes; ++i) {
-        unsigned Idx = Endian == llvm::endianness::little ? i : (NumBytes - 1) - i;
-        Data[Offset + Idx] |= uint8_t((Value >> (i * 8)) & 0xff);
-      }
-    }
-
-    std::unique_ptr<MCObjectTargetWriter>
-    createObjectTargetWriter() const override {
-      uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(OSType);
-      return createT8xxELFObjectWriter(Is64Bit, OSABI);
-    }
-  };
-
-} // end anonymous namespace
+std::unique_ptr<MCObjectTargetWriter>
+T8xxAsmBackend::createObjectTargetWriter() const {
+  return createT8xxELFObjectWriter(Is64Bit, OSABI);
+}
 
 MCAsmBackend *llvm::createT8xxAsmBackend(const Target &T,
-                                          const MCSubtargetInfo &STI,
-                                          const MCRegisterInfo &MRI,
-                                          const MCTargetOptions &Options) {
+					 const MCSubtargetInfo &STI,
+					 const MCRegisterInfo &MRI,
+					 const MCTargetOptions &Options) {
   const Triple &TT = STI.getTargetTriple();
   uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TT.getOS());
-  return new ELFT8xxAsmBackend(T, STI.getTargetTriple().getOS());
+  return new T8xxAsmBackend(STI, OSABI, Options);
 }

@@ -16,7 +16,7 @@ namespace llvm {
     enum Fixups {
       // fixup_t8xx_addr - global address to some symbol   = 128
       // Results in 8 bytes of pfix/nfix instructions.
-      fixup_t8xx_addr = FirstTargetFixupKind,
+      fixup_t8xx_addr = FirstTargetFixupKind,   // ==4010
 
       /// fixup_t8xx_addr_npfix - global address to symbol, not needing  = 129
       /// prefix / postfix transputer instruction (i.e. results in 4 bytes with

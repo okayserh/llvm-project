@@ -40,7 +40,7 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
 
   LLVM_DEBUG(dbgs() << "LowerSymbolOperand TargetFlags " << TargetFlags <<
 	     "  Type " << (int)MO.getType() << "\n");
-  
+
   // Note: The T8xxII:MO_NO_FLAG, MO_GLOBAL, etc. (defined in T8xxBaseInfo.h
   // are relevant for the intermediate assembler representation. In this
   // function, the respective operands are transferred into MCSymbolRef
