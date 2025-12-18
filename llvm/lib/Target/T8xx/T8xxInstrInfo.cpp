@@ -247,7 +247,6 @@ unsigned T8xxInstrInfo::insertBranch(MachineBasicBlock &MBB,
                                     ArrayRef<MachineOperand> Cond,
                                     const DebugLoc &DL,
 				    int *BytesAdded) const {
-  unsigned NumInserted = 0;
   LLVM_DEBUG(dbgs() << "T8xx::insertBranch\n");
 
   if (BytesAdded)
@@ -371,7 +370,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
 
   MachineBasicBlock &MBB = *MI.getParent();
   const MachineFunction *MF = MBB.getParent();
-  const MachineRegisterInfo &MRI = MF->getRegInfo();
+  //  const MachineRegisterInfo &MRI = MF->getRegInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   switch (MI.getOpcode())

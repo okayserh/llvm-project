@@ -54,13 +54,8 @@ public:
 
   MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override;
 
-  /*
-  bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
-                         const MCSubtargetInfo &STI) const override;
-  void relaxInstruction(MCInst &Inst,
-                        const MCSubtargetInfo &STI) const override;
-
   bool relaxAlign(MCFragment &F, unsigned &Size) override;
+  /*
   bool relaxDwarfLineAddr(MCFragment &) const override;
   bool relaxDwarfCFA(MCFragment &) const override;
   std::pair<bool, bool> relaxLEB128(MCFragment &LF,

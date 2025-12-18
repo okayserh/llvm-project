@@ -24,7 +24,7 @@ using namespace llvm;
 T8xxAsmBackend::T8xxAsmBackend(const MCSubtargetInfo &STI, uint8_t OSABI,
 			       const MCTargetOptions &Options)
       : MCAsmBackend(llvm::endianness::little),
-	STI(STI), OSABI(OSABI), Is64Bit(false), TargetOptions(Options)	
+	STI(STI), OSABI(OSABI), Is64Bit(false), TargetOptions(Options)
 {
 }
 
@@ -70,13 +70,29 @@ MCFixupKindInfo T8xxAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
 
   if (mc::isRelocation(Kind))
     return {};
-  
+
   if (Kind < FirstTargetFixupKind)
     return MCAsmBackend::getFixupKindInfo(Kind);
-  
+
   assert(unsigned(Kind - FirstTargetFixupKind) < T8xx::NumTargetFixupKinds &&
 	 "Invalid kind!");
   return Infos[Kind - FirstTargetFixupKind];
+}
+
+// Note: This seems the replacement for the prior method
+// "shouldInsertFixupForCodeAlign". It is needed for the Transputer.
+bool T8xxAsmBackend::relaxAlign(MCFragment &F, unsigned &Size)
+{
+  dbgs () << "Relax Align\n";
+  unsigned MinNopLen = 1;  // For Transputer the NOP is just a j 0 instruction of 1 byte.
+  
+  Size = F.getAlignment().value() - MinNopLen;
+  auto *Expr = MCConstantExpr::create(Size, getContext());
+  MCFixup Fixup =
+      MCFixup::create(0, Expr, FirstLiteralRelocationKind + ELF::R_T8XX_ALIGN);
+  F.setVarFixups({Fixup});
+  F.setLinkerRelaxable();
+  return true;
 }
 
 bool T8xxAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
@@ -91,39 +107,142 @@ bool T8xxAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
   return true;
 }
 
-static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
+
+/// getFixupKindNumBytes - The number of bytes the fixup may change.
+static unsigned getFixupKindNumBytes(unsigned Kind) {
   switch (Kind) {
   default:
     llvm_unreachable("Unknown fixup kind!");
+
   case FK_Data_1:
+    return 1;
+
   case FK_Data_2:
+    return 2;
+
   case FK_Data_4:
-  case FK_Data_8:
-    return Value;
-
-  case T8xx::fixup_t8xx_addr:
   case T8xx::fixup_t8xx_addr_npfix:
-  case T8xx::fixup_t8xx_addr_base:
-  case T8xx::fixup_t8xx_addr_add:
-  case T8xx::fixup_t8xx_addr_sub:
-    return 0;
-    break;
+    return 4;
 
+  case FK_Data_8:
+  case T8xx::fixup_t8xx_addr:
   case T8xx::fixup_t8xx_jump:
-    return Value - 1;
-    break;
-
   case T8xx::fixup_t8xx_pcrel_sym:
-    return Value - 1;
-    break;
+    return 8;
   }
 }
+
+static bool exprHasSymbolRef (const MCExpr *Expr)
+{
+  switch (Expr->getKind ())
+    {
+    case MCExpr::SymbolRef:
+      return true;
+    case MCExpr::Binary:
+      {
+	const MCBinaryExpr *ABE = cast<MCBinaryExpr>(Expr);
+	return (exprHasSymbolRef (ABE->getLHS()) ||
+		exprHasSymbolRef (ABE->getRHS()));
+      }
+    case MCExpr::Unary:
+      {
+	const MCUnaryExpr *UE = cast<MCUnaryExpr>(Expr);
+	return (exprHasSymbolRef (UE->getSubExpr()));
+      }
+    default:
+      return false;
+    }
+}
+
+
+// Note: This is called from MCAssembler in method evaluateFixup.
+// If it returns a non NULL pointer, the return value is copied
+// into the "IsResolved" flag.
+// At the end, the MCAssembler::evaluateFixup calls
+// Backend::applyFixup
 
 std::optional<bool> T8xxAsmBackend::evaluateFixup(const MCFragment &, MCFixup &Fixup, MCValue &Target,
 						  uint64_t &Value)
 {
+  if (Fixup.getKind() >= T8xx::fixup_t8xx_addr)
+    return (false);
+  else
+    return {};
+
   dbgs () << "evaluateFixup " << Fixup.getKind() << "  Value  " << Value << "\n";
-  // TBD
+  Fixup.getValue ()->dump();
+
+  bool includesSymbol = exprHasSymbolRef (Fixup.getValue ());
+  if (includesSymbol)
+    dbgs () << "Incl Symbol\n";
+  else
+    dbgs () << "Incl No Symbol\n";
+
+  switch (Fixup.getValue()->getKind ())
+    {
+    case MCExpr::Binary:
+      {
+	dbgs() << "Binary\n";
+	const MCBinaryExpr *ABE = cast<MCBinaryExpr>(Fixup.getValue ());
+	MCValue LHSValue, RHSValue;
+
+	printf ("LHS Kind = %i   RHS Kind = %i\n",
+		(int) ABE->getLHS()->getKind(),
+		(int) ABE->getRHS()->getKind());
+
+	if (ABE->getLHS()->getKind()==MCExpr::Binary)
+	  {
+	    dbgs() << "LHS Binary\n";
+	    ABE->getLHS()->dump();
+
+	    const MCBinaryExpr *ABC = cast<MCBinaryExpr>(ABE->getLHS ());
+
+	    if (!ABC->getLHS()->evaluateAsRelocatable(LHSValue, Asm) ||
+		!ABC->getRHS()->evaluateAsRelocatable(RHSValue, Asm)) {
+	      dbgs() << "LHS Target Expressions\n";
+	    }
+
+	    if (ABC->getLHS()->getKind()==MCExpr::SymbolRef)
+	      {
+		dbgs() << "LHS LHS  \n";
+		const MCSymbolRefExpr *SRE = cast<MCSymbolRefExpr>(ABC->getLHS());
+		MCSymbol &Sym = const_cast<MCSymbol &>(SRE->getSymbol());
+		Sym.dump ();
+	      }
+	  }
+
+	/*
+	if (!ABE->getLHS()->evaluateAsRelocatable(LHSValue, Asm) ||
+	    !ABE->getRHS()->evaluateAsRelocatable(RHSValue, Asm)) {
+	  dbgs() << "Target Expressions\n";
+	}
+	*/
+	if (LHSValue.getAddSym())
+	  dbgs() << "LHS Sym A\n";
+	if (LHSValue.getAddSym())
+	  dbgs() << "LHS Sym B\n";
+
+	if (LHSValue.isAbsolute())
+	  dbgs() << "LHS Absolute\n";
+	if (RHSValue.isAbsolute())
+	  dbgs() << "RHS Absolute\n";
+
+      }
+      break;
+    case MCExpr::SymbolRef:
+      dbgs() << "SymbolRef\n";
+      break;
+    case MCExpr::Unary:
+      dbgs() << "Unary\n";
+      break;
+    case MCExpr::Specifier:
+      dbgs() << "Specifier\n";
+      break;
+    case MCExpr::Target:
+      dbgs() << "Target\n";
+      break;
+    }
+
   return {};
 }
 
@@ -131,9 +250,17 @@ bool T8xxAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
 			      const MCValue &Target, uint64_t &FixedValue,
 			      bool IsResolved) {
   uint64_t FixedValueA, FixedValueB;
+
+  dbgs() << "addReloc\n";
+
+  if (Target.getAddSym())
+    Target.getAddSym()->dump();
+  if (Target.getSubSym())
+    Target.getSubSym()->dump();
+
   if (Target.getSubSym()) {
     dbgs () << "Target.getSubSym()\n";
-    
+
     assert(Target.getSpecifier() == 0 &&
 	   "relocatable SymA-SymB cannot have relocation specifier");
     unsigned TA = 0, TB = 0;
@@ -162,7 +289,7 @@ bool T8xxAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
     FixedValue = FixedValueA - FixedValueB;
     return false;
   }
-  
+
   // If linker relaxation is enabled and supported by the current fixup, then we
   // always want to generate a relocation.
   /*
@@ -170,19 +297,20 @@ bool T8xxAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
     relaxableFixupNeedsRelocation(Fixup.getKind());
     if (NeedsRelax)
     IsResolved = false;
-    
+
     if (IsResolved && Fixup.isPCRel())
     IsResolved = isPCRelFixupResolved(Target.getAddSym(), F);
   */
   IsResolved = false;
-  
+
   if (!IsResolved) {
     // Some Fixups require a VENDOR relocation, record it (directly) before we
     // add the relocation.
     //	maybeAddVendorReloc(F, Fixup);
-    
+
+    dbgs () << "recordReloc\n";
     Asm->getWriter().recordRelocation(F, Fixup, Target, FixedValue);
-    
+
     /*
       if (NeedsRelax) {
       // Some Fixups get a RELAX relocation, record it (directly) after we add
@@ -195,7 +323,7 @@ bool T8xxAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
       }
     */
   }
-  
+
   return false;
 }
 
@@ -203,18 +331,19 @@ void T8xxAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
 				const MCValue &Target, uint8_t *Data,
 				uint64_t Value, bool IsResolved) {
   printf ("apply Fixup  %i  %lu\n", Fixup.getKind(), Value);
-  
-  IsResolved = addReloc(F, Fixup, Target, Value, IsResolved);
+  //  IsResolved = addReloc(F, Fixup, Target, Value, IsResolved);
+
+  // This combination registers the relocation for writing to the object file.
+  maybeAddReloc(F, Fixup, Target, Value, IsResolved);
+
   if (!IsResolved)
-    return;
-  
-  /*
+    return;   // If it is not resolved, leave it as is
+
+  dbgs () << "post maybe\n";
+
   unsigned NumBytes = getFixupKindNumBytes(Fixup.getKind());
   unsigned Offset = Fixup.getOffset();
-  
-  if (!IsResolved)
-    return;          // If it is not resolved, leave it as is
-  
+
   // For each byte of the fragment that the fixup touches, mask in the bits
   // from the fixup value. The Value has been "split up" into the
   // appropriate bitfields above.
@@ -222,7 +351,8 @@ void T8xxAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
     unsigned Idx = Endian == llvm::endianness::little ? i : (NumBytes - 1) - i;
     Data[Offset + Idx] |= uint8_t((Value >> (i * 8)) & 0xff);
   }
-  */
+
+  dbgs () << "apply Fixup Fin\n";  
 }
 
 std::unique_ptr<MCObjectTargetWriter>

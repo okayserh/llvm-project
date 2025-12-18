@@ -288,7 +288,6 @@ If you're developing an LLVM backend for a new architecture, you would implement
 
   setOperationAction(ISD::MULHS, MVT::i32, Expand);
   setOperationAction(ISD::MULHU, MVT::i32, Expand);
-
 }
 
 bool T8xxTargetLowering::useSoftFloat() const {
@@ -510,11 +509,13 @@ SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 
 SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
 {
+  /*
   SDValue Op0 = Op.getOperand(0);
   SDValue Op1 = Op.getOperand(1);
   SDLoc DL(Op);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
-
+  */
+  
   /*
   if (Op0.getValueType ().isFloatingPoint ())
     {
@@ -554,7 +555,6 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
       {
 	CondCodeSDNode *CCNode = cast<CondCodeSDNode>(Cond.getOperand(2));
 	ISD::CondCode invCC = getSetCCInverse (CCNode->get(), Cond.getOperand(2).getValueType ());
-	ISD::CondCode origCC = CCNode->get ();
 
 	NewCond = DAG.getSetCC (DL, Cond.getValueType (),
 				Cond.getOperand(0),
@@ -665,7 +665,6 @@ SDValue T8xxTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
 
 SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
 {
-  bool addTest = true;
   SDValue Cond = Op.getOperand(0);
   SDValue Op1 = Op.getOperand(1);
   SDValue Op2 = Op.getOperand(2);
@@ -1070,8 +1069,8 @@ bool T8xxTargetLowering::isJumpTableRelative() const
 
 // Lower a call
 SDValue
-T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
-                                  SmallVectorImpl<SDValue> &InVals) const {
+T8xxTargetLowering::LowerCall(CallLoweringInfo &CLI,
+			      SmallVectorImpl<SDValue> &InVals) const {
   SelectionDAG &DAG = CLI.DAG;
 
   MachineFunction &MF = DAG.getMachineFunction();
@@ -1227,7 +1226,7 @@ T8xxTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     }
   else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee))
     {
-      LLVM_DEBUG(dbgs() << "Lower Call: ExternalSymbolSDNode\n");
+      LLVM_DEBUG(dbgs() << "Lower Call: ExternalSymbolSDNode " << E->getSymbol() << "\n");
       Callee = DAG.getTargetExternalSymbol(E->getSymbol(), MVT::i32, T8xxII::MO_IPTRREL);
     }
 

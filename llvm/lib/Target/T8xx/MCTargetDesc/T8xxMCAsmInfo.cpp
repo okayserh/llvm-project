@@ -13,6 +13,7 @@
 #include "T8xxMCAsmInfo.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCValue.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/TargetParser/Triple.h"
@@ -54,9 +55,18 @@ void T8xxELFMCAsmInfo::printSpecifierExpr(raw_ostream &OS,
 }
 
 
+// Note: This is a custom implementation for MCExpr of type "Specifier".
+// It is therefore expected to set "Res" accordingly when a resolution is possible.
+
 bool T8xxELFMCAsmInfo::evaluateAsRelocatableImpl(const MCSpecifierExpr &Expr, MCValue &Res,
 						 const MCAssembler *Asm) const
 {
+  if (!Expr.getSubExpr()->evaluateAsRelocatable(Res, Asm))
+    return false;
+
+  Res.setSpecifier(Expr.getSpecifier());
+  return !Res.getSubSym();
+
   dbgs() << "EvaluatAsReloc\n";
   return (true);
 }
