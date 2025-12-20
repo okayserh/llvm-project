@@ -759,7 +759,10 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
     return std::make_unique<LinuxTargetInfo<VETargetInfo>>(Triple, Opts);
 
   case llvm::Triple::t8xx:
-    return std::make_unique<LinuxTargetInfo<T8xxTargetInfo>>(Triple, Opts);
+    // Note: In fact T8xx is currently "baremetal". RTEMS seems to be closest with
+    // respect to what is offered as "system functionality".
+    return std::make_unique<RTEMSTargetInfo<T8xxTargetInfo>>(Triple, Opts);
+    //    return std::make_unique<LinuxTargetInfo<T8xxTargetInfo>>(Triple, Opts);
 
   case llvm::Triple::csky:
     switch (os) {
