@@ -73,7 +73,7 @@ unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
     case FK_Data_1:                  return ELF::R_T8XX_8;
     case FK_Data_2:                  return ELF::R_T8XX_16;
     case FK_Data_4:                  return ELF::R_T8XX_ADDR_NPFIX;
-      //    case FK_Data_8:                  return ELF::R_T8XX_ADDR;
+    case FK_Data_8:                  return ELF::R_T8XX_ADDR;
 
       // TODO: It seem these fixups are only selected when the "IsPCRel" flag is set. However,
       // some of these relocations are not PC relative. Needs to be ordered properly.
@@ -91,11 +91,8 @@ unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
   case FK_Data_1:                return ELF::R_T8XX_8;
   case FK_Data_2:                return ELF::R_T8XX_16;
   case FK_Data_4:                return ELF::R_T8XX_ADDR_NPFIX;
-    /*
-  case FK_Data_8:                return ((Fixup.getOffset() % 8)
-                                         ? ELF::R_T8XX_ADDR
-                                         : ELF::R_T8XX_ADDR);
-    */
+  case FK_Data_8:                return ELF::R_T8XX_ADDR_NPFIX;
+
   case T8xx::fixup_t8xx_addr:    return ELF::R_T8XX_ADDR;
   case T8xx::fixup_t8xx_addr_npfix: return ELF::R_T8XX_ADDR_NPFIX;
 

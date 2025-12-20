@@ -55,11 +55,12 @@ public:
   MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override;
 
   bool relaxAlign(MCFragment &F, unsigned &Size) override;
-  /*
+
+  //  std::pair<bool, bool> relaxLEB128(MCFragment &LF,
+  //                                    int64_t &Value) const override;
+/*
   bool relaxDwarfLineAddr(MCFragment &) const override;
   bool relaxDwarfCFA(MCFragment &) const override;
-  std::pair<bool, bool> relaxLEB128(MCFragment &LF,
-                                    int64_t &Value) const override;
   */
 
   bool writeNopData(raw_ostream &OS, uint64_t Count,

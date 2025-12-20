@@ -17,9 +17,18 @@
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/EndianStream.h"
 
 using namespace llvm;
+
+// Temporary workaround for old linkers that do not support ULEB128 relocations,
+// which are abused by DWARF v5 DW_LLE_offset_pair/DW_RLE_offset_pair
+// implemented in Clang/LLVM.
+static cl::opt<bool> ULEB128Reloc(
+    "t8xx-uleb128-reloc", cl::init(true), cl::Hidden,
+    cl::desc("Emit R_T8XX_SET_ULEB128/E_T8XX_SUB_ULEB128 if appropriate"));
+
 
 T8xxAsmBackend::T8xxAsmBackend(const MCSubtargetInfo &STI, uint8_t OSABI,
 			       const MCTargetOptions &Options)
@@ -94,6 +103,19 @@ bool T8xxAsmBackend::relaxAlign(MCFragment &F, unsigned &Size)
   F.setLinkerRelaxable();
   return true;
 }
+
+/*
+std::pair<bool, bool> T8xxAsmBackend::relaxLEB128(MCFragment &LF,
+                                                   int64_t &Value) const {
+  if (LF.isLEBSigned())
+    return std::make_pair(false, false);
+  const MCExpr &Expr = LF.getLEBValue();
+  if (ULEB128Reloc) {
+    LF.setVarFixups({MCFixup::create(0, &Expr, FK_Data_leb128)});
+  }
+  return std::make_pair(Expr.evaluateKnownAbsolute(Value, *Asm), false);
+}
+*/
 
 bool T8xxAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
 				  const MCSubtargetInfo *STI) const {
@@ -330,16 +352,12 @@ bool T8xxAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
 void T8xxAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
 				const MCValue &Target, uint8_t *Data,
 				uint64_t Value, bool IsResolved) {
-  printf ("apply Fixup  %i  %lu\n", Fixup.getKind(), Value);
-  //  IsResolved = addReloc(F, Fixup, Target, Value, IsResolved);
-
   // This combination registers the relocation for writing to the object file.
   maybeAddReloc(F, Fixup, Target, Value, IsResolved);
+  //addReloc(F, Fixup, Target, Value, IsResolved);
 
   if (!IsResolved)
     return;   // If it is not resolved, leave it as is
-
-  dbgs () << "post maybe\n";
 
   unsigned NumBytes = getFixupKindNumBytes(Fixup.getKind());
   unsigned Offset = Fixup.getOffset();
@@ -349,10 +367,8 @@ void T8xxAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
   // appropriate bitfields above.
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned Idx = Endian == llvm::endianness::little ? i : (NumBytes - 1) - i;
-    Data[Offset + Idx] |= uint8_t((Value >> (i * 8)) & 0xff);
+    Data[Idx] |= uint8_t((Value >> (i * 8)) & 0xff);
   }
-
-  dbgs () << "apply Fixup Fin\n";  
 }
 
 std::unique_ptr<MCObjectTargetWriter>
