@@ -538,6 +538,23 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
+    // The T8xx instruction set includes an instructions to convert an integer to a floating
+    // point number. However, this works only from a memory address. As a workaround the
+    // code stores the AReg in Workspace location 0, loads a pointer to that location in AReg
+    // and then triggers the conversion.
+  case T8xx::FPI32TOR32Reg:
+  case T8xx::FPI32TOR64Reg:
+    {
+      BuildMI (MBB, MI, DL, get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
+      BuildMI (MBB, MI, DL, get(T8xx::LDLP), T8xx::AREG).addReg(T8xx::WPTR).addImm(0);
+      if (MI.getOpcode() == T8xx::FPI32TOR32Reg)
+	BuildMI (MBB, MI, DL, get(T8xx::FPI32TOR32), T8xx::FAREG).addReg(T8xx::AREG);
+      else
+	BuildMI (MBB, MI, DL, get(T8xx::FPI32TOR64), T8xx::FAREG).addReg(T8xx::AREG);
+      MBB.erase(MI);
+    }
+    break;
+
     // Attempt to fix the jump table problem
   case T8xx::BRIND:
     {
@@ -545,7 +562,6 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
       MBB.erase(MI);
     }
     break;
-
 
   case T8xx::CALL:
     {

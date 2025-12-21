@@ -47,12 +47,39 @@ multiclass T8BinaryCastOp<bits<8> opval, string opstr,
 	def NAME#SN :      T8BinarySNOp8<opval, opstr, opnode>;
 }
 
-// Note: The respective T8xxISD::DS_... need to be defined int T8xxISelLowering.h!
 defm FADD : T8BinaryCastOp<0x87, "fpadd", fadd>;
 defm FSUB : T8BinaryCastOp<0x89, "fpsub", fsub>;
 defm FMUL : T8BinaryCastOp<0x8B, "fpmul", fmul>;
 defm FDIV : T8BinaryCastOp<0x8C, "fpdiv", fdiv>;
 
+
+class T8UnaryDBOp4<bits<4> opval, string opstr, SDNode opnode> :
+      T8InstFPU4<opval,
+                (outs DFPReg:$dst),
+       	 	(ins DFPReg:$src),
+		opstr,
+		[(set f64:$dst, (opnode f64:$src))]>
+{
+}
+
+class T8UnarySNOp4<bits<4> opval, string opstr, SDNode opnode> :
+      T8InstFPU4<opval,
+                (outs FPReg:$dst),
+       	 	(ins FPReg:$src),
+		opstr,
+		[(set f32:$dst, (opnode f32:$src))]>
+{
+	 	 let DecoderNamespace = "FPSN";
+}
+
+multiclass T8UnaryCastOp<bits<4> opval, string opstr,
+	   		SDNode opnode>
+{
+	def NAME#DB :      T8UnaryDBOp4<opval, opstr, opnode>;
+	def NAME#SN :      T8UnarySNOp4<opval, opstr, opnode>;
+}
+
+defm FPUABS :  	   T8UnaryCastOp<0xB, "fpuabs", fabs>;
 
 
 // Store f32 to global address
@@ -167,6 +194,15 @@ def FPI32TOR32 :  T8InstOp8<0x96,
 def : Pat<(sint_to_fp (i32 (load ADDRri:$addr))),
           (FPI32TOR32 (LDLP ADDRri:$addr) )>;
 
+def FPI32TOR32Reg : T8Inst<(outs FPReg:$dst),
+    		           (ins OReg:$src),
+			   "fpi32tor32reg",
+			   [(set f32:$dst, (sint_to_fp i32:$src))]>
+{
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+}
+
 def FPI32TOR64 :  T8InstOp8<0x98,
 		            (outs DFPReg:$dst),
 			    (ins MemSrc:$addr),
@@ -176,6 +212,14 @@ def FPI32TOR64 :  T8InstOp8<0x98,
 def : Pat<(sint_to_fp (i32 (load ADDRri:$addr))),
           (FPI32TOR64 (LDLP ADDRri:$addr) )>;
 
+def FPI32TOR64Reg : T8Inst<(outs DFPReg:$dst),
+    		           (ins OReg:$src),
+			   "fpi32tor64reg",
+			   [(set f64:$dst, (sint_to_fp i32:$src))]>
+{
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+}
 
 // Conversion from uint to f32 or f64
 def FPB32TOR64 :  T8InstOp8<0x9A,
@@ -466,7 +510,6 @@ def FPUSQRTLAST :  T8InstFPU4<0x3, (outs), (ins), "fpusqrtlast", []>;
 
 def FPUEXPDEC32 :  T8InstFPU4<0x9, (outs), (ins), "fpuexpdec32", []>;
 def FPUEXPINC32 :  T8InstFPU4<0xA, (outs), (ins), "fpuexpinc32", []>;
-def FPUABS :  	   T8InstFPU4<0xB, (outs), (ins), "fpuabs", []>;
 def FPUNOROUND :   T8InstFPU4<0xD, (outs), (ins), "fpunoround", []>;
 
 def FPUCHKI32 :    T8InstFPU4<0xE, (outs), (ins), "fpuchki32", []>;

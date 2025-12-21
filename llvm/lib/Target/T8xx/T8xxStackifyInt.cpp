@@ -1064,7 +1064,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
                     << MF.getName() << '\n');
 
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
+  //  T8xxMachineFunctionInfo &MFI = *MF.getInfo<T8xxMachineFunctionInfo>();
   auto &LIS = getAnalysis<LiveIntervalsWrapperPass>().getLIS();
 
   // OKH: Try to use the virtual register map
