@@ -732,9 +732,8 @@ def : Pat<(call tglobaladdr:$dst),
 def : Pat<(call texternalsym:$dst),
           (CALL texternalsym:$dst)>;
 
-// TODO: Verify whether this works for function pointers
 def : Pat<(call OReg:$target),
-           (GCALL $target)>;
+           (CALL $target)>;
 
 
 def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
