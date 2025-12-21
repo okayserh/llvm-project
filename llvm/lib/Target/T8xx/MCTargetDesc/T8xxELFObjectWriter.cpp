@@ -39,7 +39,6 @@ unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
                                            const MCValue &Target,
                                            bool IsPCRel) const {
   MCFixupKind Kind = Fixup.getKind();
-  auto Spec = Target.getSpecifier();
 
   if (mc::isRelocation(Kind))
     return Kind;

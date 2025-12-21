@@ -346,7 +346,6 @@ void T8xxAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
     return;   // If it is not resolved, leave it as is
 
   unsigned NumBytes = getFixupKindNumBytes(Fixup.getKind());
-  unsigned Offset = Fixup.getOffset();
 
   // For each byte of the fragment that the fixup touches, mask in the bits
   // from the fixup value. The Value has been "split up" into the
