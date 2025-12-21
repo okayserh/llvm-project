@@ -92,7 +92,6 @@ MCFixupKindInfo T8xxAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
 // "shouldInsertFixupForCodeAlign". It is needed for the Transputer.
 bool T8xxAsmBackend::relaxAlign(MCFragment &F, unsigned &Size)
 {
-  dbgs () << "Relax Align\n";
   unsigned MinNopLen = 1;  // For Transputer the NOP is just a j 0 instruction of 1 byte.
   
   Size = F.getAlignment().value() - MinNopLen;
@@ -103,19 +102,6 @@ bool T8xxAsmBackend::relaxAlign(MCFragment &F, unsigned &Size)
   F.setLinkerRelaxable();
   return true;
 }
-
-/*
-std::pair<bool, bool> T8xxAsmBackend::relaxLEB128(MCFragment &LF,
-                                                   int64_t &Value) const {
-  if (LF.isLEBSigned())
-    return std::make_pair(false, false);
-  const MCExpr &Expr = LF.getLEBValue();
-  if (ULEB128Reloc) {
-    LF.setVarFixups({MCFixup::create(0, &Expr, FK_Data_leb128)});
-  }
-  return std::make_pair(Expr.evaluateKnownAbsolute(Value, *Asm), false);
-}
-*/
 
 bool T8xxAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
 				  const MCSubtargetInfo *STI) const {

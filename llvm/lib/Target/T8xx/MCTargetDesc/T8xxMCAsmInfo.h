@@ -26,14 +26,6 @@ class T8xxELFMCAsmInfo : public MCAsmInfoELF {
 public:
   explicit T8xxELFMCAsmInfo(const Triple &TheTriple);
 
-  /*
-  const MCExpr*
-  getExprForPersonalitySymbol(const MCSymbol *Sym, unsigned Encoding,
-                              MCStreamer &Streamer) const override;
-  const MCExpr* getExprForFDESymbol(const MCSymbol *Sym,
-                                    unsigned Encoding,
-                                    MCStreamer &Streamer) const override;
-  */
   void printSpecifierExpr(raw_ostream &OS,
                           const MCSpecifierExpr &Expr) const override;
   bool evaluateAsRelocatableImpl(const MCSpecifierExpr &Expr, MCValue &Res,

@@ -20,6 +20,8 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "t8xxmcasminfo"
+
 void T8xxELFMCAsmInfo::anchor() {}
 
 T8xxELFMCAsmInfo::T8xxELFMCAsmInfo(const Triple &TheTriple) {
@@ -67,6 +69,6 @@ bool T8xxELFMCAsmInfo::evaluateAsRelocatableImpl(const MCSpecifierExpr &Expr, MC
   Res.setSpecifier(Expr.getSpecifier());
   return !Res.getSubSym();
 
-  dbgs() << "EvaluatAsReloc\n";
+  LLVM_DEBUG(dbgs() << "EvaluatAsReloc\n");
   return (true);
 }

@@ -196,6 +196,12 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
 	      Bits |= imm_dec & 0xF;
 	    }
 
+	  // TODO: This code assumes that all expressions will lead to a
+	  // relocation.
+	  // I.e. any expression gets 8 bytes for a full nfix/pfix setup.
+	  // However, it will only affect T8xx instructions. Hence it must
+	  // be checked that all instructions get appropriate relocations
+	  // recorded.
 	  if (MO->isExpr ())
 	    {
 	      // Add 7 "pfix 0" instructions. These will later be adjusted
@@ -203,8 +209,10 @@ void T8xxMCCodeEmitter::encodeInstruction(const MCInst &MI,
 	      for (int i = 0; i < 7; ++i)
 		EmitByte (0x20, CB);
 
-	      LLVM_DEBUG(dbgs() << "Opcode " << Bits << ", Expression found\n");
-	      MO->getExpr ()->dump ();
+	      LLVM_DEBUG( {
+		  dbgs() << "Opcode " << Bits << ", Expression found\n";
+		  MO->getExpr ()->dump ();
+		});
 	    }
 	}
     }
@@ -221,7 +229,7 @@ getExprOpValue(const MCInst &MI,
                const MCSubtargetInfo &STI) const {
   int64_t Res;
 
-  dbgs() << "getExprOpValue\n";
+  LLVM_DEBUG(dbgs() << "getExprOpValue\n");
 
   if (Expr->evaluateAsAbsolute(Res))
     return Res;

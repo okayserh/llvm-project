@@ -41,29 +41,8 @@ unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
   MCFixupKind Kind = Fixup.getKind();
   auto Spec = Target.getSpecifier();
 
-  // Note: Other backends filter for TLS and set the symbol type accordingly
-
-  dbgs () << "getRelocType" << Kind << "\n";
-  
   if (mc::isRelocation(Kind))
     return Kind;
-
-    dbgs () << "getRelocType -> Fallthrough\n";
-
-  // Reference code from SparcELFObjectwriter
-  /*
-  if (const auto *SExpr = dyn_cast<MCSpecifierExpr>(Fixup.getValue())) {
-    if (SExpr->getSpecifier() == ELF::R_SPARC_DISP32)
-      return ELF::R_SPARC_DISP32;
-  }
-  */
-
-  /* Old code
-    if (const T8xxMCExpr *SExpr = dyn_cast<T8xxMCExpr>(Fixup.getValue())) {
-    if (SExpr->getKind() == T8xxMCExpr::VK_T8xx_IPTRREL)
-      return ELF::R_T8XX_ADDR;
-      }
-  */
 
   if (IsPCRel) {
     switch(Kind) {
@@ -107,28 +86,10 @@ unsigned T8xxELFObjectWriter::getRelocType(const MCFixup &Fixup,
 
 bool T8xxELFObjectWriter::needsRelocateWithSymbol(const MCValue &/*Val*/,
                                                  unsigned Type) const {
-  dbgs ()<<  "needsRelocateWithSymbol: " << Type << "\n";
   if (Type == ELF::R_T8XX_ALIGN)
     return (false);
   else
-    return (true);
-  
-  switch (Type) {
-    default:
-      return false;
-
-      // Returning true creates a "real" symbol in the ELF object file!
-      // We need this for the binary relocations.
-  case ELF::R_T8XX_ADDR:
-  case ELF::R_T8XX_ADDR_BASE:
-  case ELF::R_T8XX_ADDR_ADD:
-  case ELF::R_T8XX_ADDR_SUB:
-  case ELF::R_T8XX_ADDR_NPFIX:
-
-  case ELF::R_T8XX_LDPI_SYM:
-  case ELF::R_T8XX_JUMP:
-      return true;
-  }
+    return (true);  
 }
 
 std::unique_ptr<MCObjectTargetWriter>

@@ -242,17 +242,9 @@ public:
   void addWPtrSrcOperands(MCInst &Inst, unsigned N) const {
     assert(N == 2 && "Invalid number of operands!");
 
-    //    Inst.addOperand(MCOperand::createReg(getMemBase()));
     Inst.addOperand(MCOperand::createReg(T8xx::WPTR));
 
     const MCExpr *Expr = getMemOff();
-
-    if (!Expr)
-      printf ("Expr == NULL\n");
-    else if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr))
-      printf ("Expr == %i\n", CE->getValue());
-    else
-      printf ("Expr == createExpr\n");
 
     addExpr(Inst, Expr);
   }
@@ -323,11 +315,12 @@ bool T8xxAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   SmallVector<MCInst, 8> Instructions;
   unsigned MatchResult = MatchInstructionImpl(Operands, Inst, ErrorInfo,
                                               MatchingInlineAsm);
-
   // Debug ouput
-  printf ("MatchAndEmit  OpSize %i\n", Operands.size());
+  //  printf ("MatchAndEmit  OpSize %i\n", Operands.size());
+  LLVM_DEBUG( {
   for (auto T = Operands.begin (); T != Operands.end (); ++T)
     (*T)->dump ();
+    } );
 
   switch (MatchResult) {
   case Match_Success: {
@@ -386,12 +379,6 @@ ParseStatus T8xxAsmParser::tryParseRegister(MCRegister &RegNo,
     return ParseStatus::NoMatch;
   Parser.Lex();
   unsigned regKind = T8xxOperand::rk_None;
-  /*
-  if (matchRegisterName(Tok, RegNo, regKind)) {
-    Parser.Lex();
-    return MatchOperand_Success;
-  }
-  */
 
   getLexer().UnLex(Tok);
   return ParseStatus::NoMatch;
@@ -404,42 +391,10 @@ static void applyMnemonicAliases(StringRef &Mnemonic,
 bool T8xxAsmParser::parseInstruction(ParseInstructionInfo &Info,
                                       StringRef Name, SMLoc NameLoc,
                                       OperandVector &Operands) {
-
-  printf ("parseInstruction\n");
-  
   // First operand in MCInst is instruction mnemonic.
   Operands.push_back(T8xxOperand::CreateToken(Name, NameLoc));
 
-  // apply mnemonic aliases, if any, so that we can parse operands correctly.
-  //TODO OKH  applyMnemonicAliases(Name, getAvailableFeatures(), 0);
-
-  /* Since the Transputer instructions always act on specific registers,
-    those registers are not explicitly mentioned in assembler code. However,
-    for the LLVM representation of the assembler instructions those operands
-    are required.
-    At this place, those operands are added as required by the 15 instructions
-    for which this applies */
-  /*
-  if (Name.equals("stl")) {
-    printf ("Adding OPS for stl\n");
-    Operands.push_back (T8xxOperand::CreateReg(T8xx::AREG, T8xxOperand::rk_Int,
-					       getLexer().getLoc(),
-					       getLexer().getLoc()));
-  }
-  */
-
-
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
-    // Read the first operand.
-    /*
-    if (getLexer().is(AsmToken::Comma)) {
-      if (parseBranchModifiers(Operands) != MatchOperand_Success) {
-        SMLoc Loc = getLexer().getLoc();
-        return Error(Loc, "unexpected token");
-      }
-    }
-    */
-
     if (parseOperand(Operands, Name)) {
       SMLoc Loc = getLexer().getLoc();
       return Error(Loc, "unexpected token");
@@ -470,9 +425,6 @@ ParseStatus T8xxAsmParser::
 parseDirective(AsmToken DirectiveID)
 {
   StringRef IDVal = DirectiveID.getString();
-
-  dbgs() << "parseDirective: " << IDVal << "\n";  
-  
   // Let the MC layer to handle other directives.
   return ParseStatus::NoMatch;
 }
@@ -482,8 +434,6 @@ ParseStatus T8xxAsmParser::parseWPtrOperand(OperandVector &Operands) {
   SMLoc S = Parser.getTok().getLoc();
   SMLoc E = SMLoc::getFromPointer(S.getPointer() - 1);
 
-  printf ("parseWPtrOperand  %i  %i\n", getLexer().getKind(), AsmToken::Integer);
-  
   switch (getLexer().getKind()) {
   default:
     return ParseStatus::NoMatch;
@@ -542,8 +492,7 @@ T8xxAsmParser::parseT8xxAsmOperand(std::unique_ptr<T8xxOperand> &Op,
       Parser.Lex(); // Eat the '%'.
       if (matchT8xxAsmModifiers(EVal, E)) {
 	E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-	printf ("parseT8xxOperand, Percent\n");
-	EVal->dump ();
+	//	EVal->dump ();
 	Op = T8xxOperand::CreateImm(EVal, S, E);
       }
     }
@@ -572,8 +521,6 @@ T8xxAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
   // Thus, this method also looks for instructions, where the "ParserMatchClass"
   // has been defined. In our case this is the T8xxWPtrSrcAsmOperand.
   ParseStatus Res = MatchOperandParserImpl(Operands, Mnemonic);
-
-  dbgs() << "parseOp\n";
 
   // If there wasn't a custom match, try the generic matcher below. Otherwise,
   // there was a match, but an error occurred, in which case, just return that
