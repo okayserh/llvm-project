@@ -81,7 +81,7 @@ define dso_local i32 @test20b(i32 noundef %0) #0 {
 ; CHECK: stl -2
 ; CHECK: ldl 2
 ; CHECK: stl -3
-; CHECK: ldc test20a
+; CHECK: ldc %global_pfix(test20a)
 ; CHECK: gcall
 ; CHECK: rev
 ; CHECK: stl 3

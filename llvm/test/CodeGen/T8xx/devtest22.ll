@@ -19,7 +19,7 @@ entry:
 ; CHECK-LABEL: test22a:
 ; CHECK: stl 0
 ; CHECK: ajw -4
-; CHECK: ldc test
+; CHECK: ldc %global_pfix(test)
 ; CHECK: ldnl 0
 ; CHECK: ldl 3
 ; CHECK: add
@@ -52,7 +52,7 @@ entry:
 ; CHECK: ajw -4
 ; CHECK: ldl 3
 ; CHECK: stl -1
-; CHECK: ldc test22a
+; CHECK: ldc %global_pfix(test22a)
 ; CHECK: gcall
 ; CHECK: rev
 ; CHECK: stl 2

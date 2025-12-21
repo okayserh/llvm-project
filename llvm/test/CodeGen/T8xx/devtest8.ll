@@ -27,11 +27,11 @@ define i32 @test8a(i32) #0 {
 ; CHECK: and
 ; CHECK: gajw
 ; CHECK: stl 4
-; CHECK: ldc .L.str
+; CHECK: ldc %global_pfix(.L.str)
 ; CHECK: stl 2
 ; CHECK: ldl 4
 ; CHECK: ldnl 0
-; CHECK: ldc .L.str
+; CHECK: ldc %global_pfix(.L.str)
 ; CHECK: add
 ; CHECK: lb
 ; CHECK: ldc 128
@@ -63,7 +63,7 @@ define i32 @test8b(i32) #0 {
 ; CHECK: ajw -4
 ; CHECK: ldl 3
 ; CHECK: stl -1
-; CHECK: ldc test8a
+; CHECK: ldc %global_pfix(test8a)
 ; CHECK: gcall
 ; CHECK: rev
 ; CHECK: stl 2
