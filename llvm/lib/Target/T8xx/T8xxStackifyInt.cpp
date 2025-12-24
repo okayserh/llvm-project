@@ -692,7 +692,18 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	    str2code = "EsDEl";
 	  else
 	    // TODO: Check for commuting operators
-	    str2code = "ED";
+	    // For commuting operators this string can be used (i.e.
+	    // result is same with FAREG and FBREG switched (like add,mul)
+	    // str2code = "ED";
+
+	    // For non commuting operators this string must be used
+	    // It brings FAREG and FBREG into the required order
+	    // (div, sub, stnl!)
+	    str2code = "EsDEl";
+
+	    // TODO: Very sloppy fix. Instead of implementing the reversal,
+	    // just use a safe combination with additional store.
+	    //	    str2code = "EsDEl";
 	}
       else
 	{
@@ -714,6 +725,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  // to that position, if it is a load
 	  if ((*(str2code+1) != 0) && (*(str2code+1) == 'l'))
 	    ++str2code;
+
+	  dbgs() << "Proc " << *str2code << "\n";
 
 	  switch (*str2code)
 	    {
@@ -800,8 +813,11 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      int opno = bIntCase ? (*(str2code-1)) - 'A' :
 		(*(str2code-1)) - 'D';
 
+	      dbgs () << "Opno " << opno << "\n";
+	      
 	      // Note Character denotes operand position!
-	      MachineOperand *Use = OpDepth[opno].second;
+	      MachineOperand *Use = bIntCase ? OpDepth[opno].second :
+		OpDepthFP[opno].second;
 	      Register Reg = Use->getReg ();
 	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
 
@@ -836,8 +852,14 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 		  // integer variable?
 		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
 		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-		  DefI = BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPSTNLSN)).
-		    addReg(Reg).addReg(RegFPStack);
+
+		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
+		    BuildMI(*MBB, MBBI, DL, TII->get(T8xx::FPSTNLSN)).
+		      addReg(Reg).addReg(RegFPStack);
+
+		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
+		    BuildMI(*MBB, MBBI, DL, TII->get(T8xx::FPSTNLDB)).
+		      addReg(Reg).addReg(RegFPStack);		  
 		}
 	    }
 	      break;
@@ -846,7 +868,8 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      bool bIntCase = (*(str2code-1) <= 'C');
 	      int opno = bIntCase ? (*(str2code-1)) - 'A' :
 		(*(str2code-1)) - 'D';
-	      MachineOperand *Use = OpDepth[opno].second;
+	      MachineOperand *Use = bIntCase ? OpDepth[opno].second :
+		OpDepthFP[opno].second;
 
 	      // When the temporary register is introduced, the use
 	      // is set to RegClone. Hence, we can retrieve the right clone from there
@@ -871,17 +894,17 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 		  // TODO: Evaluate whether something needs to be done regarding the newly introduced
 		  // integer variable?
-		  BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
+		  BuildMI(*MBB, MBBI, DL, TII->get(T8xx::LDLP),RegFPStack).
 		    addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
 
 		  // Load single when register is singe precision
 		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::FPRegRegClassID)
-		    BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
+		    BuildMI(*MBB, MBBI, DL, TII->get(T8xx::FPLDNLSN),RegClone).
 		      addReg(RegFPStack);
 
 		  // Load double when register is double precision
 		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
-		    BuildMI(*MBB, ++MBBI, DL, TII->get(T8xx::FPLDNLDB),RegClone).
+		    BuildMI(*MBB, MBBI, DL, TII->get(T8xx::FPLDNLDB),RegClone).
 		      addReg(RegFPStack);
 
 		  VRM.grow ();
@@ -894,7 +917,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  ++str2code;
 	}
     }
-
+  
   output.push_back (MI);
   return (MI);
 }
