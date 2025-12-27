@@ -182,9 +182,15 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT, MVT::i16, Promote);
   setOperationAction(ISD::SELECT, MVT::i32, Custom);
 
+  setOperationAction(ISD::SELECT, MVT::f32, Custom);
+  setOperationAction(ISD::SELECT, MVT::f64, Custom);
+  
   setOperationAction(ISD::SELECT_CC, MVT::i8, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
+
+  setOperationAction(ISD::SELECT_CC, MVT::f32, Expand);
+  setOperationAction(ISD::SELECT_CC, MVT::f64, Expand);
 
   // TODO: Implement efficiently
   setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
@@ -898,9 +904,6 @@ T8xxTargetLowering::EmitLoweredSelect(MachineInstr &MI,
   return SinkMBB;
 }
 
-
-
-
 // This function creates nodes to replicate a select function
 // in the DAG
 
@@ -1021,10 +1024,11 @@ T8xxTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   switch (MI.getOpcode()) {
   default:
     llvm_unreachable("Unexpected instr type to insert");
+  case T8xx::CMOVf32:
+  case T8xx::CMOVf64:
   case T8xx::CMOV32:
     return EmitLoweredSelect(MI, MBB);
   }
-
 }
 
 //

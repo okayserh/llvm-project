@@ -726,8 +726,6 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  if ((*(str2code+1) != 0) && (*(str2code+1) == 'l'))
 	    ++str2code;
 
-	  dbgs() << "Proc " << *str2code << "\n";
-
 	  switch (*str2code)
 	    {
 	      // Integer cases

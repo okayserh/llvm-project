@@ -99,23 +99,6 @@ def T8xxMoveLoad : SDNode<"T8xxISD::MoveLoad", SDT_MoveLoad, [SDNPHasChain, SDNP
 def T8xxMoveSEXTLoad : SDNode<"T8xxISD::MoveSEXTLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
 def T8xxMoveZEXTLoad : SDNode<"T8xxISD::MoveZEXTLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
 
-// Note: This translates into a pseudo instruction, which is translated into a
-// STL, MOVE. Truncation should automatically happen through the limited number of bytes in the "move"
-// instruction.
-// For the STL, the used buffer needs to be kept as fourth parameter
-/*
-def SDT_StoreMove : SDTypeProfile<0, 4,   // 0 output, 5 inputs (SRC, DST, Count)
-[
-SDTCisInt<0>,     // Value
-SDTCisVT<1, i32>, // Count
-SDTCisPtrTy<2>,   // AlignedBuffer
-SDTCisPtrTy<3>    // SRC (Unaligned)
-//,SDTCisPtrTy<4>   // AlignedBuffer 2
-]>; // Input chain
-
-def T8xxStoreMove : SDNode<"T8xxISD::StoreMove", SDT_StoreMove, [SDNPHasChain, SDNPMayStore]>;
-*/
-
 
 // Custom add for instruction pointer (Note: To avoid defining a new register class
 // for the instruction pointer, this is designed as a unary pattern
@@ -811,7 +794,5 @@ def ADJCALLSTACKUP : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
 
 // Include Assembler only opcodes
 include "T8xxInstrArithmetic.td"
-
-
 
 include "T8xxInstrAliases.td"

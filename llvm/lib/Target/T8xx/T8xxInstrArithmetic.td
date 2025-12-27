@@ -471,6 +471,33 @@ def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUO)),
            (EQC (FPORDEREDDB $lhs, $rhs), 0)>;
 
 
+//===----------------------------------------------------------------------===//
+// Conditional Move Pseudo Instructions
+//
+// CMOV* - Used to implement the SELECT DAG operation. Expanded after
+// instruction selection into a branch sequence.
+//===----------------------------------------------------------------------===//
+
+def CMOVf32 : T8Inst<(outs FPReg:$dst),
+    		    (ins OReg:$ccr, FPReg:$t, FPReg:$f),
+                    "",
+		    [(set f32:$dst,
+		    (f32 (MxCmov i32:$ccr, f32:$t, f32:$f)))]> {
+    let usesCustomInserter = 1;
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+  }
+
+def CMOVf64 : T8Inst<(outs DFPReg:$dst),
+    		    (ins OReg:$ccr, DFPReg:$t, DFPReg:$f),
+                    "",
+		    [(set f64:$dst,
+		    (f64 (MxCmov i32:$ccr, f64:$t, f64:$f)))]> {
+    let usesCustomInserter = 1;
+    let isCodeGenOnly = 1;
+    let isPseudo = 1;
+  }
+
 def FPNAN :       T8InstOp8<0x91,
 			    (outs OReg:$nan, FPReg:$tst_out),
 			    (ins FPReg:$tst_in),  // Needs one FPReg, but does not "consume" it from FP-stack
