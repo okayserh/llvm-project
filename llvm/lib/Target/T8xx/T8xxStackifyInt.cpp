@@ -810,8 +810,6 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      bool bIntCase = (*(str2code-1) <= 'C');
 	      int opno = bIntCase ? (*(str2code-1)) - 'A' :
 		(*(str2code-1)) - 'D';
-
-	      dbgs () << "Opno " << opno << "\n";
 	      
 	      // Note Character denotes operand position!
 	      MachineOperand *Use = bIntCase ? OpDepth[opno].second :

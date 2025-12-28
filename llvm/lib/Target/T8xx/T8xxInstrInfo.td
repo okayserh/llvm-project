@@ -787,6 +787,83 @@ def ADJCALLSTACKUP : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
 }
 
 
+//===----------------------------------------------------------------------===//
+// Atomic Instructions
+// Note: Structurally copied from the MipsInstrInfo.td
+// Since the T8xx is single threaded, the atomic instructions do not
+// make much sense for this backend. As long as no T8xx task switching
+// instructions are used within an instruction sequence, the regular instructions
+// should be "atomic".
+//===----------------------------------------------------------------------===//
+
+// Atomic instructions with 2 source operands (ATOMIC_SWAP & ATOMIC_LOAD_*).
+class Atomic2Ops<PatFrag Op> :
+  T8Inst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$incr), "",
+           [(set i32:$dst, (Op iPTR:$ptr, i32:$incr))]> {
+  let hasNoSchedulingInfo = 1;
+  let isCodeGenOnly = 1;    // Note: prevents an error message that the token is not found
+  let isPseudo = 1;
+}
+
+/*
+class Atomic2OpsPostRA<RegisterClass RC> :
+  PseudoSE<(outs RC:$dst), (ins PtrRC:$ptr, RC:$incr), []> {
+  let mayLoad = 1;
+  let mayStore = 1;
+}
+
+
+// Atomic Compare & Swap.
+// Atomic compare and swap is lowered into two stages. The first stage happens
+// during ISelLowering, which produces the PostRA version of this instruction.
+class AtomicCmpSwap<PatFrag Op, RegisterClass DRC> :
+  PseudoSE<(outs DRC:$dst), (ins PtrRC:$ptr, DRC:$cmp, DRC:$swap),
+           [(set DRC:$dst, (Op iPTR:$ptr, DRC:$cmp, DRC:$swap))]> {
+  let hasNoSchedulingInfo = 1;
+}
+
+class AtomicCmpSwapPostRA<RegisterClass RC> :
+  PseudoSE<(outs RC:$dst), (ins PtrRC:$ptr, RC:$cmp, RC:$swap), []> {
+  let mayLoad = 1;
+  let mayStore = 1;
+}
+*/
+
+let usesCustomInserter = 1 in {
+  def ATOMIC_LOAD_ADD_I32  : Atomic2Ops<atomic_load_add_i32>;
+  def ATOMIC_LOAD_SUB_I32  : Atomic2Ops<atomic_load_sub_i32>;
+  def ATOMIC_LOAD_AND_I32  : Atomic2Ops<atomic_load_and_i32>;
+  def ATOMIC_LOAD_OR_I32   : Atomic2Ops<atomic_load_or_i32>;
+  def ATOMIC_LOAD_XOR_I32  : Atomic2Ops<atomic_load_xor_i32>;
+  def ATOMIC_LOAD_NAND_I32 : Atomic2Ops<atomic_load_nand_i32>;
+
+  def ATOMIC_SWAP_I32      : Atomic2Ops<atomic_swap_i32>;
+
+//  def ATOMIC_CMP_SWAP_I32  : AtomicCmpSwap<atomic_cmp_swap_i32>;
+
+  def ATOMIC_LOAD_MIN_I32  : Atomic2Ops<atomic_load_min_i32>;
+  def ATOMIC_LOAD_MAX_I32  : Atomic2Ops<atomic_load_max_i32>;
+  def ATOMIC_LOAD_UMIN_I32 : Atomic2Ops<atomic_load_umin_i32>;
+  def ATOMIC_LOAD_UMAX_I32 : Atomic2Ops<atomic_load_umax_i32>;
+}
+
+/*
+def ATOMIC_LOAD_ADD_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_SUB_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_AND_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_OR_I32_POSTRA   : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_XOR_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_NAND_I32_POSTRA : Atomic2OpsPostRA<GPR32>;
+
+def ATOMIC_SWAP_I32_POSTRA : Atomic2OpsPostRA<GPR32>;
+
+def ATOMIC_CMP_SWAP_I32_POSTRA : AtomicCmpSwapPostRA<GPR32>;
+
+def ATOMIC_LOAD_MIN_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_MAX_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_UMIN_I32_POSTRA : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_UMAX_I32_POSTRA : Atomic2OpsPostRA<GPR32>;
+*/
 
 //===----------------------------------------------------------------------===//
 // Floating Point Instructions
