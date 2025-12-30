@@ -1,4 +1,5 @@
 ; RUN: llc < %s -march=t8xx | FileCheck %s -v --check-prefix=CHECK
+; Corresponds to fp/test3.ll
 
 define dso_local i32 @fp_test2(float noundef %a, double noundef %b) {
 entry:
