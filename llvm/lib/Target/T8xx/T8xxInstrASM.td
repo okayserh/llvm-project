@@ -71,7 +71,6 @@ def OUTWORD:  T8InstOp4<0xF, (outs), (ins OReg:$word, MemSrc:$chan), "outword", 
 def RESETCH : T8InstOp8<0x12, (outs OReg:$dst), (ins OReg:$src), "resetch", []>;
 
 // Diverse functions
-def MINT :    T8InstOp8<0x42, (outs OReg:$dst), (ins), "mint", []>;
 def BCNT :    T8InstOp8<0x34, (outs OReg:$dst), (ins OReg:$src), "bcnt", []>;
 def WCNT :    T8InstOp8<0x3F, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src), "wcnt", []>;
 
@@ -111,9 +110,6 @@ def LMUL :    T8InstOp8<0x31, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OR
 def NORM :    T8InstOp8<0x19, (outs OReg:$dst1, OReg:$dst2), (ins OReg:$src1, OReg:$src2, OReg:$src3), "norm", []>;
 
 def SUM :     T8InstOp8<0x52, (outs OReg:$dst), (ins OReg:$src1, OReg:$src2), "sum", []>;
-
-// Note: There is no binary not operation in the LLVM instruction set.
-def NOT : T8InstOp8<0x32, (outs OReg:$dst), (ins OReg:$src), "not", []>;
 
 // Fractional arithmetic
 def FMUL :        T8InstOp8<0x72, (outs OReg:$dst),

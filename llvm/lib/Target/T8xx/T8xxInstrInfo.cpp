@@ -369,7 +369,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   LLVM_DEBUG(dbgs()<< "expandPostRAPseudo Opcode: " << MI.getOpcode () << "\n");
 
   MachineBasicBlock &MBB = *MI.getParent();
-  const MachineFunction *MF = MBB.getParent();
+  // const MachineFunction *MF = MBB.getParent();
   //  const MachineRegisterInfo &MRI = MF->getRegInfo();
   DebugLoc DL = MI.getDebugLoc();
 
@@ -427,6 +427,7 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     break;
 
     // Pseudo instruction needs to be removed
+  case T8xx::TxSync:
   case T8xx::SELLOW:
   case T8xx::JOIN:
     MBB.erase (MI);

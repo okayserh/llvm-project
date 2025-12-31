@@ -76,6 +76,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "JOIN";
   case T8xxISD::FP_SETCC:
     return "FP_SETCC";
+  case T8xxISD::SYNC:
+    return "SYNC";
   }
 }
 
@@ -172,6 +174,9 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
 
+  // Bitcast for a very special use in FCOPYSIGN
+  setOperationAction(ISD::BITCAST, MVT::f32, Custom);
+
   // Note, the Custom code only provides functionality
   // for i32 values. For the other value types, use
   // "Promote" to indicate that those types need
@@ -191,6 +196,9 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::SELECT_CC, MVT::f32, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::f64, Expand);
+
+  setOperationAction(ISD::FCOPYSIGN,          MVT::f32,   Custom);
+  setOperationAction(ISD::FCOPYSIGN,          MVT::f64,   Custom);
 
   // TODO: Implement efficiently
   setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
@@ -329,45 +337,45 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
   case ISD::STORE:
     LLVM_DEBUG(dbgs() << "#### Lower Store #####\n");
     return LowerSTORE(Op, DAG);
-
   case ISD::LOAD:
     LLVM_DEBUG(dbgs() << "#### Lower Load #####\n");
     return LowerLOAD(Op, DAG);
-
+  case ISD::BRCOND:
+    return LowerBRCOND(Op, DAG);
+  case ISD::VASTART:
+    return LowerVASTART(Op, DAG);
   case ISD::SETCC:
     LLVM_DEBUG(dbgs() << "#### SETCC #####\n");
     return LowerSETCC(Op, DAG);
   case ISD::SELECT:
     LLVM_DEBUG(dbgs() << "####### Lower Select  #########\n");
     return LowerSELECT(Op, DAG);
-  case ISD::BRCOND:
-    return LowerBRCOND(Op, DAG);
-  case ISD::VASTART:
-    return LowerVASTART(Op, DAG);
+
+  case ISD::ATOMIC_FENCE:
+    return LowerATOMIC_FENCE(Op, DAG);
+  case ISD::BITCAST:
+    return LowerBITCAST(Op, DAG);
+  case ISD::FCOPYSIGN:
+    return LowerFCOPYSIGN(Op, DAG);
 
   case ISD::GlobalAddress:
     LLVM_DEBUG(dbgs() << "####### Lower GlobalAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
-
     //TODO: These four may need reevaluation
   case ISD::ConstantPool:
     LLVM_DEBUG(dbgs() << "####### Lower ConstantPool  #########\n");
     return LowerConstantPool(Op, DAG);
-
   case ISD::JumpTable:
     LLVM_DEBUG(dbgs() << "####### Lower JumpTable  #########\n");
     return LowerJumpTable(Op, DAG);
-
   case ISD::BlockAddress:
     LLVM_DEBUG(dbgs() << "####### Lower BlockAddress  #########\n");
     return LowerBlockAddress(Op, DAG);
-
   case ISD::GlobalTLSAddress:
     LLVM_DEBUG(dbgs() << "####### Lower GlobalTLSAddress  #########\n");
     return LowerGlobalAddress(Op, DAG);
   }
 }
-
 
 SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
 {
@@ -424,22 +432,6 @@ SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
 	      Move->dump ();
 	    });
 
-	  /*
-	  dbgs() << "StoreMove node created\n";
-	  Op->dump ();
-
-	  // --- 3. Perform the unaligned move (a smaller byte-by-byte store/load) ---
-	  SDValue MoveLen = DAG.getConstant(2, DL, MVT::i32);
-	  SDValue Ptr = StoreOp->getBasePtr ();
-	  SDValue Chain = StoreOp->getChain();  // Output chain from original LOAD node
-
-	  SDVTList VTs = DAG.getVTList(MVT::Other);
-	  SDValue Move = DAG.getNode(T8xxISD::StoreMove, DL, VTs,
-				     StoreOp->getValue(), MoveLen, FIPtr, Ptr);
-
-	  StoreOp->getValue().dump();
-	  */
-
 	  return (Move);
 	}
       else
@@ -448,7 +440,6 @@ SDValue T8xxTargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const
 
   return (Op);
 }
-
 
 SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 {
@@ -511,38 +502,6 @@ SDValue T8xxTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 
   return (Op);
 }
-
-
-SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
-{
-  /*
-  SDValue Op0 = Op.getOperand(0);
-  SDValue Op1 = Op.getOperand(1);
-  SDLoc DL(Op);
-  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
-  */
-  
-  /*
-  if (Op0.getValueType ().isFloatingPoint ())
-    {
-      switch (CC)
-	{
-	case ISD::SETEQ:
-	case ISD::SETGT:
-	  return (Op);
-	}
-
-      // TODO: Quick hack to see if it catches floating point comparisons
-      SDValue NewCond;
-      NewCond = DAG.getSetCC (DL, Op.getValueType (),
-			      Op0, Op1, ISD::SETOLT);
-      return (NewCond);
-    }
-  */
-
-  return (Op);
-}
-
 
 SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   //  bool AddTest = true;
@@ -668,6 +627,10 @@ SDValue T8xxTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
                       MachinePointerInfo(SV));
 }
 
+SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
+{
+  return (Op);
+}
 
 SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
 {
@@ -681,6 +644,154 @@ SDValue T8xxTargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const
   SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
   SDValue Ops[] = {Cond, Op1, Op2};
   return DAG.getNode(T8xxISD::CMOV, DL, VTs, Ops);
+}
+
+SDValue T8xxTargetLowering::LowerATOMIC_FENCE(SDValue Op,
+                                              SelectionDAG &DAG) const {
+  // FIXME: Need pseudo-fence for 'singlethread' fences
+  // FIXME: Set SType for weaker fences where supported/appropriate.
+  unsigned SType = 0;
+  SDLoc DL(Op);
+  return DAG.getNode(T8xxISD::SYNC, DL, MVT::Other, Op.getOperand(0),
+                     DAG.getConstant(SType, DL, MVT::i32));
+}
+
+SDValue T8xxTargetLowering::LowerBITCAST(SDValue Op,
+					 SelectionDAG &DAG) const {
+
+  // This function is only supposed to be called for i32 source and f32 destination
+  // types.
+  EVT SrcVT = Op.getOperand(0).getValueType();
+  EVT DstVT = Op.getValueType();
+  SDLoc DL(Op);
+
+  if ((SrcVT == MVT::i32) &&
+      (DstVT == MVT::f32))
+    {
+      MachineFunction &MF = DAG.getMachineFunction();
+      T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
+
+      // Check whether a workspace location was already allocated
+      // as temporary storage for Move instructions
+      int FI = FuncInfo->getMoveSlot();
+      if (FI == 0)
+	{
+	  FI = DAG.getMachineFunction().
+	    getFrameInfo().CreateStackObject(4, // Size in bytes for i16
+					     Align(4), // Required alignment for the load to the frame
+					     false); // isImmutable
+	  FuncInfo->setMoveSlot(FI);
+	}
+      
+      SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      SDValue Chain = DAG.getEntryNode();
+      SDValue Result = DAG.getStore(Chain, DL, Op.getOperand(0), FIPtr,
+				    MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI),
+				    Align(4));
+      Result = DAG.getLoad(DstVT, DL, Result, FIPtr,
+			   MachinePointerInfo::getFixedStack(DAG.getMachineFunction(),FI),
+			   Align(4));
+
+      return Result;
+    }
+  else
+    return Op;
+}
+
+
+SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
+					   /*bool HasExtractInsert*/) const {
+  EVT TyX = Op.getOperand(0).getValueType();
+  EVT TyY = Op.getOperand(1).getValueType();
+  SDLoc DL(Op);
+  SDValue Const1 = DAG.getConstant(1, DL, MVT::i32);
+  SDValue Const31 = DAG.getConstant(31, DL, MVT::i32);
+  SDValue Res;
+
+  // Note: The T8xx code should be something like this:
+  // FAReg = X (absolute value)
+  // FBReg = Y (sign)
+
+  // fprev
+  // ldlp (temp space)
+  // fpstnl  // Original FBReg (Y) into temp space
+  // ldl (temp space)
+  // mint
+  // and    // Extract top bit   -> AReg = Top with only sign bit extracted
+  // ldlp (temp space)
+  // fpstnl  // Original FAReg (X) into temp space
+  // ldl (temp space)           -> AReg = X with only sign part extracted, BReg = Sign Y
+  // mint        AReg = 0x8000000, BReg = X, CReg = Sign 
+  // not         AReg = 0x7ffffff, BReg = X, CReg = Sign
+  // and         AReg = X & 0x7fffffff, BReg = Sign
+  // or          AReg = Sign | (X & 0x7fffffff)
+  // stl (temp space)
+  // ldlp (temp space)
+  // fpldnl  // result in FAReg
+
+  // Check whether a workspace location was already allocated
+  // as temporary storage for Move instructions
+  // This can be reused for f32 conversions!
+  /*
+  int FI = 0;
+  if (ValueType == F32)
+  {
+  FI = FuncInfo->getMoveSlot();
+  if (FI == 0)
+  {
+    FI = DAG.getMachineFunction().
+    getFrameInfo().CreateStackObject(4, // Size in bytes for i16
+    Align(4), // Required alignment for the load to the frame
+    false); // isImmutable
+    FuncInfo->setMoveSlot(FI);
+    }
+    }
+    else // ValueType = f64
+    {
+    int FI = FuncInfo->getDoubleFPSlot();
+    if (FI == 0)
+    {
+    }
+    }
+  */
+
+  // Note: MIPS Code
+
+  // If operand is of type f64, extract the upper 32-bit. Otherwise, bitcast it
+  // to i32.
+  /*
+  SDValue X = (TyX == MVT::f32) ?
+    DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(0)) :
+    DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32, Op.getOperand(0),
+                Const1);
+  SDValue Y = (TyY == MVT::f32) ?
+    DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(1)) :
+    DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32, Op.getOperand(1),
+                Const1);
+  */
+  SDValue X = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(0));
+  SDValue Y = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(1));
+
+  // sll SllX, X, 1
+  // srl SrlX, SllX, 1
+  // srl SrlY, Y, 31
+  // sll SllY, SrlX, 31
+  // or  Or, SrlX, SllY
+  SDValue SllX = DAG.getNode(ISD::SHL, DL, MVT::i32, X, Const1);
+  SDValue SrlX = DAG.getNode(ISD::SRL, DL, MVT::i32, SllX, Const1);
+  SDValue SrlY = DAG.getNode(ISD::SRL, DL, MVT::i32, Y, Const31);
+  SDValue SllY = DAG.getNode(ISD::SHL, DL, MVT::i32, SrlY, Const31);
+  Res = DAG.getNode(ISD::OR, DL, MVT::i32, SrlX, SllY);
+
+  if (TyX == MVT::f32)
+    return DAG.getNode(ISD::BITCAST, DL, Op.getOperand(0).getValueType(), Res);
+
+  /*
+  SDValue LowX = DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32,
+                             Op.getOperand(0),
+                             DAG.getConstant(0, DL, MVT::i32));
+  return DAG.getNode(MipsISD::BuildPairF64, DL, MVT::f64, LowX, Res);
+  */
 }
 
 

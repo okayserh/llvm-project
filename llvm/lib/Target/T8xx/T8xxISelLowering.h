@@ -42,7 +42,8 @@ namespace llvm {
     LDIFF,
     REV,
     JOIN,
-    FP_SETCC
+    FP_SETCC,
+    SYNC
   };
   }
 
@@ -113,6 +114,10 @@ namespace llvm {
     SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
 
+    SDValue LowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerBITCAST(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG) const;
+    
     SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerJumpTable(SDValue Op, SelectionDAG& DAG) const;

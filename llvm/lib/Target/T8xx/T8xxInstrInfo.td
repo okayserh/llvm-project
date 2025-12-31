@@ -174,6 +174,23 @@ def MxStackJoin : SDTypeProfile<1, 2, [
 def MxJoin : SDNode<"T8xxISD::JOIN", MxStackJoin>;
 
 
+// ATOMIC_FENCE (copied from MipsInstrInfo.td)
+
+def SDT_Sync             : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
+
+def T8xxSync : SDNode<"T8xxISD::SYNC", SDT_Sync, [SDNPHasChain,SDNPSideEffect]>;
+
+// Sync, Will be plainly removed
+def TxSync : T8Inst<(outs), (ins i32imm:$stype), "sync $stype",
+           [(T8xxSync imm:$stype)]>
+{
+    let isCodeGenOnly = 1;
+    let hasSideEffects = 1;
+    let isPseudo = 1;
+}
+
+
+
 //===----------------------------------------------------------------------===//
 // Conditional Move Pseudo Instructions
 //
@@ -269,12 +286,26 @@ def ADC  : T8InstImm<0x8,
 		"adc $imm",
 		[(set i32:$dst, (add OReg:$src1, imm:$imm))]>;
 
+// Note: MINT, NOT and the pattern were primarily added to create efficient constants for
+// the FCOPYSIGN function. Are much faster than an 8 byte LDC sequence for 0x80000000
+// and 0x7FFFFFFF.
+def MINT :    T8InstOp8<0x42,
+                (outs OReg:$dst),
+		(ins),
+		"mint",
+		[(set i32:$dst, -2147483648)]>;
+
+// Note: There is no binary not operation in the LLVM instruction set.
+def NOT : T8InstOp8<0x32, (outs OReg:$dst), (ins OReg:$src), "not", []>;
+
+def : Pat<(i32 2147483647),
+      	   (NOT (MINT))>;
+
 def LDC  : T8InstImm<0x4,
 		(outs OReg:$dst),
        	 	(ins i32imm:$imm),
 		"ldc $imm",
 		[(set i32:$dst, imm:$imm)]>;
-
 
 // Goes into postprocessing for unaligned addresses, which cannot be directly handled by ldlp
 def LDLP   : T8InstImm<0x1,
@@ -805,29 +836,35 @@ class Atomic2Ops<PatFrag Op> :
   let isPseudo = 1;
 }
 
-/*
-class Atomic2OpsPostRA<RegisterClass RC> :
-  PseudoSE<(outs RC:$dst), (ins PtrRC:$ptr, RC:$incr), []> {
+class Atomic2OpsPostRA :
+  T8Inst<(outs OReg:$dst),
+         (ins OReg:$ptr, OReg:$incr), "",
+	 []> {
+  let isCodeGenOnly = 1;    // Note: prevents an error message that the token is not found
+  let isPseudo = 1;
   let mayLoad = 1;
   let mayStore = 1;
 }
-
 
 // Atomic Compare & Swap.
 // Atomic compare and swap is lowered into two stages. The first stage happens
 // during ISelLowering, which produces the PostRA version of this instruction.
-class AtomicCmpSwap<PatFrag Op, RegisterClass DRC> :
-  PseudoSE<(outs DRC:$dst), (ins PtrRC:$ptr, DRC:$cmp, DRC:$swap),
-           [(set DRC:$dst, (Op iPTR:$ptr, DRC:$cmp, DRC:$swap))]> {
+class AtomicCmpSwap<PatFrag Op> :
+  T8Inst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$cmp, OReg:$swap), "",
+           [(set i32:$dst, (Op iPTR:$ptr, i32:$cmp, i32:$swap))]> {
   let hasNoSchedulingInfo = 1;
+  let isCodeGenOnly = 1;    // Note: prevents an error message that the token is not found
+  let isPseudo = 1;
 }
 
-class AtomicCmpSwapPostRA<RegisterClass RC> :
-  PseudoSE<(outs RC:$dst), (ins PtrRC:$ptr, RC:$cmp, RC:$swap), []> {
+class AtomicCmpSwapPostRA :
+  T8Inst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$cmp, OReg:$swap), "", []> {
+  let isCodeGenOnly = 1;    // Note: prevents an error message that the token is not found
+  let isPseudo = 1;
   let mayLoad = 1;
   let mayStore = 1;
 }
-*/
+
 
 let usesCustomInserter = 1 in {
   def ATOMIC_LOAD_ADD_I32  : Atomic2Ops<atomic_load_add_i32>;
@@ -839,7 +876,7 @@ let usesCustomInserter = 1 in {
 
   def ATOMIC_SWAP_I32      : Atomic2Ops<atomic_swap_i32>;
 
-//  def ATOMIC_CMP_SWAP_I32  : AtomicCmpSwap<atomic_cmp_swap_i32>;
+  def ATOMIC_CMP_SWAP_I32  : AtomicCmpSwap<atomic_cmp_swap_i32>;
 
   def ATOMIC_LOAD_MIN_I32  : Atomic2Ops<atomic_load_min_i32>;
   def ATOMIC_LOAD_MAX_I32  : Atomic2Ops<atomic_load_max_i32>;
@@ -847,23 +884,22 @@ let usesCustomInserter = 1 in {
   def ATOMIC_LOAD_UMAX_I32 : Atomic2Ops<atomic_load_umax_i32>;
 }
 
-/*
-def ATOMIC_LOAD_ADD_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
-def ATOMIC_LOAD_SUB_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
-def ATOMIC_LOAD_AND_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
-def ATOMIC_LOAD_OR_I32_POSTRA   : Atomic2OpsPostRA<GPR32>;
-def ATOMIC_LOAD_XOR_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
-def ATOMIC_LOAD_NAND_I32_POSTRA : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_LOAD_ADD_I32_POSTRA  : Atomic2OpsPostRA;
+def ATOMIC_LOAD_SUB_I32_POSTRA  : Atomic2OpsPostRA;
+def ATOMIC_LOAD_AND_I32_POSTRA  : Atomic2OpsPostRA;
+def ATOMIC_LOAD_OR_I32_POSTRA   : Atomic2OpsPostRA;
+def ATOMIC_LOAD_XOR_I32_POSTRA  : Atomic2OpsPostRA;
+def ATOMIC_LOAD_NAND_I32_POSTRA : Atomic2OpsPostRA;
 
-def ATOMIC_SWAP_I32_POSTRA : Atomic2OpsPostRA<GPR32>;
+def ATOMIC_SWAP_I32_POSTRA : Atomic2OpsPostRA;
 
-def ATOMIC_CMP_SWAP_I32_POSTRA : AtomicCmpSwapPostRA<GPR32>;
+def ATOMIC_CMP_SWAP_I32_POSTRA : AtomicCmpSwapPostRA;
 
-def ATOMIC_LOAD_MIN_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
-def ATOMIC_LOAD_MAX_I32_POSTRA  : Atomic2OpsPostRA<GPR32>;
-def ATOMIC_LOAD_UMIN_I32_POSTRA : Atomic2OpsPostRA<GPR32>;
-def ATOMIC_LOAD_UMAX_I32_POSTRA : Atomic2OpsPostRA<GPR32>;
-*/
+def ATOMIC_LOAD_MIN_I32_POSTRA  : Atomic2OpsPostRA;
+def ATOMIC_LOAD_MAX_I32_POSTRA  : Atomic2OpsPostRA;
+def ATOMIC_LOAD_UMIN_I32_POSTRA : Atomic2OpsPostRA;
+def ATOMIC_LOAD_UMAX_I32_POSTRA : Atomic2OpsPostRA;
+
 
 //===----------------------------------------------------------------------===//
 // Floating Point Instructions

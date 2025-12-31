@@ -38,13 +38,9 @@ namespace llvm {
     // use "move" instructions to copy/align shorter ints or unaligned words.
     int MoveStackSlot = 0;
 
-    /// A mapping from CodeGen vreg index to a boolean value indicating whether
-    /// the given register is considered to be "stackified", meaning it has been
-    /// determined or made to meet the stack requirements:
-    ///   - single use (per path)
-    ///   - single def (per path)
-    ///   - defined and used in LIFO order with other stack registers
-    BitVector VRegStackified;
+    // A stack slot which is used as temporary storage when a function needs to
+    // store a double precision floating point number for bit manipulation.
+    int DoubleFPStackSlot = 0;
 
   public:
     T8xxMachineFunctionInfo() = default;
@@ -76,28 +72,9 @@ namespace llvm {
     void setMoveSlot(int slot) { MoveStackSlot = slot; }
     int getMoveSlot() const { return MoveStackSlot; }
 
-    // Copied from WebAssemblyMachineFunctionInfo.h
-    /*
-    void stackifyVReg(MachineRegisterInfo &MRI, unsigned VReg) {
-      assert(MRI.getUniqueVRegDef(VReg));
-      auto I = Register::virtReg2Index(VReg);
-      if (I >= VRegStackified.size())
-	VRegStackified.resize(I + 1);
-      VRegStackified.set(I);
-    }
-    void unstackifyVReg(unsigned VReg) {
-      auto I = Register::virtReg2Index(VReg);
-      if (I < VRegStackified.size())
-	VRegStackified.reset(I);
-    }
-    bool isVRegStackified(unsigned VReg) const {
-      auto I = Register::virtReg2Index(VReg);
-      if (I >= VRegStackified.size())
-	return false;
-      return VRegStackified.test(I);
-    }
-    */
-
+    // Access to Stack slot for double precision FP manipulations
+    void setDoubleFPSlot(int slot) { DoubleFPStackSlot = slot; }
+    int getDoubleFPSlot() const { return DoubleFPStackSlot; }
   };
 }
 
