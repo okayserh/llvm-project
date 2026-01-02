@@ -190,12 +190,11 @@ def SDT_TXSync             : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
 def T8xxSync : SDNode<"T8xxISD::SYNC", SDT_TXSync, [SDNPHasChain,SDNPSideEffect]>;
 
 // Sync, Will be plainly removed
-def TxSync : T8Inst<(outs), (ins i32imm:$stype), "sync $stype",
+def TxSync : T8PseudoInst<(outs), (ins i32imm:$stype), "sync $stype",
            [(T8xxSync imm:$stype)]>
 {
     let isCodeGenOnly = 1;
     let hasSideEffects = 1;
-    let isPseudo = 1;
 }
 
 //===----------------------------------------------------------------------===//
@@ -206,14 +205,13 @@ def TxSync : T8Inst<(outs), (ins i32imm:$stype), "sync $stype",
 //===----------------------------------------------------------------------===//
 
 
-def CMOV32 : T8Inst<(outs OReg:$dst),
+def CMOV32 : T8PseudoInst<(outs OReg:$dst),
     		    (ins OReg:$ccr, OReg:$t, OReg:$f),
                     "",
 		    [(set i32:$dst,
 		    (i32 (T8xxCmov i32:$ccr, i32:$t, i32:$f)))]> {
     let usesCustomInserter = 1;
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
   }
 
 
@@ -322,23 +320,21 @@ def LDLP   : T8InstImm<0x1,
                 [(set iPTR:$rd, ADDRri:$addr)]> {
 }
 
-def LDLPb   : T8Inst<(outs OReg:$rd),
+def LDLPb   : T8PseudoInst<(outs OReg:$rd),
       		(ins (WPtrSrc $rs, $imm):$addr),
                 "ldlp $addr",
                 [(set iPTR:$rd, ADDRri8:$addr)]> {
 		let isCodeGenOnly = 1;
-		let isPseudo = 1;
 }
 
 
-def MoveLoad : T8Inst<
+def MoveLoad : T8PseudoInst<
     (outs OReg:$res),
     (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
     "move_load",
     [(set i32:$res, (T8xxMoveLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
 	 {
 	 let hasSideEffects = 1;
-	 let isPseudo = 1;
 	 }
 
 def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
@@ -350,14 +346,13 @@ def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRri:$src_addr, ADDRri:$bu
 def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRri:$buf_addr2),
       	   (MoveLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
 
-def MoveSEXTLoad : T8Inst<
+def MoveSEXTLoad : T8PseudoInst<
     (outs OReg:$res),
     (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
     "move_sext_load",
     [(set i32:$res, (T8xxMoveSEXTLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
 	 {
 	 let hasSideEffects = 1;
-	 let isPseudo = 1;
 	 }
 
 def : Pat<(T8xxMoveSEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
@@ -370,14 +365,13 @@ def : Pat<(T8xxMoveSEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRr
       	   (MoveSEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
 
 
-def MoveZEXTLoad : T8Inst<
+def MoveZEXTLoad : T8PseudoInst<
     (outs OReg:$res),
     (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
     "move_sext_load",
     [(set i32:$res, (T8xxMoveZEXTLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
 	 {
 	 let hasSideEffects = 1;
-	 let isPseudo = 1;
 	 }
 
 def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
@@ -395,14 +389,13 @@ def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRr
 // fpstnldb
 // ldl <FI+Offset> AREG
 
-def ExtractElementF64 : T8Inst<
+def ExtractElementF64 : T8PseudoInst<
     (outs OReg:$res),
     (ins DFPReg:$src, (WPtrSrc $rs, $imm):$buf_addr2, i32imm:$offs),
     "extract_element_f64",
     [(set i32:$res, (T8xxExtractElementF64 DFPReg:$src, ADDRri:$buf_addr2, imm:$offs))]>
 	 {
 	 let hasSideEffects = 1;
-	 let isPseudo = 1;
 	 }
 
 // Needed for 16 bit operations
@@ -434,12 +427,11 @@ def : Pat<(T8xxMOVE i32:$cnt, ADDRri8:$dst_addr, ADDRri8:$src_addr),
 
 
 // Special instruction, which is solely used in CallLowering
-def AddWptrImm : T8Inst<(outs OReg:$dst),
+def AddWptrImm : T8PseudoInst<(outs OReg:$dst),
     		    (ins WptrRegs:$src, i32imm:$val),
                     "ldlp $val",
 		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, (i32 imm:$val)))]> {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
   }
 
 // Instruction used to get addresses relative to the instruction pointer
@@ -668,21 +660,15 @@ def REV :     T8InstOp4<0x0,
 // Move the "low word" of an LReg to the destination register
 // Since the low word is already in the destination register on the operand stack,
 // this is a pseudo instruction
-def SELLOW :  T8Inst<(outs OReg:$dst),
+def SELLOW :  T8PseudoInst<(outs OReg:$dst),
 	             (ins LReg:$src),
 	             "sellow",
-		     [(set i32:$dst, (T8xxSelect i64:$src))]>
-{
-    let isPseudo = 1;
-}
+		     [(set i32:$dst, (T8xxSelect i64:$src))]>;
 
-def JOIN :  T8Inst<(outs LReg:$dst),
+def JOIN :  T8PseudoInst<(outs LReg:$dst),
 	           (ins OReg:$src1, OReg:$src2),
 	           "join",
-		   [(set i64:$dst, (T8xxJoin i32:$src1, i32:$src2))]>
-{
-    let isPseudo = 1;
-}
+		   [(set i64:$dst, (T8xxJoin i32:$src1, i32:$src2))]>;
 
 
 // Unsigned comparisons are a bit more complex
@@ -723,10 +709,9 @@ def : Pat<(urem (i32 OReg:$lhs), (i32 OReg:$rhs)),
 //===----------------------------------------------------------------------===//
 
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
-  def RET : T8xxPseudoInst<(outs), (ins variable_ops),
+  def RET : T8PseudoInst<(outs), (ins variable_ops),
                     "RET",  [(T8xxRet)]> {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
   }
 }
 
@@ -744,20 +729,18 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
 // right destination "Frame-Register"
 let isCall = 1 in {
 /* Version that tries to determine a instruction pointer relative adressing.
-def CALL : T8Inst<(outs), (ins i32imm:$addr),
+def CALL : T8PseudoInst<(outs), (ins i32imm:$addr),
                       "ldcipr $addr \n\tadc -4 \n\tldpi \n\tgcall \n\trev \n",
                       [(call tglobaladdr:$addr)]> {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
   }
 */
 
 // Version with absolute adressing
-def CALL : T8Inst<(outs), (ins i32imm:$addr),
+def CALL : T8PseudoInst<(outs), (ins i32imm:$addr),
                       "ldc $addr\n\tgcall \n\trev \n",
                       []> {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
   }
 }
 
@@ -805,7 +788,7 @@ def JUMP  : T8InstImm<0x0,
 
 // Note: Defines a pseudo instruction, which is replaced by a GCALL in T8xxInstrInfo.cpp
 // during Pseudo Code replacement.
-def BRIND  : T8Inst<(outs),
+def BRIND  : T8PseudoInst<(outs),
 		   (ins OReg:$target),
                    "brind",
                    [(brind i32:$target)]>
@@ -815,7 +798,6 @@ def BRIND  : T8Inst<(outs),
    let isIndirectBranch = 1;
    let isBarrier = 1;
    let isCodeGenOnly = 1;
-   let isPseudo = 1;
 }
 
 
@@ -831,10 +813,10 @@ properly.
 */
 
 let Uses = [WPTR] in {
-def ADJCALLSTACKDOWN : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+def ADJCALLSTACKDOWN : T8PseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                "ADJCALLSTACKDOWN $amt1, $amt2",
                                [(callseq_start timm:$amt1, timm:$amt2)]>;
-def ADJCALLSTACKUP : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+def ADJCALLSTACKUP : T8PseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                             "ADJCALLSTACKUP $amt1",
                             [(callseq_end timm:$amt1, timm:$amt2)]>;
 }
@@ -851,19 +833,17 @@ def ADJCALLSTACKUP : T8xxPseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
 
 // Atomic instructions with 2 source operands (ATOMIC_SWAP & ATOMIC_LOAD_*).
 class Atomic2Ops<PatFrag Op> :
-  T8Inst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$incr), "",
+  T8PseudoInst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$incr), "",
            [(set i32:$dst, (Op iPTR:$ptr, i32:$incr))]> {
   let hasNoSchedulingInfo = 1;
   let isCodeGenOnly = 1;    // Note: prevents an error message that the token is not found
-  let isPseudo = 1;
 }
 
 class Atomic2OpsPostRA :
-  T8Inst<(outs OReg:$dst),
+  T8PseudoInst<(outs OReg:$dst),
          (ins OReg:$ptr, OReg:$incr), "",
 	 []> {
   let isCodeGenOnly = 1;    // Note: prevents an error message that the token is not found
-  let isPseudo = 1;
   let mayLoad = 1;
   let mayStore = 1;
 }
@@ -872,17 +852,15 @@ class Atomic2OpsPostRA :
 // Atomic compare and swap is lowered into two stages. The first stage happens
 // during ISelLowering, which produces the PostRA version of this instruction.
 class AtomicCmpSwap<PatFrag Op> :
-  T8Inst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$cmp, OReg:$swap), "",
+  T8PseudoInst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$cmp, OReg:$swap), "",
            [(set i32:$dst, (Op iPTR:$ptr, i32:$cmp, i32:$swap))]> {
   let hasNoSchedulingInfo = 1;
   let isCodeGenOnly = 1;    // Note: prevents an error message that the token is not found
-  let isPseudo = 1;
 }
 
 class AtomicCmpSwapPostRA :
-  T8Inst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$cmp, OReg:$swap), "", []> {
+  T8PseudoInst<(outs OReg:$dst), (ins OReg:$ptr, OReg:$cmp, OReg:$swap), "", []> {
   let isCodeGenOnly = 1;    // Note: prevents an error message that the token is not found
-  let isPseudo = 1;
   let mayLoad = 1;
   let mayStore = 1;
 }

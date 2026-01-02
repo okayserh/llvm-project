@@ -76,7 +76,7 @@ class T8Inst64<dag outs, dag ins, string asmstr, list<dag> pattern>
 
 
 // Pseudo instructions format
-class T8xxPseudoInst<dag outs, dag ins, string asmstr, list<dag> pattern>
+class T8PseudoInst<dag outs, dag ins, string asmstr, list<dag> pattern>
     : T8Inst<outs, ins, asmstr, pattern> {
   let isPseudo = 1;
 }

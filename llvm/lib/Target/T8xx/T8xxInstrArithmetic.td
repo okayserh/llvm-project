@@ -194,13 +194,12 @@ def FPI32TOR32 :  T8InstOp8<0x96,
 def : Pat<(sint_to_fp (i32 (load ADDRri:$addr))),
           (FPI32TOR32 (LDLP ADDRri:$addr) )>;
 
-def FPI32TOR32Reg : T8Inst<(outs FPReg:$dst),
+def FPI32TOR32Reg : T8PseudoInst<(outs FPReg:$dst),
     		           (ins OReg:$src),
 			   "fpi32tor32reg",
 			   [(set f32:$dst, (sint_to_fp i32:$src))]>
 {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
 }
 
 def FPI32TOR64 :  T8InstOp8<0x98,
@@ -212,13 +211,12 @@ def FPI32TOR64 :  T8InstOp8<0x98,
 def : Pat<(sint_to_fp (i32 (load ADDRri:$addr))),
           (FPI32TOR64 (LDLP ADDRri:$addr) )>;
 
-def FPI32TOR64Reg : T8Inst<(outs DFPReg:$dst),
+def FPI32TOR64Reg : T8PseudoInst<(outs DFPReg:$dst),
     		           (ins OReg:$src),
 			   "fpi32tor64reg",
 			   [(set f64:$dst, (sint_to_fp i32:$src))]>
 {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
 }
 
 // Conversion from uint to f32 or f64
@@ -264,13 +262,12 @@ def FPSTNLI32 :   T8InstOp8<0x9E,
 
 // Pseudo instructions to provide code for the conversion from floating
 // point to integer. These are multi instruction sequences on the T8xx.
-def FPR32TOI32 :   T8Inst<(outs OReg:$dst),
+def FPR32TOI32 :   T8PseudoInst<(outs OReg:$dst),
 			(ins FPReg:$src),
 			"fpr32toi32",
 			[(set i32:$dst, (fp_to_sint f32:$src))]>
 {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
 }
 
 // The Inmos C compiler generates the same code to convert a
@@ -279,13 +276,12 @@ def FPR32TOI32 :   T8Inst<(outs OReg:$dst),
 def : Pat<(i32 (fp_to_uint (f32 FPReg:$src))),
           (FPR32TOI32 $src)>;
 
-def FPR64TOI32 :   T8Inst<(outs OReg:$dst),
+def FPR64TOI32 :   T8PseudoInst<(outs OReg:$dst),
 			(ins DFPReg:$src),
 			"fpr64toi32",
 			[(set i32:$dst, (fp_to_sint f64:$src))]>
 {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
 }
 
 def : Pat<(i32 (fp_to_uint (f64 DFPReg:$src))),
@@ -368,25 +364,23 @@ def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETLE)),
 
 // Pseudo instructions for comparisons
 class T8PseudoCompareSN<CondCode condnode> :
-      T8Inst<(outs OReg:$cc),
+      T8PseudoInst<(outs OReg:$cc),
        	     (ins FPReg:$lhs, FPReg:$rhs),
 	      "",
 	     [(set i32:$cc,
 	      (i32 (setcc f32:$lhs, f32:$rhs, condnode)))]>
 {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
 }
 
 class T8PseudoCompareDB<CondCode condnode> :
-      T8Inst<(outs OReg:$cc),
+      T8PseudoInst<(outs OReg:$cc),
        	     (ins DFPReg:$lhs, DFPReg:$rhs),
 	      "",
 	     [(set i32:$cc,
 	      (i32 (setcc f64:$lhs, f64:$rhs, condnode)))]>
 {
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
 }
 
 multiclass T8PseudoCmpOp<CondCode condnode>
@@ -478,24 +472,22 @@ def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETUO)),
 // instruction selection into a branch sequence.
 //===----------------------------------------------------------------------===//
 
-def CMOVf32 : T8Inst<(outs FPReg:$dst),
+def CMOVf32 : T8PseudoInst<(outs FPReg:$dst),
     		    (ins OReg:$ccr, FPReg:$t, FPReg:$f),
                     "",
 		    [(set f32:$dst,
 		    (f32 (T8xxCmov i32:$ccr, f32:$t, f32:$f)))]> {
     let usesCustomInserter = 1;
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
   }
 
-def CMOVf64 : T8Inst<(outs DFPReg:$dst),
+def CMOVf64 : T8PseudoInst<(outs DFPReg:$dst),
     		    (ins OReg:$ccr, DFPReg:$t, DFPReg:$f),
                     "",
 		    [(set f64:$dst,
 		    (f64 (T8xxCmov i32:$ccr, f64:$t, f64:$f)))]> {
     let usesCustomInserter = 1;
     let isCodeGenOnly = 1;
-    let isPseudo = 1;
   }
 
 def FPNAN :       T8InstOp8<0x91,
