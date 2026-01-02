@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// Base class for transputer instructions
 class T8Inst<dag outs, dag ins, string asmstr, list<dag> pattern,
              InstrItinClass itin = NoItinerary>
    : Instruction {
@@ -19,7 +20,7 @@ class T8Inst<dag outs, dag ins, string asmstr, list<dag> pattern,
   let Itinerary = itin;
 }
 
-
+// 8 bit instructions
 class T8Inst8<dag outs, dag ins, string asmstr, list<dag> pattern>
       :T8Inst<outs, ins, asmstr, pattern> {
       field bits<8> Inst;
@@ -29,51 +30,26 @@ class T8Inst8<dag outs, dag ins, string asmstr, list<dag> pattern>
       let Inst{7 - 4} = op;
 }
 
+// 16 bit instructions (i.e. usually one pfix and OP)
 class T8Inst16<dag outs, dag ins, string asmstr, list<dag> pattern>
       :T8Inst<outs, ins, asmstr, pattern> {
       field bits<16> Inst;
       let Size = 2;
 }
 
+// 24 bit instructions (i.e. usually two pfix and OP)
 class T8Inst24<dag outs, dag ins, string asmstr, list<dag> pattern>
       :T8Inst<outs, ins, asmstr, pattern> {
       field bits<24> Inst;
       let Size = 3;
 }
 
+// 32 bit instructions (i.e. usually three pfix and OP)
 class T8Inst32<dag outs, dag ins, string asmstr, list<dag> pattern>
       :T8Inst<outs, ins, asmstr, pattern> {
       field bits<32> Inst;
       let Size = 4;
 }
-
-// These instruction types are needed for jumps and conditional jumps.
-// When a full prefix sequence is required, they can achieve lengths
-// of 8 bytes.
-class T8Inst40<dag outs, dag ins, string asmstr, list<dag> pattern>
-      :T8Inst<outs, ins, asmstr, pattern> {
-      field bits<40> Inst;
-      let Size = 5;
-}
-
-class T8Inst48<dag outs, dag ins, string asmstr, list<dag> pattern>
-      :T8Inst<outs, ins, asmstr, pattern> {
-      field bits<48> Inst;
-      let Size = 6;
-}
-
-class T8Inst56<dag outs, dag ins, string asmstr, list<dag> pattern>
-      :T8Inst<outs, ins, asmstr, pattern> {
-      field bits<56> Inst;
-      let Size = 7;
-}
-
-class T8Inst64<dag outs, dag ins, string asmstr, list<dag> pattern>
-      :T8Inst<outs, ins, asmstr, pattern> {
-      field bits<64> Inst;
-      let Size = 8;
-}
-
 
 // Pseudo instructions format
 class T8PseudoInst<dag outs, dag ins, string asmstr, list<dag> pattern>
@@ -81,9 +57,7 @@ class T8PseudoInst<dag outs, dag ins, string asmstr, list<dag> pattern>
   let isPseudo = 1;
 }
 
-
-// Attempt for immediate instructions. They are defined in multiple flavors
-// for different immediate operand sizes.
+// Immediate instruction.
 class T8InstImm<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
    : T8Inst8<outs, ins, asmstr, pattern> {
    bits<4> imm;
@@ -93,141 +67,6 @@ class T8InstImm<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> patte
 
    let DecoderMethod = "decodeImm";
 }
-
-/*
-class T8InstImmP8<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
-   : T8Inst16<outs, ins, asmstr, pattern> {
-   bits<8> imm;
-
-   let Inst{15- 12} = 0x2;
-   let Inst{11-  8} = imm{7-4};
-   let Inst{7 -  4} = opval;
-   let Inst{3 -  0} = imm{3-0};
-
-   let DecoderMethod = "decodeImm";
-   let DecoderNamespace = "PFIX1";
-}
-
-class T8InstImmP12<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
-   : T8Inst24<outs, ins, asmstr, pattern> {
-   bits<12> imm;
-
-   let Inst{23- 20} = 0x2;
-   let Inst{19- 16} = imm{11-8};
-   let Inst{15- 12} = 0x2;
-   let Inst{11-  8} = imm{7-4};
-   let Inst{7 -  4} = opval;
-   let Inst{3 -  0} = imm{3-0};
-
-   let DecoderMethod = "decodeImm";
-   let DecoderNamespace = "PFIX2";
-}
-
-class T8InstImmP16<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
-   : T8Inst32<outs, ins, asmstr, pattern> {
-   bits<16> imm;
-
-   let Inst{31- 28} = 0x2;
-   let Inst{27- 24} = imm{15-12};
-   let Inst{23- 20} = 0x2;
-   let Inst{19- 16} = imm{11-8};
-   let Inst{15- 12} = 0x2;
-   let Inst{11-  8} = imm{7-4};
-   let Inst{7 -  4} = opval;
-   let Inst{3 -  0} = imm{3-0};
-
-   let DecoderMethod = "decodeImm";
-   let DecoderNamespace = "PFIX3";
-}
-
-class T8InstImmP20<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
-   : T8Inst40<outs, ins, asmstr, pattern> {
-   bits<20> imm;
-
-   let Inst{39- 26} = 0x2;
-   let Inst{35- 32} = imm{19-16};
-   let Inst{31- 28} = 0x2;
-   let Inst{27- 24} = imm{15-12};
-   let Inst{23- 20} = 0x2;
-   let Inst{19- 16} = imm{11-8};
-   let Inst{15- 12} = 0x2;
-   let Inst{11-  8} = imm{7-4};
-   let Inst{7 -  4} = opval;
-   let Inst{3 -  0} = imm{3-0};
-
-   let DecoderMethod = "decodeImm";
-   let DecoderNamespace = "PFIX4";
-}
-
-class T8InstImmP24<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
-   : T8Inst48<outs, ins, asmstr, pattern> {
-   bits<24> imm;
-
-   let Inst{47- 44} = 0x2;
-   let Inst{43- 40} = imm{23-20};
-   let Inst{39- 26} = 0x2;
-   let Inst{35- 32} = imm{19-16};
-   let Inst{31- 28} = 0x2;
-   let Inst{27- 24} = imm{15-12};
-   let Inst{23- 20} = 0x2;
-   let Inst{19- 16} = imm{11-8};
-   let Inst{15- 12} = 0x2;
-   let Inst{11-  8} = imm{7-4};
-   let Inst{7 -  4} = opval;
-   let Inst{3 -  0} = imm{3-0};
-
-   let DecoderMethod = "decodeImm";
-   let DecoderNamespace = "PFIX5";
-}
-
-class T8InstImmP28<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
-   : T8Inst56<outs, ins, asmstr, pattern> {
-   bits<28> imm;
-
-   let Inst{55- 52} = 0x2;
-   let Inst{51- 48} = imm{27-24};
-   let Inst{47- 44} = 0x2;
-   let Inst{43- 40} = imm{23-20};
-   let Inst{39- 26} = 0x2;
-   let Inst{35- 32} = imm{19-16};
-   let Inst{31- 28} = 0x2;
-   let Inst{27- 24} = imm{15-12};
-   let Inst{23- 20} = 0x2;
-   let Inst{19- 16} = imm{11-8};
-   let Inst{15- 12} = 0x2;
-   let Inst{11-  8} = imm{7-4};
-   let Inst{7 -  4} = opval;
-   let Inst{3 -  0} = imm{3-0};
-
-   let DecoderMethod = "decodeImm";
-   let DecoderNamespace = "PFIX6";
-}
-
-class T8InstImmP32<bits<4> opval, dag outs, dag ins, string asmstr, list<dag> pattern>
-   : T8Inst64<outs, ins, asmstr, pattern> {
-   bits<32> imm;
-
-   let Inst{63- 60} = 0x2;
-   let Inst{59- 56} = imm{31-28};
-   let Inst{55- 52} = 0x2;
-   let Inst{51- 48} = imm{27-24};
-   let Inst{47- 44} = 0x2;
-   let Inst{43- 40} = imm{23-20};
-   let Inst{39- 26} = 0x2;
-   let Inst{35- 32} = imm{19-16};
-   let Inst{31- 28} = 0x2;
-   let Inst{27- 24} = imm{15-12};
-   let Inst{23- 20} = 0x2;
-   let Inst{19- 16} = imm{11-8};
-   let Inst{15- 12} = 0x2;
-   let Inst{11-  8} = imm{7-4};
-   let Inst{7 -  4} = opval;
-   let Inst{3 -  0} = imm{3-0};
-
-   let DecoderMethod = "decodeImm";
-   let DecoderNamespace = "PFIX7";
-}
-*/
 
 class T8InstOp4<bits<4> opval2, dag outs, dag ins, string asmstr, list<dag> pattern>
    : T8Inst8<outs, ins, asmstr, pattern> {
