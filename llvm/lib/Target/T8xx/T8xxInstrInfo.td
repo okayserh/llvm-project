@@ -27,40 +27,40 @@ include "T8xxInstrFormats.td"
 //===----------------------------------------------------------------------===//
 
 //  These are target-independent nodes, but have target-specific formats.
-def SDT_SPCallSeqStart : SDCallSeqStart<[ SDTCisVT<0, i32>,
+def SDT_TXCallSeqStart : SDCallSeqStart<[ SDTCisVT<0, i32>,
                                           SDTCisVT<1, i32> ]>;
-def SDT_SPCallSeqEnd   : SDCallSeqEnd<[ SDTCisVT<0, i32>,
+def SDT_TXCallSeqEnd   : SDCallSeqEnd<[ SDTCisVT<0, i32>,
                                         SDTCisVT<1, i32> ]>;
 
-def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_SPCallSeqStart,
+def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_TXCallSeqStart,
                            [SDNPHasChain, SDNPOutGlue]>;
-def callseq_end   : SDNode<"ISD::CALLSEQ_END",   SDT_SPCallSeqEnd,
+def callseq_end   : SDNode<"ISD::CALLSEQ_END",   SDT_TXCallSeqEnd,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
 
 // SDTCisVT is a type constraint. I.e. has exactly that type.
 
-def SDT_SPCall    : SDTypeProfile<0, -1, [SDTCisVT<0, i32>]>;
+def SDT_TXCall    : SDTypeProfile<0, -1, [SDTCisVT<0, i32>]>;
 
 // This is the ISD representation of a call. This is later
 // matched by the concrete CALL instruction defined below.
-def call          : SDNode<"T8xxISD::CALL", SDT_SPCall,
+def call          : SDNode<"T8xxISD::CALL", SDT_TXCall,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                             SDNPVariadic]>;
 
-def SDT_SPRet     : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
+//def SDT_TXRet     : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
 
 def T8xxRetFlag     : SDNode<"T8xxISD::RET_FLAG", SDTNone,
                            [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 // Custom add for workspace pointer
-def SDT_AddWptr     : SDTypeProfile<1, 2, [SDTCisPtrTy<0>, SDTCisPtrTy<1>, SDTCisVT<1, i32>]>;
+def SDT_TXAddWptr     : SDTypeProfile<1, 2, [SDTCisPtrTy<0>, SDTCisPtrTy<1>, SDTCisVT<1, i32>]>;
 
-def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_AddWptr, []>;
+def T8xxAddWPTR : SDNode<"T8xxISD::ADD_WPTR", SDT_TXAddWptr, []>;
 
 // Adjust workspace
-def SDT_AdjWptr : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
-def T8xxAdjWPTR : SDNode<"T8xxISD::AJW", SDT_AdjWptr,
+def SDT_TXAdjWptr : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
+def T8xxAdjWPTR : SDNode<"T8xxISD::AJW", SDT_TXAdjWptr,
     		[SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
 def AJW   : T8InstImm<0xB,
@@ -71,22 +71,22 @@ def AJW   : T8InstImm<0xB,
 
 // Type definition for multi byte moves by MOVE instruction. This is crucial for
 // handling 16bit values.
-def SDT_Move : SDTypeProfile<0, 3,   // 3 inputs (Count, SRC, DST)
+def SDT_TXMove : SDTypeProfile<0, 3,   // 3 inputs (Count, SRC, DST)
 [
 SDTCisVT<0, i32>, // Count
 SDTCisPtrTy<1>,   // DST
 SDTCisPtrTy<2>   // SRC
 ]>; // Input chain
 
-def T8xxMOVE : SDNode<"T8xxISD::MOVE", SDT_Move, [SDNPHasChain, SDNPMayLoad, SDNPMayStore,
-    	       			       		  SDNPOptInGlue, SDNPOutGlue]>;
+def T8xxMOVE : SDNode<"T8xxISD::MOVE", SDT_TXMove, [SDNPHasChain, SDNPMayLoad, SDNPMayStore,
+    	       			       		   SDNPOptInGlue, SDNPOutGlue]>;
 
 
 // Note: This translates into a pseudo instruction, which is translated into a
 // MOVE, LDL and optionally a EXT/ZEXT/SEXT instruction.
 // For the second LDL, the used buffer needs to be kept as fourth parameter
 
-def SDT_MoveLoad : SDTypeProfile<1, 4,   // 1 output, 3 inputs (SRC, DST, Count)
+def SDT_TXMoveLoad : SDTypeProfile<1, 4,   // 1 output, 3 inputs (SRC, DST, Count)
 [
 SDTCisVT<0, i32>, // Result
 SDTCisVT<1, i32>, // Count
@@ -95,16 +95,28 @@ SDTCisPtrTy<3>,   // SRC (Unaligned)
 SDTCisPtrTy<4>   // AlignedBuffer 2
 ]>; // Input chain
 
-def T8xxMoveLoad : SDNode<"T8xxISD::MoveLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
-def T8xxMoveSEXTLoad : SDNode<"T8xxISD::MoveSEXTLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
-def T8xxMoveZEXTLoad : SDNode<"T8xxISD::MoveZEXTLoad", SDT_MoveLoad, [SDNPHasChain, SDNPMayLoad]>;
+def T8xxMoveLoad : SDNode<"T8xxISD::MoveLoad", SDT_TXMoveLoad, [SDNPHasChain, SDNPMayLoad]>;
+def T8xxMoveSEXTLoad : SDNode<"T8xxISD::MoveSEXTLoad", SDT_TXMoveLoad, [SDNPHasChain, SDNPMayLoad]>;
+def T8xxMoveZEXTLoad : SDNode<"T8xxISD::MoveZEXTLoad", SDT_TXMoveLoad, [SDNPHasChain, SDNPMayLoad]>;
 
+
+// Pseudo instruction to extract a 32 Bit part from a 64 bit floating point register
+def SDT_TXExtractElementF64 : SDTypeProfile<1, 3,   // 1 output (i32), 3 inputs (SRC, Frame, Offset)
+[
+SDTCisVT<0, i32>, // Result
+SDTCisVT<1, f64>, // Source
+SDTCisPtrTy<2>,   // AlignedBuffer at WPtr
+SDTCisVT<3, i32>  // Offset
+]>;
+
+def T8xxExtractElementF64 : SDNode<"T8xxISD::ExtractElementF64",
+           SDT_TXExtractElementF64, [SDNPMayLoad, SDNPMayStore]>;
 
 // Custom add for instruction pointer (Note: To avoid defining a new register class
 // for the instruction pointer, this is designed as a unary pattern
-def SDT_AddIptr     : SDTypeProfile<1, 1, [SDTCisPtrTy<0>, SDTCisPtrTy<1>]>;
+def SDT_TXAddIptr     : SDTypeProfile<1, 1, [SDTCisPtrTy<0>, SDTCisPtrTy<1>]>;
 
-def T8xxAddIPTR : SDNode<"T8xxISD::ADD_IPTR", SDT_AddIptr, []>;
+def T8xxAddIPTR : SDNode<"T8xxISD::ADD_IPTR", SDT_TXAddIptr, []>;
 
 
 // A definition of the store instruction to access the parameter
@@ -113,72 +125,71 @@ def T8xxAddIPTR : SDNode<"T8xxISD::ADD_IPTR", SDT_AddIptr, []>;
 // First parameter is Argument to be saved,
 // Second is the stack offset as simple constant
 
-def SDT_T8xxParmStack : SDTypeProfile<0, 2,
-                                       [SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
+def SDT_TXParmStack : SDTypeProfile<0, 2,
+          	      [SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
 
-def T8xxParmStack : SDNode<"T8xxISD::STL_PARM", SDT_T8xxParmStack,
+def T8xxParmStack : SDNode<"T8xxISD::STL_PARM", SDT_TXParmStack,
     		    	   [SDNPHasChain, SDNPInGlue, SDNPOutGlue,
 			   SDNPMayStore]>;
 
-
-def load_sym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
+def T8xxLoadSym : SDNode<"T8xxISD::LOAD_SYM", SDTIntUnaryOp>;
 
 
 /* The transputer conditional jump goes the conditional branch on
   false! Hence we introduce a special code for this one */
 
-def MxSDTBrnotcond : SDTypeProfile<0, 2, [       // brnotcond
+def SDT_TXBrNotCond : SDTypeProfile<0, 2, [       // brnotcond
   SDTCisInt<0>, SDTCisVT<1, OtherVT>
 ]>;
 
-def MxBrNotCond     : SDNode<"T8xxISD::BRNCOND"     , MxSDTBrnotcond, [SDNPHasChain]>;
+def T8xxBrNotCond     : SDNode<"T8xxISD::BRNCOND"     , SDT_TXBrNotCond, [SDNPHasChain]>;
 
 
 /* Definitions for Conditional Move Pseudo instruction */
 
-def MxSDT_Cmov : SDTypeProfile<1, 3, [
+def SDT_TXCmov : SDTypeProfile<1, 3, [
   /*  CCR */ SDTCisVT<1, i32>,
   /*  ARG */ SDTCisSameAs<0, 2>,
   /*  ARG */ SDTCisSameAs<2, 3>
 ]>;
 
-def MxCmov    : SDNode<"T8xxISD::CMOV",        MxSDT_Cmov>;
+def T8xxCmov    : SDNode<"T8xxISD::CMOV",        SDT_TXCmov>;
 
 
 /* Example for an operation that yields two results. Might be used for
 the long arithmetic operations of the Transputer (i.e. ldiff etc.) */
-def MxLongArithmetic : SDTypeProfile<1, 3, [
+def SDT_TXLongArithmetic : SDTypeProfile<1, 3, [
   /* RES 1 */ SDTCisVT<0, i64>,
   /*   LHS */ SDTCisVT<1, i32>,
   /*   RHS */ SDTCisVT<2, i32>,
   /*   CCR */ SDTCisVT<3, i32>
 ]>;
 
-def MxLongDiff : SDNode<"T8xxISD::LDIFF", MxLongArithmetic>;
+def T8xxLongDiff : SDNode<"T8xxISD::LDIFF", SDT_TXLongArithmetic>;
 
 
-def MxStackSelect : SDTypeProfile<1, 1, [
+def SDT_TXStackSelect : SDTypeProfile<1, 1, [
   /* RES       */ SDTCisVT<0, i32>,
   /* AREG/BREG */ SDTCisVT<1, i64>
 ]>;
 
-def MxSelect : SDNode<"T8xxISD::REV", MxStackSelect>;
+def T8xxSelect : SDNode<"T8xxISD::REV", SDT_TXStackSelect>;
 
 
-def MxStackJoin : SDTypeProfile<1, 2, [
+def SDT_TXStackJoin : SDTypeProfile<1, 2, [
   /* RES       */ SDTCisVT<0, i64>,
   /* AREG/BREG */ SDTCisVT<1, i32>,
   /* AREG/BREG */ SDTCisVT<2, i32>
 ]>;
 
-def MxJoin : SDNode<"T8xxISD::JOIN", MxStackJoin>;
+def T8xxJoin : SDNode<"T8xxISD::JOIN", SDT_TXStackJoin>;
 
 
 // ATOMIC_FENCE (copied from MipsInstrInfo.td)
 
-def SDT_Sync             : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
+def SDT_TXSync             : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
 
-def T8xxSync : SDNode<"T8xxISD::SYNC", SDT_Sync, [SDNPHasChain,SDNPSideEffect]>;
+def T8xxSync : SDNode<"T8xxISD::SYNC", SDT_TXSync, [SDNPHasChain,SDNPSideEffect]>;
 
 // Sync, Will be plainly removed
 def TxSync : T8Inst<(outs), (ins i32imm:$stype), "sync $stype",
@@ -188,8 +199,6 @@ def TxSync : T8Inst<(outs), (ins i32imm:$stype), "sync $stype",
     let hasSideEffects = 1;
     let isPseudo = 1;
 }
-
-
 
 //===----------------------------------------------------------------------===//
 // Conditional Move Pseudo Instructions
@@ -203,7 +212,7 @@ def CMOV32 : T8Inst<(outs OReg:$dst),
     		    (ins OReg:$ccr, OReg:$t, OReg:$f),
                     "",
 		    [(set i32:$dst,
-		    (i32 (MxCmov i32:$ccr, i32:$t, i32:$f)))]> {
+		    (i32 (T8xxCmov i32:$ccr, i32:$t, i32:$f)))]> {
     let usesCustomInserter = 1;
     let isCodeGenOnly = 1;
     let isPseudo = 1;
@@ -382,6 +391,21 @@ def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri:$src_addr, ADDRri
 def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRri:$buf_addr2),
       	   (MoveZEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
 
+
+
+// ldlp <FI>  AREG
+// fpstnldb
+// ldl <FI+Offset> AREG
+
+def ExtractElementF64 : T8Inst<
+    (outs OReg:$res),
+    (ins DFPReg:$src, (WPtrSrc $rs, $imm):$buf_addr2, i32imm:$offs),
+    "extract_element_f64",
+    [(set i32:$res, (T8xxExtractElementF64 DFPReg:$src, ADDRri:$buf_addr2, imm:$offs))]>
+	 {
+	 let hasSideEffects = 1;
+	 let isPseudo = 1;
+	 }
 
 // Needed for 16 bit operations
 def MOVE :    T8InstOp8<0x4A, (outs), (ins OReg:$cnt, MemSrc:$dst_addr, MemSrc:$src_addr), "move",
@@ -633,7 +657,7 @@ def LDIFF :   T8InstOp8<0x4F,
     	      (outs LReg:$dst),
 	      (ins OReg:$src1, OReg:$src2, OReg:$src3),
 	      "ldiff",
-	      [(set i64:$dst, (MxLongDiff i32:$src1, i32:$src2, i32:$src3))]>;
+	      [(set i64:$dst, (T8xxLongDiff i32:$src1, i32:$src2, i32:$src3))]>;
 
 
 // Moves the "high word" of an LReg to the destination register
@@ -641,7 +665,7 @@ def REV :     T8InstOp4<0x0,
 		(outs OReg:$dst),
 		(ins LReg:$src),
 		"rev",
-		[(set i32:$dst, (MxSelect i64:$src))]>;
+		[(set i32:$dst, (T8xxSelect i64:$src))]>;
 
 // Move the "low word" of an LReg to the destination register
 // Since the low word is already in the destination register on the operand stack,
@@ -649,7 +673,7 @@ def REV :     T8InstOp4<0x0,
 def SELLOW :  T8Inst<(outs OReg:$dst),
 	             (ins LReg:$src),
 	             "sellow",
-		     [(set i32:$dst, (MxSelect i64:$src))]>
+		     [(set i32:$dst, (T8xxSelect i64:$src))]>
 {
     let isPseudo = 1;
 }
@@ -657,7 +681,7 @@ def SELLOW :  T8Inst<(outs OReg:$dst),
 def JOIN :  T8Inst<(outs LReg:$dst),
 	           (ins OReg:$src1, OReg:$src2),
 	           "join",
-		   [(set i64:$dst, (MxJoin i32:$src1, i32:$src2))]>
+		   [(set i64:$dst, (T8xxJoin i32:$src1, i32:$src2))]>
 {
     let isPseudo = 1;
 }
@@ -750,16 +774,16 @@ def : Pat<(call OReg:$target),
            (CALL $target)>;
 
 
-def : Pattern<(i32 (load_sym tglobaladdr:$addr)),  [(LDC $addr)]>;
-def : Pattern<(i32 (load_sym tglobaltlsaddr:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (T8xxLoadSym tglobaladdr:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (T8xxLoadSym tglobaltlsaddr:$addr)),  [(LDC $addr)]>;
 
-def : Pattern<(i32 (load_sym texternalsym:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (T8xxLoadSym texternalsym:$addr)),  [(LDC $addr)]>;
 
 // TODO: Test for constant pool
-def : Pattern<(i32 (load_sym tconstpool:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (T8xxLoadSym tconstpool:$addr)),  [(LDC $addr)]>;
 
-def : Pattern<(i32 (load_sym tjumptable:$addr)),  [(LDC $addr)]>;
-def : Pattern<(i32 (load_sym tblockaddress:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (T8xxLoadSym tjumptable:$addr)),  [(LDC $addr)]>;
+def : Pattern<(i32 (T8xxLoadSym tblockaddress:$addr)),  [(LDC $addr)]>;
 
 //===----------------------------------------------------------------------===//
 // Branch Instructions
@@ -770,7 +794,7 @@ def CJ    : T8InstImm<0xA,
 		(outs),
 		(ins OReg:$cc, brtarget:$imm),
                 "cj $imm",
-		[(MxBrNotCond i32:$cc, bb:$imm)]>;
+		[(T8xxBrNotCond i32:$cc, bb:$imm)]>;
 }
 
 let isTerminator = 1, isBranch = 1, isBarrier = 1 in {

@@ -482,7 +482,7 @@ def CMOVf32 : T8Inst<(outs FPReg:$dst),
     		    (ins OReg:$ccr, FPReg:$t, FPReg:$f),
                     "",
 		    [(set f32:$dst,
-		    (f32 (MxCmov i32:$ccr, f32:$t, f32:$f)))]> {
+		    (f32 (T8xxCmov i32:$ccr, f32:$t, f32:$f)))]> {
     let usesCustomInserter = 1;
     let isCodeGenOnly = 1;
     let isPseudo = 1;
@@ -492,7 +492,7 @@ def CMOVf64 : T8Inst<(outs DFPReg:$dst),
     		    (ins OReg:$ccr, DFPReg:$t, DFPReg:$f),
                     "",
 		    [(set f64:$dst,
-		    (f64 (MxCmov i32:$ccr, f64:$t, f64:$f)))]> {
+		    (f64 (T8xxCmov i32:$ccr, f64:$t, f64:$f)))]> {
     let usesCustomInserter = 1;
     let isCodeGenOnly = 1;
     let isPseudo = 1;
