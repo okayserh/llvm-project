@@ -20,36 +20,37 @@ operations both parameters must have the same length.
 
 /* https://discourse.llvm.org/t/how-to-resolve-decoding-conflict/32818 */
 
-class T8BinaryDBOp8<bits<8> opval, string opstr, SDNode opnode> :
+class T8BinaryDBOp8<bits<8> opval, string opstr, SDNode opnode, bit IsComm = 0> :
       T8InstOp8<opval,
                 (outs DFPReg:$dst),
        	 	(ins DFPReg:$src1, DFPReg:$src2),
 		opstr,
 		[(set f64:$dst, (opnode f64:$src1, f64:$src2))]>
 {
+  let isCommutable = IsComm;
 }
 
-class T8BinarySNOp8<bits<8> opval, string opstr, SDNode opnode> :
+class T8BinarySNOp8<bits<8> opval, string opstr, SDNode opnode, bit IsComm = 0> :
       T8InstOp8<opval,
                 (outs FPReg:$dst),
        	 	(ins FPReg:$src1, FPReg:$src2),
 		opstr,
 		[(set f32:$dst, (opnode f32:$src1, f32:$src2))]>
 {
-	 	 let DecoderNamespace = "FPSN";
+  let DecoderNamespace = "FPSN";
+  let isCommutable = IsComm;
 }
-
 
 multiclass T8BinaryCastOp<bits<8> opval, string opstr,
-	   		SDNode opnode>
+	   		SDNode opnode, bit IsComm = 0>
 {
-	def NAME#DB :      T8BinaryDBOp8<opval, opstr, opnode>;
-	def NAME#SN :      T8BinarySNOp8<opval, opstr, opnode>;
+	def NAME#DB :      T8BinaryDBOp8<opval, opstr, opnode, IsComm>;
+	def NAME#SN :      T8BinarySNOp8<opval, opstr, opnode, IsComm>;
 }
 
-defm FADD : T8BinaryCastOp<0x87, "fpadd", fadd>;
+defm FADD : T8BinaryCastOp<0x87, "fpadd", fadd, 1>;
+defm FMUL : T8BinaryCastOp<0x8B, "fpmul", fmul, 1>;
 defm FSUB : T8BinaryCastOp<0x89, "fpsub", fsub>;
-defm FMUL : T8BinaryCastOp<0x8B, "fpmul", fmul>;
 defm FDIV : T8BinaryCastOp<0x8C, "fpdiv", fdiv>;
 
 
@@ -81,14 +82,15 @@ multiclass T8UnaryCastOp<bits<4> opval, string opstr,
 
 defm FPUABS :  	   T8UnaryCastOp<0xB, "fpuabs", fabs>;
 
-
 // Store f32 to global address
 def FPSTNLSN : T8InstOp8<0x88,
 		(outs),
        	 	(ins FPReg:$val, MemSrc:$addr),
 		"fpstnlsn",
-		[(store f32:$val, ADDRr:$addr)]> {
-		}
+		[(store f32:$val, ADDRr:$addr)]>
+{
+  let mayStore = 1;
+}
 
 // Pattern for FP stores to WPtr stack
 def : Pat<(store f32:$val, ADDRri:$addr),
@@ -99,8 +101,10 @@ def FPSTNLDB : T8InstOp8<0x84,
 		(outs),
        	 	(ins DFPReg:$val, MemSrc:$addr),
 		"fpstnldb",
-		[(store f64:$val, ADDRr:$addr)]> {
-		}
+		[(store f64:$val, ADDRr:$addr)]>
+{
+  let mayStore = 1;
+}
 
 def : Pat<(store f64:$val, ADDRri:$addr),
           (FPSTNLDB f64:$val, (LDLP ADDRri:$addr) )>;
@@ -113,6 +117,7 @@ def FPLDNLSN : T8InstOp8<0x8E,
 		"fpldnlsn",
 		[(set f32:$val, (load ADDRr:$addr))]>
 {
+  let mayLoad = 1;
 }
 
 // Pattern for FP loads from WPtr stack
@@ -128,6 +133,7 @@ def FPLDNLDB : T8InstOp8<0x8A,
 		"fpldnldb",
 		[(set f64:$val, (load ADDRr:$addr))]>
 {
+  let mayLoad = 1;
 }
 
 // Pattern for FP loads from WPtr stack
@@ -141,25 +147,37 @@ def FPLDNLADDSN : T8InstOp8<0xAA,
 			   (outs FPReg:$dst),
 			   (ins FPReg:$src, MemSrc:$addr),
 			   "fpldnladdsn",
-			   [(set f32:$dst, (fadd f32:$src, (load ADDRr:$addr)))]>;
+			   [(set f32:$dst, (fadd f32:$src, (load ADDRr:$addr)))]>
+{
+  let mayLoad = 1;
+}
 
 def FPLDNLADDDB : T8InstOp8<0xA6,
 			   (outs DFPReg:$dst),
 			   (ins DFPReg:$src, MemSrc:$addr),
 			   "fpldnladddb",
-			   [(set f64:$dst, (fadd f64:$src, (load ADDRr:$addr)))]>;
+			   [(set f64:$dst, (fadd f64:$src, (load ADDRr:$addr)))]>
+{
+  let mayLoad = 1;
+}
 
 def FPLDNLMULSN : T8InstOp8<0xAC,
 			   (outs FPReg:$dst),
 			   (ins FPReg:$src, MemSrc:$addr),
 			   "fpldnlmulsn",
-			   [(set f32:$dst, (fmul f32:$src, (load ADDRr:$addr)))]>;
+			   [(set f32:$dst, (fmul f32:$src, (load ADDRr:$addr)))]>
+{
+  let mayLoad = 1;
+}
 
 def FPLDNLMULDB : T8InstOp8<0xA8,
 			   (outs DFPReg:$dst),
 			   (ins DFPReg:$src, MemSrc:$addr),
 			   "fpldnlmuldb",
-			   [(set f64:$dst, (fadd f64:$src, (load ADDRr:$addr)))]>;
+			   [(set f64:$dst, (fadd f64:$src, (load ADDRr:$addr)))]>
+{
+  let mayLoad = 1;
+}
 
 def : Pat<(fmul FPReg:$op1, (load ADDRri:$addr)),
           (FPLDNLMULSN FPReg:$op1, (LDLP ADDRri:$addr) )>;
@@ -258,7 +276,10 @@ def FPSTNLI32 :   T8InstOp8<0x9E,
 			(outs),
 			(ins FPReg:$val, MemSrc:$addr),
 			"fpstnli32",
-			[(store (i32 (fp_to_sint f32:$val)), ADDRr:$addr)]>;
+			[(store (i32 (fp_to_sint f32:$val)), ADDRr:$addr)]>
+{
+  let mayStore = 1;
+}
 
 // Pseudo instructions to provide code for the conversion from floating
 // point to integer. These are multi instruction sequences on the T8xx.
@@ -313,7 +334,7 @@ def FPEQSN :      T8InstOp8<0x95,
 		  [(set i32:$cc,
 		  (i32 (setcc f32:$lhs, f32:$rhs, SETEQ)))]>
 {
-	 let DecoderNamespace = "FPSN";
+  let DecoderNamespace = "FPSN";
 }
 
 def FPEQDB :      T8InstOp8<0x95,
@@ -330,7 +351,7 @@ def FPGTSN :      T8InstOp8<0x94,
 		  [(set i32:$cc,
 		  (i32 (setcc f32:$lhs, f32:$rhs, SETGT)))]>
 {
-	 let DecoderNamespace = "FPSN";
+  let DecoderNamespace = "FPSN";
 }
 
 def FPGTDB :      T8InstOp8<0x94,
@@ -370,7 +391,7 @@ class T8PseudoCompareSN<CondCode condnode> :
 	     [(set i32:$cc,
 	      (i32 (setcc f32:$lhs, f32:$rhs, condnode)))]>
 {
-    let isCodeGenOnly = 1;
+  let isCodeGenOnly = 1;
 }
 
 class T8PseudoCompareDB<CondCode condnode> :
@@ -380,7 +401,7 @@ class T8PseudoCompareDB<CondCode condnode> :
 	     [(set i32:$cc,
 	      (i32 (setcc f64:$lhs, f64:$rhs, condnode)))]>
 {
-    let isCodeGenOnly = 1;
+  let isCodeGenOnly = 1;
 }
 
 multiclass T8PseudoCmpOp<CondCode condnode>
@@ -403,7 +424,6 @@ def : Pat<(i32 (setcc (f32 FPReg:$lhs), (f32 FPReg:$rhs), SETOGE)),
            (FPOLESN $rhs, $lhs)>;
 def : Pat<(i32 (setcc (f64 DFPReg:$lhs), (f64 DFPReg:$rhs), SETOGE)),
            (FPOLEDB $rhs, $lhs)>;
-
 
 // Pattern fors the unordered variants. These are created from
 // the ordered variants by Morgans rule.
@@ -448,7 +468,7 @@ def FPORDEREDSN :   T8InstOp8<0x92,
 	    [(set i32:$cc,
 	      (i32 (setcc f32:$lhs, f32:$rhs, SETO)))]>
 {
-	 let DecoderNamespace = "FPSN";
+  let DecoderNamespace = "FPSN";
 }
 
 def FPORDEREDDB :   T8InstOp8<0x92,
@@ -476,19 +496,21 @@ def CMOVf32 : T8PseudoInst<(outs FPReg:$dst),
     		    (ins OReg:$ccr, FPReg:$t, FPReg:$f),
                     "",
 		    [(set f32:$dst,
-		    (f32 (T8xxCmov i32:$ccr, f32:$t, f32:$f)))]> {
-    let usesCustomInserter = 1;
-    let isCodeGenOnly = 1;
-  }
+		    (f32 (T8xxCmov i32:$ccr, f32:$t, f32:$f)))]>
+{
+  let usesCustomInserter = 1;
+  let isCodeGenOnly = 1;
+}
 
 def CMOVf64 : T8PseudoInst<(outs DFPReg:$dst),
     		    (ins OReg:$ccr, DFPReg:$t, DFPReg:$f),
                     "",
 		    [(set f64:$dst,
-		    (f64 (T8xxCmov i32:$ccr, f64:$t, f64:$f)))]> {
-    let usesCustomInserter = 1;
-    let isCodeGenOnly = 1;
-  }
+		    (f64 (T8xxCmov i32:$ccr, f64:$t, f64:$f)))]>
+{
+  let usesCustomInserter = 1;
+  let isCodeGenOnly = 1;
+}
 
 def FPNAN :       T8InstOp8<0x91,
 			    (outs OReg:$nan, FPReg:$tst_out),
