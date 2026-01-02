@@ -48,9 +48,7 @@ def call          : SDNode<"T8xxISD::CALL", SDT_TXCall,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                             SDNPVariadic]>;
 
-//def SDT_TXRet     : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
-
-def T8xxRetFlag     : SDNode<"T8xxISD::RET_FLAG", SDTNone,
+def T8xxRet     : SDNode<"T8xxISD::RET", SDTNone,
                            [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 // Custom add for workspace pointer
@@ -726,7 +724,7 @@ def : Pat<(urem (i32 OReg:$lhs), (i32 OReg:$rhs)),
 
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : T8xxPseudoInst<(outs), (ins variable_ops),
-                    "RET",  [(T8xxRetFlag)]> {
+                    "RET",  [(T8xxRet)]> {
     let isCodeGenOnly = 1;
     let isPseudo = 1;
   }

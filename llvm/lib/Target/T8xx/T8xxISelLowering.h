@@ -25,7 +25,7 @@ namespace llvm {
     FIRST_NUMBER = ISD::BUILTIN_OP_END,
 
     CALL,            // A call instruction.
-    RET_FLAG,        // Return with a flag operand.
+    RET,             // Return
     LOAD_SYM,
     ADD_WPTR,
     AJW,    // Adjust Workspace pointer
@@ -35,6 +35,7 @@ namespace llvm {
     MoveLoad,
     MoveSEXTLoad,
     MoveZEXTLoad,
+    ExtractElementF64,
 
     // T8xx conditional moves.
     CMOV,

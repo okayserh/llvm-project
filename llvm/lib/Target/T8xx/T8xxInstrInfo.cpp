@@ -382,8 +382,10 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
   case T8xx::MoveSEXTLoad:
   case T8xx::MoveZEXTLoad:
     {
-      dbgs()<<"Expand MoveLoad\n";
-      MI.dump ();
+      LLVM_DEBUG({
+	  dbgs()<<"Expand MoveLoad\n";
+	  MI.dump ();
+	});
       int64_t FI = MI.getOperand(5).getImm ();
       BuildMI (MBB, MI, DL, get(T8xx::MOVE)).addReg(T8xx::AREG).
 	addReg(T8xx::BREG).addReg(T8xx::CREG);
@@ -406,6 +408,31 @@ bool T8xxInstrInfo::expandPostRAPseudo(MachineInstr &MI) const
     }
     break;
 
+  case T8xx::ExtractElementF64:
+    {
+      dbgs()<<"Expand ExtractElementF64\n";
+      // Operand 0 = AReg = Result
+      // Operand 1 = FAreg = Src
+      // Operand 2 = FIPtr = WPtr
+      // Operand 3 = FIPtr = FI Offset
+      // Operand 4 = Offset
+
+      for (unsigned int i = 0; i < 5; ++i)
+	{
+	  const MachineOperand::MachineOperandType MOT = MI.getOperand(i).getType ();  // X
+	  dbgs() << "storeRegStack TYPE: " << (int) MOT << "\n";
+	}
+      
+      int64_t FI = MI.getOperand(3).getImm ();
+      BuildMI (MBB, MI, DL, get(T8xx::LDLP), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI);
+      BuildMI (MBB, MI, DL, get(T8xx::FPSTNLDB)).addReg(T8xx::FAREG).addReg(T8xx::AREG);
+      BuildMI (MBB, MI, DL, get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI + MI.getOperand(4).getImm());
+
+      MBB.erase(MI);
+      return (true);
+    }
+    break;
+    
     // This is a special instruction to introduce a way to get effective addresses
     // that are not aligned
   case T8xx::AddWptrImm:

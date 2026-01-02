@@ -44,8 +44,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return NULL;
   case T8xxISD::CALL:
     return "CALL";
-  case T8xxISD::RET_FLAG:
-    return "RetFlag";
+  case T8xxISD::RET:
+    return "RET";
   case T8xxISD::LOAD_SYM:
     return "LOAD_SYM";
   case T8xxISD::ADD_WPTR:
@@ -64,6 +64,8 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "MoveSEXTLoad";
   case T8xxISD::MoveZEXTLoad:
     return "MoveZEXTLoad";
+  case T8xxISD::ExtractElementF64:
+    return "ExtractElementF64";
   case T8xxISD::CMOV:
     return "CMOV";
   case T8xxISD::BRNCOND:
@@ -698,6 +700,84 @@ SDValue T8xxTargetLowering::LowerBITCAST(SDValue Op,
     return Op;
 }
 
+/*
+static SDValue extractElementF64(SDValue Src, SDValue Chain, unsigned int Offset,
+				 MVT FIPtrType,
+				 SelectionDAG &DAG)
+{
+  MachineFunction &MF = DAG.getMachineFunction();
+  T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
+  SDLoc DL(Src);
+
+  assert(Src.getValueType() == MVT::f64 && "extractElementF64 is designed to work for F64 only!");
+
+  // Find the temporary space in the working area
+  // TODO: Reuse the MoveStackSlot for double conversions. If the MoveSlot does not exist,
+  // create it. Otherwise, retrieve the MoveSlot and resize it to keep to i32.
+  // Can be done by getFrameInfo().setObjectSize(ObjectIndex, Size);
+
+  int FI = FuncInfo->getDoubleFPSlot();
+  if (FI == 0)
+    {
+      FI = DAG.getMachineFunction().
+	getFrameInfo().CreateStackObject(8, // Size in bytes for i16
+					 Align(4), // Required alignment for the load to the frame
+					 false); // isImmutable
+      FuncInfo->setDoubleFPSlot(FI);
+    }
+
+  // Now store element
+  SDValue FIPtr = DAG.getFrameIndex(FI, FIPtrType);
+  SDValue Result = DAG.getStore(Chain, DL, Src, FIPtr,
+				MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI),
+				Align(4));
+
+  // Find way to add offset to FIPtr
+  if (Offset > 0)
+    {
+      // TODO: Replace hardcoded 4 by machine word size
+      SDValue PtrOff = DAG.getIntPtrConstant(Offset * 4, DL);
+      FIPtr = DAG.getNode(ISD::ADD, DL, MVT::i32, FIPtr, PtrOff);
+    }
+  // TODO: Replace hardcoded 4 by machine default aligment size
+  Result = DAG.getLoad(MVT::i32, DL, Result, FIPtr,
+		       MachinePointerInfo::getFixedStack(DAG.getMachineFunction(),FI),
+		       Align(4));
+  return Result;
+}
+*/
+
+
+static SDValue extractElementF64(SDValue Src, SDValue Chain, unsigned int Offset,
+				 MVT FIPtrType,
+				 SelectionDAG &DAG)
+{
+  MachineFunction &MF = DAG.getMachineFunction();
+  T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
+  SDLoc DL(Src);
+
+  assert(Src.getValueType() == MVT::f64 && "extractElementF64 is designed to work for F64 only!");
+
+  int FI = FuncInfo->getDoubleFPSlot();
+  if (FI == 0)
+    {
+      FI = DAG.getMachineFunction().
+	getFrameInfo().CreateStackObject(8, // Size in bytes for i16
+					 Align(4), // Required alignment for the load to the frame
+					 false); // isImmutable
+      FuncInfo->setDoubleFPSlot(FI);
+    }
+
+  // Find way to add offset to FIPtr
+  SDValue PtrOff = DAG.getIntPtrConstant(Offset, DL);
+  SDVTList VTs = DAG.getVTList(MVT::i32, MVT::Other);
+  SDValue FIPtr = DAG.getFrameIndex(FI, FIPtrType);
+
+  SDValue Result = DAG.getNode(T8xxISD::ExtractElementF64, DL, VTs,
+			     Src, FIPtr, PtrOff);
+  return Result;
+}
+
 
 SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
 					   /*bool HasExtractInsert*/) const {
@@ -729,48 +809,22 @@ SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
   // ldlp (temp space)
   // fpldnl  // result in FAReg
 
-  // Check whether a workspace location was already allocated
-  // as temporary storage for Move instructions
-  // This can be reused for f32 conversions!
-  /*
-  int FI = 0;
-  if (ValueType == F32)
-  {
-  FI = FuncInfo->getMoveSlot();
-  if (FI == 0)
-  {
-    FI = DAG.getMachineFunction().
-    getFrameInfo().CreateStackObject(4, // Size in bytes for i16
-    Align(4), // Required alignment for the load to the frame
-    false); // isImmutable
-    FuncInfo->setMoveSlot(FI);
-    }
-    }
-    else // ValueType = f64
-    {
-    int FI = FuncInfo->getDoubleFPSlot();
-    if (FI == 0)
-    {
-    }
-    }
-  */
-
   // Note: MIPS Code
-
+  SDValue Chain = DAG.getEntryNode();
+  
   // If operand is of type f64, extract the upper 32-bit. Otherwise, bitcast it
   // to i32.
-  /*
-  SDValue X = (TyX == MVT::f32) ?
-    DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(0)) :
-    DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32, Op.getOperand(0),
-                Const1);
   SDValue Y = (TyY == MVT::f32) ?
     DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(1)) :
-    DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32, Op.getOperand(1),
-                Const1);
-  */
-  SDValue X = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(0));
-  SDValue Y = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(1));
+    extractElementF64(Op.getOperand(1), Chain, 1, getFrameIndexTy(DAG.getDataLayout()), DAG);
+  /*  if (TyY == MVT::f64)
+      Chain = Y.getValue(1);*/
+
+  SDValue X = (TyX == MVT::f32) ?
+    DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(0)) :
+    extractElementF64(Op.getOperand(0), Chain, 1, getFrameIndexTy(DAG.getDataLayout()), DAG);
+  /*  if (TyX == MVT::f64)
+      Chain = X.getValue(1);*/
 
   // sll SllX, X, 1
   // srl SrlX, SllX, 1
@@ -786,6 +840,29 @@ SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
   if (TyX == MVT::f32)
     return DAG.getNode(ISD::BITCAST, DL, Op.getOperand(0).getValueType(), Res);
 
+  // Store result in buffer for double
+  MachineFunction &MF = DAG.getMachineFunction();
+  T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
+  int FI = FuncInfo->getDoubleFPSlot();
+  SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+
+  //  SDValue Chain = DAG.getEntryNode();
+  /*
+  SDValue Chain = X.getValue(1);
+  SDValue FPStore = DAG.getStore(Chain, DL, X, FIPtr,
+		     MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI),
+		     Align(4));
+  */
+
+  Res = DAG.getStore(Chain, DL, Res, FIPtr,
+		     MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI),
+		     Align(4));
+
+  Res = DAG.getLoad(Op.getValueType(), DL, Res, FIPtr,
+		    MachinePointerInfo::getFixedStack(DAG.getMachineFunction(),FI),
+		    Align(4));
+
+  return Res;
   /*
   SDValue LowX = DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32,
                              Op.getOperand(0),
@@ -1564,7 +1641,7 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   // Copy the result values into the output registers.
   for (unsigned i = 0, e = RVLocs.size(); i < e; ++i) {
     // OKH: In VA the locations for return values are stored. These are
-    // also provided as operands to the "RET_FLAG" machine ISD.
+    // also provided as operands to the "RET" machine ISD.
     CCValAssign &VA = RVLocs[i];
     assert(VA.isRegLoc() && "Can only return in registers!");
 
@@ -1581,7 +1658,7 @@ T8xxTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   if (Flag.getNode())
     RetOps.push_back(Flag);
 
-  SDValue ret = DAG.getNode(T8xxISD::RET_FLAG, DL, MVT::Other, RetOps);
+  SDValue ret = DAG.getNode(T8xxISD::RET, DL, MVT::Other, RetOps);
 
   LLVM_DEBUG({
       dbgs() << "Post Lower Return\n";
