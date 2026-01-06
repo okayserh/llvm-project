@@ -67,6 +67,10 @@ namespace llvm {
     
     bool useSoftFloat() const override;
 
+    bool shouldInsertFencesForAtomic(const Instruction *I) const override {
+      return true;
+    }
+
     /// Provide custom lowering hooks for some operations
     SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 

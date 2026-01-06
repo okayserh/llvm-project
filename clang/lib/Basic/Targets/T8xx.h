@@ -22,22 +22,49 @@ namespace clang {
 namespace targets {
 
 class LLVM_LIBRARY_VISIBILITY T8xxTargetInfo : public TargetInfo {
-public:
+ protected:
+  std::string ABI;
+
+ public:
   T8xxTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
     NoAsmVariants = true;
     LongLongAlign = 32;
     SuitableAlign = 32;
     DoubleAlign = LongDoubleAlign = 32;
-
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
     IntPtrType = SignedInt;
+
+    setABI("txl");
+
     //    UseZeroLengthBitfieldAlignment = true;
     resetDataLayout("e-m:e-p:32:32:32-i8:8:8-i16:16:16-"
                     "i32:32:32-i64:32:32-f64:32:32-f32:32:32-n32-S32");
   }
 
+
+  StringRef getABI() const override { return ABI; }
+
+  bool setABI(const std::string &Name) override {
+    if (Name == "txl")   // ABI name for the LLVM / ELF convention.
+      {
+	ABI = Name;
+
+	// TODO: Initial guess. Need checking
+	Int64Type = SignedLongLong;
+	IntMaxType = Int64Type;
+	LongDoubleFormat = &llvm::APFloat::IEEEdouble();
+	LongDoubleWidth = 64;
+	LongDoubleAlign = 32;
+	LongWidth = LongAlign = 32;
+	MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 32;
+	PointerWidth = PointerAlign = 32;
+	return (true);
+      }
+    return false;
+  }
+  
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override;
 

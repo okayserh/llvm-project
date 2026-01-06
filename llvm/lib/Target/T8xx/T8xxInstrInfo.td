@@ -883,6 +883,28 @@ def ATOMIC_LOAD_UMIN_I32_POSTRA : Atomic2OpsPostRA;
 def ATOMIC_LOAD_UMAX_I32_POSTRA : Atomic2OpsPostRA;
 
 
+// Initial attempt to implement some atomic_load patterns
+def : Pat<(i32 (atomic_load_asext_8 ADDRri:$addr)),
+          (LB (LDLP ADDRri:$addr) )>;
+def : Pat<(i32 (atomic_load_asext_8 ADDRri8:$addr)),
+          (LB (LDLPb ADDRri8:$addr) )>;
+def : Pat<(i32 (atomic_load_nonext_32 ADDRrr:$addr)),
+          (LDNL (ADDRrr:$addr) )>;
+def : Pat<(i32 (atomic_load_nonext_32 ADDRri:$addr)),
+          (LDNL (LDLP ADDRri:$addr), (LDC 0) )>;
+
+def : Pat<(atomic_store_8 i32:$val, ADDRri:$addr),
+          (SB i32:$val, (LDLP ADDRri:$addr) )>;
+def : Pat<(atomic_store_8 i32:$val, ADDRri8:$addr),
+          (SB i32:$val, (LDLPb ADDRri8:$addr) )>;
+def : Pat<(atomic_store_8 i32:$val, ADDRrr:$addr),
+          (SB i32:$val, ADDRrr:$addr)>;
+
+def : Pat<(atomic_store_32 i32:$val, ADDRrr:$addr),
+          (STNL i32:$val, ADDRrr:$addr)>;
+def : Pat<(atomic_store_32 i32:$val, ADDRri:$addr),
+          (STNL i32:$val, (LDLP ADDRri:$addr), (LDC 0) )>;
+
 //===----------------------------------------------------------------------===//
 // Floating Point Instructions
 //===----------------------------------------------------------------------===//

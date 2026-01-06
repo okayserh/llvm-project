@@ -236,14 +236,17 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
   setOperationAction({ISD::VAARG, ISD::VACOPY, ISD::VAEND}, MVT::Other, Expand);
 
-
   // ATOMIC Operations seem to "kill" the build.
-  /*
-  setOperationAction(ISD::ATOMIC_FENCE,   MVT::Other,
-                       Subtarget.hasAnyDataBarrier() ? Custom : Expand);
+  setOperationAction(ISD::ATOMIC_FENCE,   MVT::Other, Custom);
+  setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i32, LibCall);
 
+  /*
+  setOperationAction(ISD::ATOMIC_LOAD, MVT::i32, LibCall);
+  setOperationAction(ISD::ATOMIC_STORE, MVT::i32, LibCall);
+  */
+
+  /*
     // Set them all for libcall, which will force libcalls.
-    setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i32, LibCall);
     setOperationAction(ISD::ATOMIC_SWAP, MVT::i32, LibCall);
     setOperationAction(ISD::ATOMIC_LOAD_ADD, MVT::i32, LibCall);
     setOperationAction(ISD::ATOMIC_LOAD_SUB, MVT::i32, LibCall);

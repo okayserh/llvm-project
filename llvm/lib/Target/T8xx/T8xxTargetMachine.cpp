@@ -196,9 +196,8 @@ FunctionPass *T8xxPassConfig::createTargetRegisterAllocator(bool) {
 }
 
 void T8xxPassConfig::addIRPasses() {
-  addPass(createAtomicExpandLegacyPass());
-
   TargetPassConfig::addIRPasses();
+  addPass(createAtomicExpandLegacyPass());
 }
 
 bool T8xxPassConfig::addInstSelector() {
