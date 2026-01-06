@@ -300,8 +300,12 @@ def MINT :    T8InstOp8<0x42,
 		"mint",
 		[(set i32:$dst, -2147483648)]>;
 
-// Note: There is no binary not operation in the LLVM instruction set.
-def NOT : T8InstOp8<0x32, (outs OReg:$dst), (ins OReg:$src), "not", []>;
+// Note: There is no unary not operation in the LLVM instruction set.
+def NOT : T8InstOp8<0x32, (outs OReg:$dst), (ins OReg:$src), "not", []>
+{
+  let mayStore = 0;
+  let hasSideEffects = 0;
+}
 
 def : Pat<(i32 2147483647),
       	   (NOT (MINT))>;
@@ -333,9 +337,10 @@ def MoveLoad : T8PseudoInst<
     (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
     "move_load",
     [(set i32:$res, (T8xxMoveLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
-	 {
-	 let hasSideEffects = 1;
-	 }
+{
+  let hasSideEffects = 1;
+  let mayLoad = 1;
+}
 
 def : Pat<(T8xxMoveLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
       	   (MoveLoad i32:$cnt, (LDLP ADDRri:$buf_addr), ADDRr:$src_addr, ADDRri:$buf_addr2)>;
@@ -351,9 +356,10 @@ def MoveSEXTLoad : T8PseudoInst<
     (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
     "move_sext_load",
     [(set i32:$res, (T8xxMoveSEXTLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
-	 {
-	 let hasSideEffects = 1;
-	 }
+{
+  let hasSideEffects = 1;
+  let mayLoad = 1;
+}
 
 def : Pat<(T8xxMoveSEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
       	   (MoveSEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), ADDRr:$src_addr, ADDRri:$buf_addr2)>;
@@ -370,9 +376,10 @@ def MoveZEXTLoad : T8PseudoInst<
     (ins OReg:$cnt, MemSrc:$src_addr, MemSrc:$buf_addr, (WPtrSrc $rs, $imm):$buf_addr2),
     "move_sext_load",
     [(set i32:$res, (T8xxMoveZEXTLoad OReg:$cnt, ADDRr:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2))]>
-	 {
-	 let hasSideEffects = 1;
-	 }
+{
+  let hasSideEffects = 1;
+  let mayLoad = 1;
+}
 
 def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRr:$src_addr, ADDRri:$buf_addr2),
       	   (MoveZEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), ADDRr:$src_addr, ADDRri:$buf_addr2)>;
@@ -401,9 +408,10 @@ def ExtractElementF64 : T8PseudoInst<
 // Needed for 16 bit operations
 def MOVE :    T8InstOp8<0x4A, (outs), (ins OReg:$cnt, MemSrc:$dst_addr, MemSrc:$src_addr), "move",
 	 [(T8xxMOVE OReg:$cnt, ADDRr:$dst_addr, ADDRr:$src_addr)]>
-	 {
-	 let hasSideEffects = 1;
-	 }
+{
+  let hasSideEffects = 1;
+  let mayStore = 1;
+}
 
 // 4 Byte aligned Frameindices
 def : Pat<(T8xxMOVE i32:$cnt, ADDRri:$dst_addr, ADDRr:$src_addr),
@@ -425,14 +433,14 @@ def : Pat<(T8xxMOVE i32:$cnt, ADDRr:$dst_addr, ADDRri8:$src_addr),
 def : Pat<(T8xxMOVE i32:$cnt, ADDRri8:$dst_addr, ADDRri8:$src_addr),
       	   (MOVE i32:$cnt, (LDLPb ADDRri:$dst_addr), (LDLPb ADDRri:$src_addr))>;
 
-
 // Special instruction, which is solely used in CallLowering
 def AddWptrImm : T8PseudoInst<(outs OReg:$dst),
     		    (ins WptrRegs:$src, i32imm:$val),
                     "ldlp $val",
-		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, (i32 imm:$val)))]> {
-    let isCodeGenOnly = 1;
-  }
+		    [(set i32:$dst, (T8xxAddWPTR WptrRegs:$src, (i32 imm:$val)))]>
+{
+  let isCodeGenOnly = 1;
+}
 
 // Instruction used to get addresses relative to the instruction pointer
 // for position independent code.
@@ -442,46 +450,45 @@ def LDPI :    T8InstOp8<0x1B,
 		"ldpi",
 		[(set i32:$dst, (T8xxAddIPTR i32:$src))]>;
 
-class T8BinaryOp4<bits<4> opval, string opstr, SDNode opnode> :
+class T8BinaryOp4<bits<4> opval, string opstr, SDNode opnode, bit IsComm = 0> :
       T8InstOp4<opval,
                 (outs OReg:$dst),
        	 	(ins OReg:$src1, OReg:$src2),
 		opstr,
 		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]>
 {
+  let isCommutable = IsComm;
 }
 
-class T8BinaryOp8<bits<8> opval, string opstr, SDNode opnode> :
+class T8BinaryOp8<bits<8> opval, string opstr, SDNode opnode, bit IsComm = 0> :
       T8InstOp8<opval,
                 (outs OReg:$dst),
        	 	(ins OReg:$src1, OReg:$src2),
 		opstr,
 		[(set i32:$dst, (opnode i32:$src1, i32:$src2))]>
 {
+  let isCommutable = IsComm;
 }
 
 
-def ADD : T8BinaryOp4<0x5, "add", add>;
+def ADD : T8BinaryOp4<0x5, "add", add, 1>;
 def SUB : T8BinaryOp4<0xC, "sub", sub>;
-def MUL : T8BinaryOp8<0x53, "mul", mul>;
+def MUL : T8BinaryOp8<0x53, "mul", mul, 1>;
 def SHL : T8BinaryOp8<0x41, "shl", shl>;
 def SHR : T8BinaryOp8<0x40, "shr", srl>;
 
 def DIV : T8BinaryOp8<0x2C, "div", sdiv>;
 def REM : T8BinaryOp8<0x1F, "rem", srem>;
 
-def XOR : T8BinaryOp8<0x33, "xor", xor>;  // #53
-def OR  : T8BinaryOp8<0x4B, "or", or>;  // #53
-def AND : T8BinaryOp8<0x46, "and", and>;  // #53
+def XOR : T8BinaryOp8<0x33, "xor", xor, 1>;
+def OR  : T8BinaryOp8<0x4B, "or",  or,  1>;
+def AND : T8BinaryOp8<0x46, "and", and, 1>;
 
 def : Pat<(i32 (sra (i32 OReg:$src), (i32 OReg:$cnt))),
 	  (LSHR (XDBLE OReg:$src), OReg:$cnt)>;
 
 /* Define via patterns */
 /*
-defm UDIV : T8BinaryOp<0x21, 0xFA, "ldiv", udiv>;   // Pseudo code, ldiv (Section 5.7.2 Compiler writer guide)
-defm UREM : T8BinaryOp<0x21, 0xFB, "ldiv", urem>;   // Pseudo code, ldiv -> TODO
-
 defm ROTR : T8BinaryOp<0x01, 0x22, "lshr", rotr>;
 defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
 */
@@ -491,7 +498,10 @@ def LDL : T8InstImm<0x7,
 		(outs OReg:$val),
        	 	(ins (WPtrSrc $rs, $imm):$addr),
 		"ldl $addr",
-		[(set i32:$val, (load ADDRri:$addr))]>;
+		[(set i32:$val, (load ADDRri:$addr))]>
+{
+  let mayLoad = 1;
+}
 
 // Load i32 from global address
 def LDNL : T8InstImm<0x3,
@@ -500,6 +510,7 @@ def LDNL : T8InstImm<0x3,
 		"ldnl $addr",
 		[(set i32:$val, (load ADDRrr:$addr))]>
 {
+  let mayLoad = 1;
 }
 
 // Load i8 from global address
@@ -507,8 +518,10 @@ def LB : T8InstOp4<0x1,
 		(outs OReg:$val),
        	 	(ins MemSrc:$addr),
 		"lb",
-		[(set i32:$val, (extloadi8 ADDRr:$addr))]> {
-		}
+		[(set i32:$val, (extloadi8 ADDRr:$addr))]>
+{
+  let mayLoad = 1;
+}
 
 def : Pat<(i32 (extloadi8 ADDRri:$addr)),
           (LB (LDLP ADDRri:$addr) )>;
@@ -553,17 +566,10 @@ def STL : T8InstImm<0xD,
 		(outs),
        	 	(ins OReg:$val, (WPtrSrc $rs, $imm):$addr),
 		"stl $addr",
-		[(store i32:$val, ADDRri:$addr)]> {
-		}
-
-// TODO: The address pattern allows for 8 bit addresses in order to
-// match the DAG and get the test16.c to compile. However, this will not
-// work in the general case, since the STL requires a proper 4 Byte aligned
-// address to work.
-/*
-def : Pat<(truncstorei16 i32:$val, ADDRri8:$addr),
-          (STL (AND i32:$val, (LDC 65535) ), ADDRri:$addr )>;
-	  */
+		[(store i32:$val, ADDRri:$addr)]>
+{
+  let mayStore = 1;
+}
 
 // This pattern is used for the treatment of call parameters
 // They are positioned relative to the WPTR but the framepointer
@@ -576,16 +582,20 @@ def STNL : T8InstImm<0xE,
 		(outs),
        	 	(ins OReg:$val, (RPtrSrc $rs, $imm):$addr),
 		"stnl $addr",
-		[(store i32:$val, ADDRrr:$addr)]> {
-		}
+		[(store i32:$val, ADDRrr:$addr)]>
+{
+  let mayStore = 1;
+}
 
 // Store i8 to global address
 def SB : T8InstOp8<0x3B,
 		(outs),
        	 	(ins OReg:$val, MemSrc:$addr),
 		"sb",
-		[(truncstorei8 i32:$val, ADDRr:$addr)]> {
-		}
+		[(truncstorei8 i32:$val, ADDRr:$addr)]>
+{
+  let mayStore = 1;
+}
 
 /* Pattern to introduce an LEA in order to get the Framepointer
  into a operand register */

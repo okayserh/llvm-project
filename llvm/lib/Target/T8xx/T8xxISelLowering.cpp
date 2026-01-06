@@ -700,7 +700,6 @@ SDValue T8xxTargetLowering::LowerBITCAST(SDValue Op,
     return Op;
 }
 
-/*
 static SDValue extractElementF64(SDValue Src, SDValue Chain, unsigned int Offset,
 				 MVT FIPtrType,
 				 SelectionDAG &DAG)
@@ -745,9 +744,8 @@ static SDValue extractElementF64(SDValue Src, SDValue Chain, unsigned int Offset
 		       Align(4));
   return Result;
 }
-*/
 
-
+/*
 static SDValue extractElementF64(SDValue Src, SDValue Chain, unsigned int Offset,
 				 MVT FIPtrType,
 				 SelectionDAG &DAG)
@@ -777,7 +775,7 @@ static SDValue extractElementF64(SDValue Src, SDValue Chain, unsigned int Offset
 			     Src, FIPtr, PtrOff);
   return Result;
 }
-
+*/
 
 SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
 					   /*bool HasExtractInsert*/) const {
@@ -817,14 +815,14 @@ SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
   SDValue Y = (TyY == MVT::f32) ?
     DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(1)) :
     extractElementF64(Op.getOperand(1), Chain, 1, getFrameIndexTy(DAG.getDataLayout()), DAG);
-  /*  if (TyY == MVT::f64)
-      Chain = Y.getValue(1);*/
+  if (TyY == MVT::f64)
+    Chain = Y.getValue(1);
 
   SDValue X = (TyX == MVT::f32) ?
     DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op.getOperand(0)) :
     extractElementF64(Op.getOperand(0), Chain, 1, getFrameIndexTy(DAG.getDataLayout()), DAG);
-  /*  if (TyX == MVT::f64)
-      Chain = X.getValue(1);*/
+  if (TyX == MVT::f64)
+    Chain = X.getValue(1);
 
   // sll SllX, X, 1
   // srl SrlX, SllX, 1
@@ -846,15 +844,11 @@ SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
   int FI = FuncInfo->getDoubleFPSlot();
   SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
 
-  //  SDValue Chain = DAG.getEntryNode();
-  /*
-  SDValue Chain = X.getValue(1);
-  SDValue FPStore = DAG.getStore(Chain, DL, X, FIPtr,
-		     MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI),
-		     Align(4));
-  */
+  // TODO: Replace hardcoded 4 by machine word size
+  SDValue PtrOff = DAG.getIntPtrConstant(4, DL);
+  SDValue FIPtrStore = DAG.getNode(ISD::ADD, DL, MVT::i32, FIPtr, PtrOff);
 
-  Res = DAG.getStore(Chain, DL, Res, FIPtr,
+  Res = DAG.getStore(Chain, DL, Res, FIPtrStore,
 		     MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI),
 		     Align(4));
 
@@ -863,12 +857,6 @@ SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
 		    Align(4));
 
   return Res;
-  /*
-  SDValue LowX = DAG.getNode(MipsISD::ExtractElementF64, DL, MVT::i32,
-                             Op.getOperand(0),
-                             DAG.getConstant(0, DL, MVT::i32));
-  return DAG.getNode(MipsISD::BuildPairF64, DL, MVT::f64, LowX, Res);
-  */
 }
 
 

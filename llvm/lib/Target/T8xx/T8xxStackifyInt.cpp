@@ -256,51 +256,7 @@ static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
       Insert->dump();
     });
 
-  /* This should not be needed anymore. Everything should be SSA
-  // MRI doesn't know what the Def is. Try asking LIS.
-  if (const VNInfo *ValNo = LIS.getInterval(Reg).getVNInfoBefore(
-          LIS.getInstructionIndex(*Insert)))
-    {
-      LLVM_DEBUG({
-	  MachineInstr *temp = LIS.getInstructionFromIndex(ValNo->def);
-	  if (temp)
-	    temp->dump ();
-	});
-
-    return LIS.getInstructionFromIndex(ValNo->def);
-    }
-  */
-
   return nullptr;
-}
-
-
-// Test whether Reg, as defined at Def, has exactly one use. This is a
-// generalization of MachineRegisterInfo::hasOneNonDBGUse that uses
-// LiveIntervals to handle complex cases.
-static bool hasOneNonDBGUse(unsigned Reg, MachineInstr *Def,
-                            MachineRegisterInfo &MRI, MachineDominatorTree &MDT,
-                            LiveIntervals &LIS) {
-  // Most registers are in SSA form here so we try a quick MRI query first.
-  if (MRI.hasOneNonDBGUse(Reg))
-    return true;
-
-  bool HasOne = false;
-  const LiveInterval &LI = LIS.getInterval(Reg);
-  const VNInfo *DefVNI =
-      LI.getVNInfoAt(LIS.getInstructionIndex(*Def).getRegSlot());
-  assert(DefVNI);
-  for (auto &I : MRI.use_nodbg_operands(Reg)) {
-    const auto &Result = LI.Query(LIS.getInstructionIndex(*I.getParent()));
-    if (Result.valueIn() == DefVNI) {
-      if (!Result.isKill())
-        return false;
-      if (HasOne)
-        return false;
-      HasOne = true;
-    }
-  }
-  return HasOne;
 }
 
 
@@ -327,104 +283,104 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 				      T8xxRegStack RegStack)
 				      //				      unsigned RegClassID)
 {
-      // Debugging Write out all definitions and operators
-      const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI->defs();
-      const iterator_range<MachineInstr::mop_iterator> &Range_uses = MI->explicit_uses();
-      unsigned int RegDefCount = 0,
-	RegUseCount = 0;
-      unsigned int DepthE = 0,
-	DepthSubE = 0;
+  // Debugging Write out all definitions and operators
+  const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI->defs();
+  const iterator_range<MachineInstr::mop_iterator> &Range_uses = MI->explicit_uses();
+  unsigned int RegDefCount = 0,
+    RegUseCount = 0;
+  unsigned int DepthE = 0,
+    DepthSubE = 0;
 
-      // Find out how many registers are defined and how many are needed as input
-      for (auto I = Range_defs.begin (); I != Range_defs.end (); ++I)
+  // Find out how many registers are defined and how many are needed as input
+  for (auto I = Range_defs.begin (); I != Range_defs.end (); ++I)
+    {
+      // Count only definitions and uses that use space on the relevant register stack
+      if (I->isReg() &&
+	  !I->getReg().isPhysical ())
 	{
-	  // Count only definitions and uses that use space on the relevant register stack
-	  if (I->isReg() &&
-	      !I->getReg().isPhysical ())
+	  unsigned RegClassID = MRI.getRegClassOrNull (I->getReg ())->getID ();
+	  if (mapRegisterStack (RegClassID) == RegStack)
 	    {
-	      unsigned RegClassID = MRI.getRegClassOrNull (I->getReg ())->getID ();
-	      if (mapRegisterStack (RegClassID) == RegStack)
-		{
-		  ++RegDefCount;
-		  // "Long registers" are a construct to get the long instructions
-		  // properly into the SSA form. However, long registers take up
-		  // two spaces on the register/operand stack
-		  if (RegClassID == T8xx::LRegRegClassID)
-		    ++RegDefCount;
-		}
+	      ++RegDefCount;
+	      // "Long registers" are a construct to get the long instructions
+	      // properly into the SSA form. However, long registers take up
+	      // two spaces on the register/operand stack
+	      if (RegClassID == T8xx::LRegRegClassID)
+		++RegDefCount;
 	    }
 	}
+    }
+  for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
+    {
+      if (I->isReg() &&
+	  !I->getReg().isPhysical ())
+	{
+	  unsigned RegClassID = MRI.getRegClassOrNull (I->getReg ())->getID ();
+	  if (mapRegisterStack (RegClassID) == RegStack)
+	    {
+	      ++RegUseCount;
+	      // "Long registers" are a construct to get the long instructions
+	      // properly into the SSA form. However, long registers use
+	      // two spaces on the register/operand stack
+	      if (RegClassID == T8xx::LRegRegClassID)
+		++RegUseCount;
+	    }
+	}
+    }
+
+  if (RegUseCount == 0)
+    DepthE = RegDefCount;
+  else
+    {
       for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
 	{
-	  if (I->isReg() &&
-	      !I->getReg().isPhysical ())
+	  if (I->isReg () &&
+	      !I->getReg().isPhysical() &&
+	      (mapRegisterStack(MRI.getRegClassOrNull (I->getReg ())->getID ()) == RegStack))
 	    {
-	      unsigned RegClassID = MRI.getRegClassOrNull (I->getReg ())->getID ();
-	      if (mapRegisterStack (RegClassID) == RegStack)
+	      Register Reg = I->getReg();
+	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      if (DefI)
 		{
-		  ++RegUseCount;
-		  // "Long registers" are a construct to get the long instructions
-		  // properly into the SSA form. However, long registers use
-		  // two spaces on the register/operand stack
-		  if (RegClassID == T8xx::LRegRegClassID)
-		    ++RegUseCount;
+		  unsigned int SubE = getDepth (DefI, MRI, LIS, RegStack);
+		  if (SubE > DepthSubE)
+		    DepthSubE = SubE;
+		}
+	      else
+		{
+		  LLVM_DEBUG(dbgs() << "getDepth -> Multiple definitions\n");
+		  // Try to find all definitions of the register.
+		  MachineRegisterInfo::def_instr_iterator def_reg = MRI.def_instr_begin(Reg);
+		  while (def_reg != MRI.def_instr_end())
+		    {
+		      LLVM_DEBUG({
+			  def_reg->dump();
+			});
+		      ++def_reg;
+		    }
 		}
 	    }
 	}
 
-      if (RegUseCount == 0)
-	DepthE = RegDefCount;
+      if (MI->getOpcode() == T8xx::REV)
+	// REV is special in that it does not change the depth of the instruction.
+	DepthE = DepthSubE;
       else
 	{
-	  for (auto I = Range_uses.begin (); I != Range_uses.end (); ++I)
-	    {
-	      if (I->isReg () &&
-		  !I->getReg().isPhysical() &&
-		  (mapRegisterStack(MRI.getRegClassOrNull (I->getReg ())->getID ()) == RegStack))
-		{
-		  Register Reg = I->getReg();
-		  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
-		  if (DefI)
-		    {
-		      unsigned int SubE = getDepth (DefI, MRI, LIS, RegStack);
-		      if (SubE > DepthSubE)
-			DepthSubE = SubE;
-		    }
-		  else
-		    {
-		      LLVM_DEBUG(dbgs() << "getDepth -> Multiple definitions\n");
-		      // Try to find all definitions of the register.
-		      MachineRegisterInfo::def_instr_iterator def_reg = MRI.def_instr_begin(Reg);
-		      while (def_reg != MRI.def_instr_end())
-			{
-			  LLVM_DEBUG({
-			      def_reg->dump();
-			    });
-			  ++def_reg;
-			}
-		    }
-		}
-	    }
-
-	  if (MI->getOpcode() == T8xx::REV)
-	    // REV is special in that it does not change the depth of the instruction.
-	    DepthE = DepthSubE;
-	  else
-	    {
-	      DepthE = DepthSubE + (RegUseCount - 1);
-	      if (RegDefCount > DepthE)
-		DepthE = RegDefCount;
-	    }
+	  DepthE = DepthSubE + (RegUseCount - 1);
+	  if (RegDefCount > DepthE)
+	    DepthE = RegDefCount;
 	}
+    }
 
-      // Determine the depth on an instruction
-      // Lower limit is the maximum of produced and used stack registers
-      // LowLimit = max(RegDefCount,RegUseCount)
-      //
-      // RegUseCount needs to be adjusted to functions that need more registers to fill one used Reg
-      // Largest register use + RegUse Count - 1
+  // Determine the depth on an instruction
+  // Lower limit is the maximum of produced and used stack registers
+  // LowLimit = max(RegDefCount,RegUseCount)
+  //
+  // RegUseCount needs to be adjusted to functions that need more registers to fill one used Reg
+  // Largest register use + RegUse Count - 1
 
-      return (DepthE);
+  return (DepthE);
 }
 
 
@@ -810,7 +766,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      bool bIntCase = (*(str2code-1) <= 'C');
 	      int opno = bIntCase ? (*(str2code-1)) - 'A' :
 		(*(str2code-1)) - 'D';
-	      
+
 	      // Note Character denotes operand position!
 	      MachineOperand *Use = bIntCase ? OpDepth[opno].second :
 		OpDepthFP[opno].second;
@@ -855,7 +811,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 
 		  if (MRI.getRegClassOrNull (Reg)->getID () == T8xx::DFPRegRegClassID)
 		    BuildMI(*MBB, MBBI, DL, TII->get(T8xx::FPSTNLDB)).
-		      addReg(Reg).addReg(RegFPStack);		  
+		      addReg(Reg).addReg(RegFPStack);
 		}
 	    }
 	      break;
@@ -913,7 +869,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	  ++str2code;
 	}
     }
-  
+
   output.push_back (MI);
   return (MI);
 }
@@ -935,16 +891,16 @@ typedef struct StackInfos_s
     fpreg_depth;
 
   StackAction action;
-  SmallVector<Register, 4> RegClones;
+  //  SmallVector<Register, 4> RegClones;
 } StackInfos;
 
 
 
-void insertTempStore (MachineBasicBlock::instr_iterator def,
-		      MachineRegisterInfo &MRI,
-		      VirtRegMap &VRM,
-		      Register VirtOrig,
-		      Register VirtNew)
+static void insertTempStore (MachineBasicBlock::instr_iterator def,
+			     MachineRegisterInfo &MRI,
+			     VirtRegMap &VRM,
+			     Register VirtOrig,
+			     Register VirtNew)
 {
   DebugLoc DL = def->getDebugLoc();
   MachineBasicBlock *MBB = def->getParent ();
@@ -1019,11 +975,11 @@ void insertTempStore (MachineBasicBlock::instr_iterator def,
 
 }
 
-void insertTempLoad (MachineBasicBlock::instr_iterator use,
-		     MachineRegisterInfo &MRI,
-		     VirtRegMap &VRM,
-		     Register VirtOrig,
-		     Register VirtNew)
+static void insertTempLoad (MachineBasicBlock::instr_iterator use,
+			    MachineRegisterInfo &MRI,
+			    VirtRegMap &VRM,
+			    Register VirtOrig,
+			    Register VirtNew)
 {
   DebugLoc DL = use->getDebugLoc();
   MachineBasicBlock *MBB = use->getParent ();
@@ -1073,6 +1029,110 @@ void insertTempLoad (MachineBasicBlock::instr_iterator use,
     }
 }
 
+// Note: Based on the same function in the WebAssembly backend
+// Determine whether MI reads memory, writes memory, has side effects,
+// and/or uses the stack pointer value.
+static void query(const MachineInstr &MI, bool &Read, bool &Write,
+                  bool &Effects) {
+  // Initialize return values
+  Read = false;
+  Write = false;
+  Effects = false;
+
+  assert(!MI.isTerminator());
+
+  if (MI.isDebugInstr() || MI.isPosition())
+    return;
+
+  // Check for loads.
+  if (MI.mayLoad() && !MI.isDereferenceableInvariantLoad())
+    Read = true;
+
+  // Check for stores.
+  if (MI.mayStore()) {
+    Write = true;
+  } else if (MI.hasOrderedMemoryRef()) {
+    // Record volatile accesses, unless it's a call, as calls are handled
+    // specially below.
+    if (!MI.isCall()) {
+      Write = true;
+      Effects = true;
+    }
+  }
+
+  // Check for side effects.
+  if (MI.hasUnmodeledSideEffects()) {
+    Effects = true;
+  }
+
+  // Analyze calls.
+  if (MI.isCall()) {
+    //    queryCallee(MI, Read, Write, Effects, StackPointer);
+    Write = true;
+    Read = true;
+    Effects = true;
+  }
+}
+
+// Test whether the instruction "Def" may be moved in front
+// of a use.
+// Note: This algorithm is loosely based on the same function
+// in the WebAssembly context. However, due the way the "stackification"
+// is implemented for the Transputer, a few shortcuts may be taken.
+// The Transputer algorithm first identifies multiple definitions and
+// introduces temporary variables for those. This leads to a structure,
+// where each virtual register is defined exactly once (these should be very
+// rare cases anyway, due to the SSA structure).
+// Then the algorithm walks backwards through the instructions that write
+// something to memory. Hence, the order of the write instructions will not be modified
+// by the stackification.
+//
+
+static bool isSafeToMove(const MachineInstr &Def,
+			 const MachineInstr &Use)
+{
+  bool Read = false, Write = false, Effects = false;
+  query (Def, Read, Write, Effects);
+
+  // For the beginning, we assume that only read instructions are
+  // potentially at the wrong place.
+  if (!Read)
+    return true;
+
+  // If use and def are in different blocks, a move might be
+  // dangerous.
+  if (Def.getParent () != Use.getParent ())
+    return (false);
+
+  // Walk through the instructions from definition to use
+  // If there's a write in between assume that it is not
+  // safe to move the instruction.
+  // Note: This is based on a case with the fcopysign
+  // builtin function.
+  // TODO: Needs further verification that all relevant cases
+  // are caught.
+  auto I = std::next(MachineBasicBlock::const_iterator(Def));
+  auto E = MachineBasicBlock::const_iterator(Use);
+
+  LLVM_DEBUG({
+	     dbgs() << "auto I = ";
+	     I->dump ();
+	     dbgs() << "auto E = ";
+	     E->dump ();});
+
+  for (; I != E; ++I)
+    {
+      LLVM_DEBUG({
+	  dbgs () << "It = ";
+	  I->dump ();
+	});
+      query (*I, Read, Write, Effects);
+      if ((Write || Effects)  && (I != E))
+	return (false);
+    }
+
+  return true;
+}
 
 /// runOnMachineFunction - Loop over all of the basic blocks, transforming FP
 /// register references into FP stack references.
@@ -1099,18 +1159,9 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
       LIS.dump ();
     });
 
-  // Some map to keep track of registers that have already been created as
-  // workspace registers
-  std::map<unsigned, unsigned> wp_reg_map;
-
-  // Walk the instructions from the bottom up. Currently we don't look past
-  // block boundaries, and the blocks aren't ordered so the block visitation
-  // order isn't significant, but we may want to change this in the future.
-  std::map<Register, int> map_mult_def;
-
-  // Test to see whether the algorithm can be structured differently.
+  // First step is to visit all virtual registers and
+  // analyse whether these registers have more than one definition
   std::vector<StackInfos> stack_info (MRI.getNumVirtRegs ());
-
   for (unsigned int i = 0, e = MRI.getNumVirtRegs (); i != e; ++i)
     {
       unsigned VirtReg = Register::index2VirtReg (i);
@@ -1168,7 +1219,25 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 		    }
 		}
 	      else
-		stack_info[i].action = MoveInst;
+		{
+		  // Note: This is the case, where it may be wrong to move
+		  // an instruction, if the result may depend on some sideeffect (i.e. store/load)
+		  // in between.
+		  // At this point we have only cases, where the instruction has one definition
+		  // and one use.
+		  if (stack_info[i].nondbg_uses > 0)
+		    {
+		      def_iter = MRI.def_instr_begin (VirtReg);
+		      MachineRegisterInfo::use_instr_iterator use_instr_iter =
+			MRI.use_instr_begin(VirtReg);
+		      if (isSafeToMove (*def_iter, *use_instr_iter))
+			stack_info[i].action = MoveInst;
+		      else
+			stack_info[i].action = DefTemp;
+		    }
+		  else
+		    stack_info[i].action = MoveInst;
+		}
 	    }
 	}
     }
@@ -1499,11 +1568,7 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	for (auto I = vreg_map.begin (); I != vreg_map.end (); ++I)
 	  {
 	    dbgs() << "ID " << I->first.id() <<
-	      "  Count " << I->second << "  # ";
-	    if (MRI.hasOneNonDBGUse(I->first))
-	      dbgs() << "One Non DBG Use\n";
-	    else
-	      dbgs() << "Multiple Non DBG Use\n";
+	      "  Count " << I->second << "\n";
 	  }
 	dbgs() << "End Def usage\n";
       });
