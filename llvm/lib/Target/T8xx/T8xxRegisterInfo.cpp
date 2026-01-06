@@ -101,7 +101,6 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   case T8xx::MoveLoad:
   case T8xx::MoveSEXTLoad:
   case T8xx::MoveZEXTLoad:
-  case T8xx::ExtractElementF64:
   case T8xx::STL:
   case T8xx::LDL:
   case T8xx::LDLP:

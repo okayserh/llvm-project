@@ -64,8 +64,6 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "MoveSEXTLoad";
   case T8xxISD::MoveZEXTLoad:
     return "MoveZEXTLoad";
-  case T8xxISD::ExtractElementF64:
-    return "ExtractElementF64";
   case T8xxISD::CMOV:
     return "CMOV";
   case T8xxISD::BRNCOND:
@@ -745,37 +743,6 @@ static SDValue extractElementF64(SDValue Src, SDValue Chain, unsigned int Offset
   return Result;
 }
 
-/*
-static SDValue extractElementF64(SDValue Src, SDValue Chain, unsigned int Offset,
-				 MVT FIPtrType,
-				 SelectionDAG &DAG)
-{
-  MachineFunction &MF = DAG.getMachineFunction();
-  T8xxMachineFunctionInfo *FuncInfo = MF.getInfo<T8xxMachineFunctionInfo>();
-  SDLoc DL(Src);
-
-  assert(Src.getValueType() == MVT::f64 && "extractElementF64 is designed to work for F64 only!");
-
-  int FI = FuncInfo->getDoubleFPSlot();
-  if (FI == 0)
-    {
-      FI = DAG.getMachineFunction().
-	getFrameInfo().CreateStackObject(8, // Size in bytes for i16
-					 Align(4), // Required alignment for the load to the frame
-					 false); // isImmutable
-      FuncInfo->setDoubleFPSlot(FI);
-    }
-
-  // Find way to add offset to FIPtr
-  SDValue PtrOff = DAG.getIntPtrConstant(Offset, DL);
-  SDVTList VTs = DAG.getVTList(MVT::i32, MVT::Other);
-  SDValue FIPtr = DAG.getFrameIndex(FI, FIPtrType);
-
-  SDValue Result = DAG.getNode(T8xxISD::ExtractElementF64, DL, VTs,
-			     Src, FIPtr, PtrOff);
-  return Result;
-}
-*/
 
 SDValue T8xxTargetLowering::LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG
 					   /*bool HasExtractInsert*/) const {

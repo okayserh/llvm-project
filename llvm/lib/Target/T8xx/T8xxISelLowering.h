@@ -35,7 +35,6 @@ namespace llvm {
     MoveLoad,
     MoveSEXTLoad,
     MoveZEXTLoad,
-    ExtractElementF64,
 
     // T8xx conditional moves.
     CMOV,

@@ -97,19 +97,6 @@ def T8xxMoveLoad : SDNode<"T8xxISD::MoveLoad", SDT_TXMoveLoad, [SDNPHasChain, SD
 def T8xxMoveSEXTLoad : SDNode<"T8xxISD::MoveSEXTLoad", SDT_TXMoveLoad, [SDNPHasChain, SDNPMayLoad]>;
 def T8xxMoveZEXTLoad : SDNode<"T8xxISD::MoveZEXTLoad", SDT_TXMoveLoad, [SDNPHasChain, SDNPMayLoad]>;
 
-
-// Pseudo instruction to extract a 32 Bit part from a 64 bit floating point register
-def SDT_TXExtractElementF64 : SDTypeProfile<1, 3,   // 1 output (i32), 3 inputs (SRC, Frame, Offset)
-[
-SDTCisVT<0, i32>, // Result
-SDTCisVT<1, f64>, // Source
-SDTCisPtrTy<2>,   // AlignedBuffer at WPtr
-SDTCisVT<3, i32>  // Offset
-]>;
-
-def T8xxExtractElementF64 : SDNode<"T8xxISD::ExtractElementF64",
-           SDT_TXExtractElementF64, [SDNPMayLoad, SDNPMayStore]>;
-
 // Custom add for instruction pointer (Note: To avoid defining a new register class
 // for the instruction pointer, this is designed as a unary pattern
 def SDT_TXAddIptr     : SDTypeProfile<1, 1, [SDTCisPtrTy<0>, SDTCisPtrTy<1>]>;
@@ -389,21 +376,6 @@ def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri:$src_addr, ADDRri
 
 def : Pat<(T8xxMoveZEXTLoad i32:$cnt, ADDRri:$buf_addr, ADDRri8:$src_addr, ADDRri:$buf_addr2),
       	   (MoveZEXTLoad i32:$cnt, (LDLP ADDRri:$buf_addr), (LDLPb ADDRri8:$src_addr), ADDRri:$buf_addr2)>;
-
-
-
-// ldlp <FI>  AREG
-// fpstnldb
-// ldl <FI+Offset> AREG
-
-def ExtractElementF64 : T8PseudoInst<
-    (outs OReg:$res),
-    (ins DFPReg:$src, (WPtrSrc $rs, $imm):$buf_addr2, i32imm:$offs),
-    "extract_element_f64",
-    [(set i32:$res, (T8xxExtractElementF64 DFPReg:$src, ADDRri:$buf_addr2, imm:$offs))]>
-	 {
-	 let hasSideEffects = 1;
-	 }
 
 // Needed for 16 bit operations
 def MOVE :    T8InstOp8<0x4A, (outs), (ins OReg:$cnt, MemSrc:$dst_addr, MemSrc:$src_addr), "move",
