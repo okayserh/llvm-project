@@ -214,6 +214,7 @@ void T8xxPassConfig::addPostRegAlloc() {
 
 
 void T8xxPassConfig::addPreEmitPass(){
+  addPass(createT8xxExpandPseudoPass());
 }
 
 void T8xxPassConfig::addMachineLateOptimization()

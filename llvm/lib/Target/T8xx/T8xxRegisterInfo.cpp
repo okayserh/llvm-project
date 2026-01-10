@@ -98,6 +98,7 @@ T8xxRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   default:
     // Not supported yet.
     return false;
+  case T8xx::ATOMIC_CMP_SWAP_I32_POSTRA:
   case T8xx::MoveLoad:
   case T8xx::MoveSEXTLoad:
   case T8xx::MoveZEXTLoad:

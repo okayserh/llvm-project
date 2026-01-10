@@ -133,6 +133,11 @@ namespace llvm {
     MachineBasicBlock *EmitLoweredFPSetCC(MachineInstr &I,
 					 MachineBasicBlock *MBB) const;
     
+    MachineBasicBlock *EmitAtomicBinary(MachineInstr &MI,
+					MachineBasicBlock *BB) const;
+    MachineBasicBlock *EmitAtomicCmpSwap(MachineInstr &MI,
+					 MachineBasicBlock *BB) const;
+
     // Inline assembly
     std::pair<unsigned, const TargetRegisterClass *>
     getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,

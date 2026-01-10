@@ -238,38 +238,10 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   // ATOMIC Operations seem to "kill" the build.
   setOperationAction(ISD::ATOMIC_FENCE,   MVT::Other, Custom);
-  setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i32, LibCall);
-
-  /*
-  setOperationAction(ISD::ATOMIC_LOAD, MVT::i32, LibCall);
-  setOperationAction(ISD::ATOMIC_STORE, MVT::i32, LibCall);
-  */
-
-  /*
-    // Set them all for libcall, which will force libcalls.
-    setOperationAction(ISD::ATOMIC_SWAP, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_ADD, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_SUB, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_AND, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_OR, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_XOR, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_MIN, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_MAX, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i32, LibCall);
-    setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i32, LibCall);
-    // Mark ATOMIC_LOAD and ATOMIC_STORE custom so we can handle the
-    // Unordered/Monotonic case.
-    if (!InsertFencesForAtomic) {
-      setOperationAction(ISD::ATOMIC_LOAD, MVT::i32, Custom);
-      setOperationAction(ISD::ATOMIC_STORE, MVT::i32, Custom);
-    }
-  */
 
   // Alternatively?
   // Cortex-M (besides Cortex-M0) have 32-bit atomics.
   setMaxAtomicSizeInBitsSupported(32);
-
 
   /*
     n LLVM, the "max lock-free size" for atomic operations is primarily determined by the target architecture's capabilities and the TargetMachine/TargetLowering implementations within LLVM. It's not typically a single, easily configurable setting in a user-facing configuration file.
@@ -1161,6 +1133,200 @@ T8xxTargetLowering::EmitLoweredFPSetCC(MachineInstr &MI,
   return SinkMBB;
 }
 
+// This function also handles Mips::ATOMIC_SWAP_I32 (when BinOpcode == 0), and
+// Mips::ATOMIC_LOAD_NAND_I32 (when Nand == true)
+MachineBasicBlock *
+T8xxTargetLowering::EmitAtomicBinary(MachineInstr &MI,
+                                     MachineBasicBlock *BB) const {
+
+  MachineFunction *MF = BB->getParent();
+  MachineRegisterInfo &RegInfo = MF->getRegInfo();
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+
+  unsigned AtomicOp;
+  bool NeedsAdditionalReg = false;
+  switch (MI.getOpcode()) {
+  case T8xx::ATOMIC_LOAD_ADD_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_ADD_I32_POSTRA;
+    break;
+  case T8xx::ATOMIC_LOAD_SUB_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_SUB_I32_POSTRA;
+    break;
+  case T8xx::ATOMIC_LOAD_AND_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_AND_I32_POSTRA;
+    break;
+  case T8xx::ATOMIC_LOAD_OR_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_OR_I32_POSTRA;
+    break;
+  case T8xx::ATOMIC_LOAD_XOR_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_XOR_I32_POSTRA;
+    break;
+  case T8xx::ATOMIC_LOAD_NAND_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_NAND_I32_POSTRA;
+    break;
+  case T8xx::ATOMIC_SWAP_I32:
+    AtomicOp = T8xx::ATOMIC_SWAP_I32_POSTRA;
+    break;
+  case T8xx::ATOMIC_LOAD_MIN_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_MIN_I32_POSTRA;
+    NeedsAdditionalReg = true;
+    break;
+  case T8xx::ATOMIC_LOAD_MAX_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_MAX_I32_POSTRA;
+    NeedsAdditionalReg = true;
+    break;
+  case T8xx::ATOMIC_LOAD_UMIN_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_UMIN_I32_POSTRA;
+    NeedsAdditionalReg = true;
+    break;
+  case T8xx::ATOMIC_LOAD_UMAX_I32:
+    AtomicOp = T8xx::ATOMIC_LOAD_UMAX_I32_POSTRA;
+    NeedsAdditionalReg = true;
+    break;
+  default:
+    llvm_unreachable("Unknown pseudo atomic for replacement!");
+  }
+
+  Register OldVal = MI.getOperand(0).getReg();
+  Register Ptr = MI.getOperand(1).getReg();
+  Register Incr = MI.getOperand(2).getReg();
+  Register Scratch = RegInfo.createVirtualRegister(RegInfo.getRegClass(OldVal));
+
+  MachineBasicBlock::iterator II(MI);
+
+  // The scratch registers here with the EarlyClobber | Define | Implicit
+  // flags is used to persuade the register allocator and the machine
+  // verifier to accept the usage of this register. This has to be a real
+  // register which has an UNDEF value but is dead after the instruction which
+  // is unique among the registers chosen for the instruction.
+
+  // The EarlyClobber flag has the semantic properties that the operand it is
+  // attached to is clobbered before the rest of the inputs are read. Hence it
+  // must be unique among the operands to the instruction.
+  // The Define flag is needed to coerce the machine verifier that an Undef
+  // value isn't a problem.
+  // The Dead flag is needed as the value in scratch isn't used by any other
+  // instruction. Kill isn't used as Dead is more precise.
+  // The implicit flag is here due to the interaction between the other flags
+  // and the machine verifier.
+
+  // For correctness purpose, a new pseudo is introduced here. We need this
+  // new pseudo, so that FastRegisterAllocator does not see an ll/sc sequence
+  // that is spread over >1 basic blocks. A register allocator which
+  // introduces (or any codegen infact) a store, can violate the expectations
+  // of the hardware.
+  //
+  // An atomic read-modify-write sequence starts with a linked load
+  // instruction and ends with a store conditional instruction. The atomic
+  // read-modify-write sequence fails if any of the following conditions
+  // occur between the execution of ll and sc:
+  //   * A coherent store is completed by another process or coherent I/O
+  //     module into the block of synchronizable physical memory containing
+  //     the word. The size and alignment of the block is
+  //     implementation-dependent.
+  //   * A coherent store is executed between an LL and SC sequence on the
+  //     same processor to the block of synchornizable physical memory
+  //     containing the word.
+  //
+
+  Register PtrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Ptr));
+  Register IncrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Incr));
+
+  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), IncrCopy).addReg(Incr);
+  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), PtrCopy).addReg(Ptr);
+
+  MachineInstrBuilder MIB =
+      BuildMI(*BB, II, DL, TII->get(AtomicOp))
+          .addReg(OldVal, RegState::Define | RegState::EarlyClobber)
+          .addReg(PtrCopy)
+          .addReg(IncrCopy)
+          .addReg(Scratch, RegState::Define | RegState::EarlyClobber |
+                               RegState::Implicit | RegState::Dead);
+  if (NeedsAdditionalReg) {
+    Register Scratch2 =
+        RegInfo.createVirtualRegister(RegInfo.getRegClass(OldVal));
+    MIB.addReg(Scratch2, RegState::Define | RegState::EarlyClobber |
+                             RegState::Implicit | RegState::Dead);
+  }
+
+  MI.eraseFromParent();
+
+  return BB;
+}
+
+
+// Lower atomic compare and swap to a pseudo instruction, taking care to
+// define a scratch register for the pseudo instruction's expansion. The
+// instruction is expanded after the register allocator as to prevent
+// the insertion of stores between the linked load and the store conditional.
+
+MachineBasicBlock *
+T8xxTargetLowering::EmitAtomicCmpSwap(MachineInstr &MI,
+                                      MachineBasicBlock *BB) const {
+
+  assert((MI.getOpcode() == T8xx::ATOMIC_CMP_SWAP_I32) &&
+         "Unsupported atomic pseudo for EmitAtomicCmpSwap.");
+
+  const unsigned Size = MI.getOpcode() == T8xx::ATOMIC_CMP_SWAP_I32 ? 4 : 8;
+
+  MachineFunction *MF = BB->getParent();
+  MachineRegisterInfo &MRI = MF->getRegInfo();
+  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(Size * 8));
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+
+  unsigned AtomicOp = T8xx::ATOMIC_CMP_SWAP_I32_POSTRA;
+  Register Dest = MI.getOperand(0).getReg();
+  Register Ptr = MI.getOperand(1).getReg();
+  Register OldVal = MI.getOperand(2).getReg();
+  Register NewVal = MI.getOperand(3).getReg();
+
+  MachineBasicBlock::iterator II(MI);
+
+  // Check whether a workspace location was already allocated
+  // as temporary storage for Move instructions
+  T8xxMachineFunctionInfo *FuncInfo = MF->getInfo<T8xxMachineFunctionInfo>();
+  int FI = FuncInfo->getMoveSlot();
+  if (FI == 0)
+    {
+      FI = MF->getFrameInfo().CreateStackObject(4, // Size in bytes for i16
+						Align(4), // Required alignment for the load to the frame
+						false); // isImmutable
+      FuncInfo->setMoveSlot(FI);
+    }
+  
+  // We need to create copies of the various registers and kill them at the
+  // atomic pseudo. If the copies are not made, when the atomic is expanded
+  // after fast register allocation, the spills will end up outside of the
+  // blocks that their values are defined in, causing livein errors.
+
+  /*
+  Register PtrCopy = MRI.createVirtualRegister(MRI.getRegClass(Ptr));
+  Register OldValCopy = MRI.createVirtualRegister(MRI.getRegClass(OldVal));
+  Register NewValCopy = MRI.createVirtualRegister(MRI.getRegClass(NewVal));
+
+  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), PtrCopy).addReg(Ptr);
+  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), OldValCopy).addReg(OldVal);
+  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), NewValCopy).addReg(NewVal);
+  */
+
+  // The purposes of the flags on the scratch registers is explained in
+  // emitAtomicBinary. In summary, we need a scratch register which is going to
+  // be undef, that is unique among registers chosen for the instruction.
+
+  BuildMI(*BB, II, DL, TII->get(AtomicOp))
+      .addReg(Dest, RegState::Define | RegState::EarlyClobber)
+      .addReg(Ptr, RegState::Kill)
+      .addReg(OldVal, RegState::Kill)
+      .addReg(NewVal, RegState::Kill)
+      .addFrameIndex(FI)
+      .addImm(0);
+
+  MI.eraseFromParent(); // The instruction is gone now.
+
+  return BB;
+}
 
 
 MachineBasicBlock *
@@ -1170,6 +1336,32 @@ T8xxTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   switch (MI.getOpcode()) {
   default:
     llvm_unreachable("Unexpected instr type to insert");
+
+  case T8xx::ATOMIC_LOAD_ADD_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_LOAD_AND_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_LOAD_OR_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_LOAD_XOR_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_LOAD_NAND_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_LOAD_SUB_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_SWAP_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_CMP_SWAP_I32:
+    return EmitAtomicCmpSwap(MI, MBB);
+  case T8xx::ATOMIC_LOAD_MIN_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_LOAD_MAX_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_LOAD_UMIN_I32:
+    return EmitAtomicBinary(MI, MBB);
+  case T8xx::ATOMIC_LOAD_UMAX_I32:
+    return EmitAtomicBinary(MI, MBB);
+
   case T8xx::CMOVf32:
   case T8xx::CMOVf64:
   case T8xx::CMOV32:

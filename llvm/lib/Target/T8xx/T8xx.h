@@ -27,6 +27,7 @@ namespace llvm {
 
   FunctionPass *createT8xxISelDag(T8xxTargetMachine &TM);
 
+  FunctionPass *createT8xxExpandPseudoPass();
   FunctionPass *createT8xxStackPass();
   
   void LowerT8xxMachineInstrToMCInst(const MachineInstr *MI,

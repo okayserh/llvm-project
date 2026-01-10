@@ -108,9 +108,6 @@ public:
                             const TargetRegisterClass *RC,
 			    Register VReg,
 			    MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
-
-  // Lower pseudo instructions after register allocation.
-  bool expandPostRAPseudo(MachineInstr &MI) const override;
 };
 
 }

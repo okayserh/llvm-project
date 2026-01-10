@@ -41,11 +41,15 @@ T8xxSubtarget &T8xxSubtarget::initializeSubtargetDependencies(StringRef CPU,
   return *this;
 }
 
-T8xxSubtarget::T8xxSubtarget(const Triple &TT, const std::string &CPU,
-                               const std::string &FS, const TargetMachine &TM)
+T8xxSubtarget::T8xxSubtarget(const Triple &TT, StringRef CPU,
+			     StringRef FS, const TargetMachine &TM)
     : T8xxGenSubtargetInfo(TT, CPU, /*TuneCPU*/ CPU, FS), TargetTriple(TT),
       InstrInfo(initializeSubtargetDependencies(CPU, FS)),
-      TLInfo(TM, *this), FrameLowering(*this) {}
+      TLInfo(TM, *this), FrameLowering(*this)
+{
+}
+
+T8xxSubtarget::~T8xxSubtarget() = default;
 
 int T8xxSubtarget::getAdjustedFrameSize(int frameSize) const {
 

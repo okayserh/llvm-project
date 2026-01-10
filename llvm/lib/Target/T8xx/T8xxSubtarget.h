@@ -40,8 +40,10 @@ class T8xxSubtarget : public T8xxGenSubtargetInfo {
   T8xxFrameLowering FrameLowering;
 
 public:
-  T8xxSubtarget(const Triple &TT, const std::string &CPU,
-                 const std::string &FS, const TargetMachine &TM);
+  T8xxSubtarget(const Triple &TT, StringRef CPU,
+                 const StringRef FS, const TargetMachine &TM);
+
+  ~T8xxSubtarget() override;
 
   const T8xxInstrInfo *getInstrInfo() const override { return &InstrInfo; }
   const TargetFrameLowering *getFrameLowering() const override {
