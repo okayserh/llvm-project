@@ -613,6 +613,8 @@ const char *tools::getLDMOption(const llvm::Triple &T, const ArgList &Args) {
     return "elf32_sparc";
   case llvm::Triple::sparcv9:
     return "elf64_sparc";
+  case llvm::Triple::t8xx:
+    return "elf32-t8xx";
   case llvm::Triple::loongarch32:
     return "elf32loongarch";
   case llvm::Triple::loongarch64:

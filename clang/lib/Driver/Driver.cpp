@@ -7002,6 +7002,11 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       case llvm::Triple::spirv64:
         TC = std::make_unique<toolchains::SPIRVToolChain>(*this, Target, Args);
         break;
+
+      case llvm::Triple::t8xx:
+        TC = std::make_unique<toolchains::BareMetal>(*this, Target, Args);
+        break;
+
       case llvm::Triple::csky:
         TC = std::make_unique<toolchains::CSKYToolChain>(*this, Target, Args);
         break;

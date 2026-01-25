@@ -349,9 +349,12 @@ void BareMetal::findMultilibs(const Driver &D, const llvm::Triple &Triple,
 }
 
 bool BareMetal::handlesTarget(const llvm::Triple &Triple) {
+  llvm::dbgs () << "Point handlesTarget\n";
+
   return arm::isARMEABIBareMetal(Triple) ||
          aarch64::isAArch64BareMetal(Triple) || isRISCVBareMetal(Triple) ||
-         isPPCBareMetal(Triple);
+         isPPCBareMetal(Triple) ||
+    Triple.getArch() == llvm::Triple::t8xx;
 }
 
 Tool *BareMetal::buildLinker() const {
@@ -601,6 +604,8 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                      const char *LinkingOutput) const {
   ArgStringList CmdArgs;
 
+  llvm::dbgs () << "Linker::ConstructJob\n";
+
   auto &TC = static_cast<const toolchains::BareMetal &>(getToolChain());
   const Driver &D = getToolChain().getDriver();
   const llvm::Triple::ArchType Arch = TC.getArch();
@@ -618,6 +623,8 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("text");
   }
 
+  llvm::dbgs () << "Linker::ConstructJob a\n";
+
   if (const char *LDMOption = getLDMOption(TC.getTriple(), Args)) {
     CmdArgs.push_back("-m");
     CmdArgs.push_back(LDMOption);
@@ -625,6 +632,8 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     D.Diag(diag::err_target_unknown_triple) << Triple.str();
     return;
   }
+
+    llvm::dbgs () << "Linker::ConstructJob b\n";
 
   if (Triple.isRISCV()) {
     CmdArgs.push_back("-X");
@@ -641,8 +650,22 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Arch == llvm::Triple::aarch64_be ? "-EB" : "-EL");
   }
 
+  // Add a default linker script for the transputer
+  if ((Triple.getArch() == llvm::Triple::t8xx) &&
+      !Args.hasArg(options::OPT_T)) {
+    // Look for the script in the sysroot or a relative path
+    SmallString<128> ScriptPath(getToolChain().getDriver().SysRoot);
+    llvm::sys::path::append(ScriptPath, "lib", "default.ld");
+    
+    CmdArgs.push_back("-T");
+    CmdArgs.push_back(Args.MakeArgString(ScriptPath));
+  }
+
+  
   bool NeedCRTs =
       !Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles);
+
+  llvm::dbgs () << "Linker::ConstructJob c\n";
 
   const char *CRTBegin, *CRTEnd;
   if (NeedCRTs) {
@@ -671,6 +694,8 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(TC.GetFilePath(CRTBegin)));
     }
   }
+
+  llvm::dbgs () << "Linker::ConstructJob  2\n";
 
   Args.addAllArgs(CmdArgs,
                   {options::OPT_L, options::OPT_u, options::OPT_T_Group,
