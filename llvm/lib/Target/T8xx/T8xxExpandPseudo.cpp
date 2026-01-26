@@ -100,7 +100,6 @@ bool T8xxExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
 {
   MachineFunction *MF = BB.getParent();
   
-  dbgs() << "++++++++++++++++ Atomic Cmp Swap expanded !!! ++++++++++++++++\n";
   LLVM_DEBUG({
       I->dump ();
       for (unsigned int i = 0; i < I->getNumOperands (); ++i)
@@ -125,13 +124,13 @@ bool T8xxExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   const BasicBlock *LLVM_BB = BB.getBasicBlock();
   MachineBasicBlock *loop1MBB = MF->CreateMachineBasicBlock(LLVM_BB);
   MachineBasicBlock *loop2MBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *sinkMBB = MF->CreateMachineBasicBlock(LLVM_BB);
   MachineBasicBlock *exitMBB = MF->CreateMachineBasicBlock(LLVM_BB);
   MachineFunction::iterator It = ++BB.getIterator();
   MF->insert(It, loop1MBB);
   MF->insert(It, loop2MBB);
+  MF->insert(It, sinkMBB);
   MF->insert(It, exitMBB);
-
-  dbgs () << "New MBBs inserted\n";
 
   // Transfer the remainder of BB and its successor edges to exitMBB.
   exitMBB->splice(exitMBB->begin(), &BB,
@@ -142,33 +141,41 @@ bool T8xxExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   //    ...
   //    fallthrough --> loop1MBB
   BB.addSuccessor(loop1MBB, BranchProbability::getOne());
-
-  loop1MBB->addSuccessor(exitMBB);
+  loop1MBB->addSuccessor(sinkMBB);
   loop1MBB->addSuccessor(loop2MBB);
   loop1MBB->normalizeSuccProbs();
   loop2MBB->addSuccessor(loop1MBB);
-  loop2MBB->addSuccessor(exitMBB);
+  loop2MBB->addSuccessor(sinkMBB);
   loop2MBB->normalizeSuccProbs();
+  sinkMBB->addSuccessor(exitMBB, BranchProbability::getOne());
 
   // loop1MBB:
+  // stl (temp)
+  // ldl (temp)
+  // ldnl 0 // AReg = *Ptr, BReg = OldVal, CReg = NewVal
+  // diff   // AReg = 0 when *Ptr == OldVal
+  // eqc 0  // AReg = 1 when *Ptr == OldVal, Continue at next,
+  //           AReg = 0 when *Ptr != OldVal, Jump to dest
+  //           -> At this point AReg = (*Ptr != OldVal), BReg = NewVal
+  // cj end
   BuildMI(loop1MBB, DL, TII->get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
   BuildMI(loop1MBB, DL, TII->get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
   BuildMI(loop1MBB, DL, TII->get(T8xx::LDNL), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
   BuildMI(loop1MBB, DL, TII->get(T8xx::DIFF), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
   BuildMI(loop1MBB, DL, TII->get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
-  BuildMI(loop1MBB, DL, TII->get(T8xx::CJ)).addReg(T8xx::AREG).addMBB(exitMBB, 0);
+  BuildMI(loop1MBB, DL, TII->get(T8xx::CJ)).addReg(T8xx::AREG).addMBB(sinkMBB, 0);
 
   // loop2MBB:
-// ldl (temp)
-// stnl 0
+  // ldl (temp)
+  // stnl 0
   BuildMI(loop2MBB, DL, TII->get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
-  BuildMI(loop2MBB, DL, TII->get(T8xx::STNL), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
+  BuildMI(loop2MBB, DL, TII->get(T8xx::STNL)).addReg(T8xx::AREG).addReg(T8xx::AREG).addImm(0);
 
-  // loop1MBB:
-  //   ll dest, 0(ptr)
-  //   bne dest, oldval, exitMBB
-
-  dbgs () << "New Insts inserted\n";
+  // sink
+  // ldl (temp)
+  // ldnl 0
+  BuildMI(sinkMBB, DL, TII->get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
+  BuildMI(sinkMBB, DL, TII->get(T8xx::LDNL), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
 
   /*
   LivePhysRegs LiveRegs;
