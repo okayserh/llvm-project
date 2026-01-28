@@ -563,12 +563,13 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   } else {
 
     LLVM_DEBUG(dbgs() << "#### LowerBRCOND Negation Case\n");
-
-    SDValue Op0 = Op.getOperand(0);
-    SDValue Op1 = Op.getOperand(1);
-    SDValue Op2 = Op.getOperand(2);
+    LLVM_DEBUG(dbgs() << "Cond Res No " << Cond.getResNo () << "\n");
 
     LLVM_DEBUG({
+	SDValue Op0 = Op.getOperand(0);
+	SDValue Op1 = Op.getOperand(1);
+	SDValue Op2 = Op.getOperand(2);
+
 	Op0.dump ();
 	Op1.dump ();
 	Op2.dump ();
@@ -576,7 +577,7 @@ SDValue T8xxTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
 
     // Otherwise insert logical not (= EQ 0)
     NewCond = DAG.getSetCC (DL, Cond.getValueType (),
-			    Cond.getValue(0),
+			    Cond.getValue(Cond.getResNo ()),
 			    DAG.getConstant(0, DL, MVT::i32),
 			    ISD::CondCode::SETEQ);
   }
@@ -1268,11 +1269,8 @@ T8xxTargetLowering::EmitAtomicCmpSwap(MachineInstr &MI,
   assert((MI.getOpcode() == T8xx::ATOMIC_CMP_SWAP_I32) &&
          "Unsupported atomic pseudo for EmitAtomicCmpSwap.");
 
-  const unsigned Size = MI.getOpcode() == T8xx::ATOMIC_CMP_SWAP_I32 ? 4 : 8;
-
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &MRI = MF->getRegInfo();
-  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(Size * 8));
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
@@ -1296,21 +1294,6 @@ T8xxTargetLowering::EmitAtomicCmpSwap(MachineInstr &MI,
       FuncInfo->setMoveSlot(FI);
     }
   
-  // We need to create copies of the various registers and kill them at the
-  // atomic pseudo. If the copies are not made, when the atomic is expanded
-  // after fast register allocation, the spills will end up outside of the
-  // blocks that their values are defined in, causing livein errors.
-
-  /*
-  Register PtrCopy = MRI.createVirtualRegister(MRI.getRegClass(Ptr));
-  Register OldValCopy = MRI.createVirtualRegister(MRI.getRegClass(OldVal));
-  Register NewValCopy = MRI.createVirtualRegister(MRI.getRegClass(NewVal));
-
-  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), PtrCopy).addReg(Ptr);
-  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), OldValCopy).addReg(OldVal);
-  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), NewValCopy).addReg(NewVal);
-  */
-
   // The purposes of the flags on the scratch registers is explained in
   // emitAtomicBinary. In summary, we need a scratch register which is going to
   // be undef, that is unique among registers chosen for the instruction.

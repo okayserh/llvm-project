@@ -70,54 +70,14 @@ namespace {
 //
 // AtomiCmpSwap:
 // In: AReg = Ptr, BReg = OldVal, CReg = NewVal
-// Out = AReg = Result
+// Out = AReg = Value Previously at *Ptr
 //
-// ## Original block
-// Needs temp storage! (Use the Scratch register also used at other places)
-// stl (temp)
-// ldl (temp)
-// ldnl 0 // AReg = *Ptr, BReg = OldVal, CReg = NewVal
-// diff   // AReg = 0 when *Ptr == OldVal
-// eqc 0  // AReg = 1 when *Ptr == OldVal, Continue at next,
-//           AReg = 0 when *Ptr != OldVal, Jump to dest
-//           -> At this point AReg = (*Ptr != OldVal), BReg = NewVal
-// cj end
-
-// ## Block Conditional (New)
-// When OldVal == *Ptr
-// ldl (temp)
-// stnl 0
-
-// ## Exit block  (New)
-// When OldVal != *Ptr
-// end:
-// ldl (temp)
-// ldnl 0
-
 bool T8xxExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
 					   MachineBasicBlock::iterator I,
 					   MachineBasicBlock::iterator &NMBBI)
 {
   MachineFunction *MF = BB.getParent();
-  
-  LLVM_DEBUG({
-      I->dump ();
-      for (unsigned int i = 0; i < I->getNumOperands (); ++i)
-	{
-	  dbgs () << "ATOMIC SWAP Op" << i << " " << I->getOperand (i).getType () << "\n";
-	  I->getOperand (i).dump ();
-	}
-    });
-
   DebugLoc DL = I->getDebugLoc();
-  
-  /*
-  Register Dest = I->getOperand(0).getReg();
-  Register Ptr = I->getOperand(1).getReg();
-  Register OldVal = I->getOperand(2).getReg();
-  Register NewVal = I->getOperand(3).getReg();
-  Register Scratch = I->getOperand(4).getReg(); // That is WPtr
-  */
   int64_t  FI_Offset = I->getOperand(5).getImm(); // That is the offset to WPtr for temp storage
 
   // insert new blocks after the current block
@@ -153,29 +113,41 @@ bool T8xxExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   // stl (temp)
   // ldl (temp)
   // ldnl 0 // AReg = *Ptr, BReg = OldVal, CReg = NewVal
-  // diff   // AReg = 0 when *Ptr == OldVal
+  // diff   // AReg = 0 when *Ptr == OldVal, BReg = NewVal
+
+  // ldl (temp)  // AReg = Ptr, BReg = diff, CReg = NewVal
+  // ldnl 0    // AReg = *Ptr, BReg = diff, CReg = NewVal
+  // rev         // AReg = diff, BReg = *Ptr, CReg = NewVal
   // eqc 0  // AReg = 1 when *Ptr == OldVal, Continue at next,
   //           AReg = 0 when *Ptr != OldVal, Jump to dest
   //           -> At this point AReg = (*Ptr != OldVal), BReg = NewVal
-  // cj end
+  // cj sink
+
   BuildMI(loop1MBB, DL, TII->get(T8xx::STL)).addReg(T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
   BuildMI(loop1MBB, DL, TII->get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
   BuildMI(loop1MBB, DL, TII->get(T8xx::LDNL), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
   BuildMI(loop1MBB, DL, TII->get(T8xx::DIFF), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
+
+  BuildMI(loop1MBB, DL, TII->get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
+  BuildMI(loop1MBB, DL, TII->get(T8xx::LDNL), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
+  BuildMI(loop1MBB, DL, TII->get(T8xx::REV), T8xx::AREG).addReg(T8xx::ABREG);
+
   BuildMI(loop1MBB, DL, TII->get(T8xx::EQC), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
   BuildMI(loop1MBB, DL, TII->get(T8xx::CJ)).addReg(T8xx::AREG).addMBB(sinkMBB, 0);
 
-  // loop2MBB:
+  // loop2MBB:  AReg = *Ptr, BReg = NewVal, comparison was successful
+  // rev
   // ldl (temp)
   // stnl 0
+  // ldc 0
+  BuildMI(loop2MBB, DL, TII->get(T8xx::REV), T8xx::AREG).addReg(T8xx::ABREG);
   BuildMI(loop2MBB, DL, TII->get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
   BuildMI(loop2MBB, DL, TII->get(T8xx::STNL)).addReg(T8xx::AREG).addReg(T8xx::AREG).addImm(0);
+  BuildMI(loop2MBB, DL, TII->get(T8xx::LDC), T8xx::AREG).addImm(0);
 
-  // sink
-  // ldl (temp)
-  // ldnl 0
-  BuildMI(sinkMBB, DL, TII->get(T8xx::LDL), T8xx::AREG).addReg(T8xx::WPTR).addImm(FI_Offset);
-  BuildMI(sinkMBB, DL, TII->get(T8xx::LDNL), T8xx::AREG).addReg(T8xx::AREG).addImm(0);
+  // sink  : AReg = 0, BReg = *Ptr, CReg = NewVal
+  // rev
+  BuildMI(sinkMBB, DL, TII->get(T8xx::REV), T8xx::AREG).addReg(T8xx::ABREG);
 
   /*
   LivePhysRegs LiveRegs;
