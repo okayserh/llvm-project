@@ -70,6 +70,10 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "BRNCOND";
   case T8xxISD::LDIFF:
     return "LDIFF";
+  case T8xxISD::LSHIFTR:
+    return "LSHIFTR";
+  case T8xxISD::LSHIFTL:
+    return "LSHIFTL";
   case T8xxISD::REV:
     return "REV";
   case T8xxISD::JOIN:

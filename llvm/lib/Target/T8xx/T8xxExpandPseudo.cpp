@@ -230,6 +230,24 @@ bool T8xxExpandPseudo::expandMI(MachineBasicBlock &MBB,
     }
     break;
 
+  case T8xx::LONGSHL:
+  case T8xx::LONGSHR:
+    {
+      MCRegister DstReg = MBBI->getOperand(0).getReg ();
+      MCRegister X1Reg = MBBI->getOperand(1).getReg ();
+      MCRegister X2Reg = MBBI->getOperand(2).getReg ();
+      MCRegister CntReg = MBBI->getOperand(3).getReg ();
+
+      unsigned opcode = (MBBI->getOpcode() == T8xx::LONGSHR) ? T8xx::LSHR : T8xx::LSHR;
+
+      BuildMI (MBB, *MBBI, DL, TII->get(opcode), T8xx::ABREG).addReg(X1Reg).addReg(X2Reg).addReg(CntReg);
+      BuildMI (MBB, *MBBI, DL, TII->get(T8xx::OR), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
+
+      MBBI->eraseFromParent();
+      return true;
+    }
+    break;
+
     // Pseudo instruction needs to be removed
   case T8xx::TxSync:
   case T8xx::SELLOW:

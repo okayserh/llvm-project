@@ -40,6 +40,8 @@ namespace llvm {
     CMOV,
     BRNCOND,
     LDIFF,
+    LSHIFTR,
+    LSHIFTL,
     REV,
     JOIN,
     FP_SETCC,

@@ -153,6 +153,20 @@ def SDT_TXLongArithmetic : SDTypeProfile<1, 3, [
 def T8xxLongDiff : SDNode<"T8xxISD::LDIFF", SDT_TXLongArithmetic>;
 
 
+/* Type definitions for the long shift operations that can be used to
+  implement rotations.*/
+def SDT_TXLongShift : SDTypeProfile<1, 3, [
+  /* RES */ SDTCisVT<0, i32>,
+  /*   Y */ SDTCisVT<1, i32>,  // Number of bits to shift
+  /*  XL */ SDTCisVT<2, i32>,  // Low word
+  /*  XH */ SDTCisVT<3, i32>   // High word
+]>;
+  
+def T8xxLongShiftR : SDNode<"T8xxISD::LSHIFTR", SDT_TXLongShift>;
+def T8xxLongShiftL : SDNode<"T8xxISD::LSHIFTL", SDT_TXLongShift>;
+
+
+
 def SDT_TXStackSelect : SDTypeProfile<1, 1, [
   /* RES       */ SDTCisVT<0, i32>,
   /* AREG/BREG */ SDTCisVT<1, i64>
@@ -459,12 +473,6 @@ def AND : T8BinaryOp8<0x46, "and", and, 1>;
 def : Pat<(i32 (sra (i32 OReg:$src), (i32 OReg:$cnt))),
 	  (LSHR (XDBLE OReg:$src), OReg:$cnt)>;
 
-/* Define via patterns */
-/*
-defm ROTR : T8BinaryOp<0x01, 0x22, "lshr", rotr>;
-defm ROTL : T8BinaryOp<0x01, 0x23, "lshr", rotl>;
-*/
-
 // Load i32 from frame index
 def LDL : T8InstImm<0x7,
 		(outs OReg:$val),
@@ -651,6 +659,30 @@ def JOIN :  T8PseudoInst<(outs LReg:$dst),
 	           (ins OReg:$src1, OReg:$src2),
 	           "join",
 		   [(set i64:$dst, (T8xxJoin i32:$src1, i32:$src2))]>;
+
+
+/* Define rotations via patterns and pseudo instructions */
+def LONGSHR : T8PseudoInst<(outs OReg:$dst),
+                  (ins OReg:$cnt, OReg:$xl, OReg:$xh),
+		  "",
+		  [(set i32:$dst, (T8xxLongShiftR i32:$cnt, i32:$xl, i32:$xh))]>
+{
+    let isCodeGenOnly = 1;
+}
+
+def : Pat<(i32 (rotr (i32 OReg:$src), (i32 OReg:$cnt))),
+	  (LONGSHR OReg:$cnt, (LDC 0), OReg:$src)>;
+
+def LONGSHL : T8PseudoInst<(outs OReg:$dst),
+                  (ins OReg:$cnt, OReg:$xl, OReg:$xh),
+		  "",
+		  [(set i32:$dst, (T8xxLongShiftL i32:$cnt, i32:$xl, i32:$xh))]>
+{
+    let isCodeGenOnly = 1;
+}
+
+def : Pat<(i32 (rotl (i32 OReg:$src), (i32 OReg:$cnt))),
+	  (LONGSHL (LDC 0), OReg:$cnt, OReg:$src)>;
 
 
 // Unsigned comparisons are a bit more complex
