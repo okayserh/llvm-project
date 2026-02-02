@@ -100,8 +100,6 @@ static bool isCMOVPseudo(MachineInstr &MI) {
   }
 }
 
-
-
 T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
                                          const T8xxSubtarget &STI)
   : TargetLowering(TM, STI), Subtarget(STI) {
@@ -238,7 +236,8 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
 
   // Operations for variadic arguments
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
-  setOperationAction({ISD::VAARG, ISD::VACOPY, ISD::VAEND}, MVT::Other, Expand);
+  setOperationAction(ISD::VAARG,   MVT::Other, Custom);
+  setOperationAction({ISD::VACOPY, ISD::VAEND}, MVT::Other, Expand);
 
   // ATOMIC Operations seem to "kill" the build.
   setOperationAction(ISD::ATOMIC_FENCE,   MVT::Other, Custom);
@@ -307,6 +306,14 @@ void T8xxTargetLowering::ReplaceNodeResults(SDNode *N,
 }
 
 
+EVT T8xxTargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
+                                           EVT VT) const {
+  if (!VT.isVector())
+    return MVT::i32;
+  return VT.changeVectorElementTypeToInteger();
+}
+
+
 SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   LLVM_DEBUG(dbgs() << "### Lower Operation ### " << Op.getOpcode () << "\n");
 
@@ -323,6 +330,8 @@ SDValue T8xxTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     return LowerBRCOND(Op, DAG);
   case ISD::VASTART:
     return LowerVASTART(Op, DAG);
+  case ISD::VAARG:
+    return LowerVAARG(Op, DAG);
   case ISD::SETCC:
     LLVM_DEBUG(dbgs() << "#### SETCC #####\n");
     return LowerSETCC(Op, DAG);
@@ -606,6 +615,92 @@ SDValue T8xxTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
                       MachinePointerInfo(SV));
 }
+
+/*
+ *  Taken from "SelectionDAG.cpp"
+SDValue SelectionDAG::expandVAArg(SDNode *Node) {
+  SDLoc dl(Node);
+  const TargetLowering &TLI = getTargetLoweringInfo();
+  const Value *V = cast<SrcValueSDNode>(Node->getOperand(2))->getValue();
+  EVT VT = Node->getValueType(0);
+  SDValue Tmp1 = Node->getOperand(0);
+  SDValue Tmp2 = Node->getOperand(1);
+  const MaybeAlign MA(Node->getConstantOperandVal(3));
+
+  SDValue VAListLoad = getLoad(TLI.getPointerTy(getDataLayout()), dl, Tmp1,
+                               Tmp2, MachinePointerInfo(V));
+  SDValue VAList = VAListLoad;
+
+  if (MA && *MA > TLI.getMinStackArgumentAlignment()) {
+    VAList = getNode(ISD::ADD, dl, VAList.getValueType(), VAList,
+                     getConstant(MA->value() - 1, dl, VAList.getValueType()));
+
+    VAList = getNode(
+        ISD::AND, dl, VAList.getValueType(), VAList,
+        getSignedConstant(-(int64_t)MA->value(), dl, VAList.getValueType()));
+  }
+
+  // Increment the pointer, VAList, to the next vaarg
+  Tmp1 = getNode(ISD::ADD, dl, VAList.getValueType(), VAList,
+                 getConstant(getDataLayout().getTypeAllocSize(
+                                               VT.getTypeForEVT(*getContext())),
+                             dl, VAList.getValueType()));
+  // Store the incremented VAList to the legalized pointer
+  Tmp1 =
+      getStore(VAListLoad.getValue(1), dl, Tmp1, Tmp2, MachinePointerInfo(V));
+  // Load the actual argument out of the pointer VAList
+  return getLoad(VT, dl, Tmp1, VAList, MachinePointerInfo());
+}
+*/
+
+SDValue T8xxTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
+  SDNode *Node = Op.getNode();
+  EVT VT = Node->getValueType(0);
+  SDValue Chain = Node->getOperand(0);
+  SDValue VAListPtr = Node->getOperand(1);
+  const Align Align =
+      llvm::MaybeAlign(Node->getConstantOperandVal(3)).valueOrOne();
+  const Value *SV = cast<SrcValueSDNode>(Node->getOperand(2))->getValue();
+  SDLoc DL(Node);
+  unsigned ArgSlotSizeInBytes = 4;
+
+  SDValue VAListLoad = DAG.getLoad(getPointerTy(DAG.getDataLayout()), DL, Chain,
+                                   VAListPtr, MachinePointerInfo(SV));
+  SDValue VAList = VAListLoad;
+
+  // Re-align the pointer if necessary.
+  // It should only ever be necessary for 64-bit types on O32 since the minimum
+  // argument alignment is the same as the maximum type alignment for N32/N64.
+  //
+  // FIXME: We currently align too often. The code generator doesn't notice
+  //        when the pointer is still aligned from the last va_arg (or pair of
+  //        va_args for the i64 on O32 case).
+  if (Align > getMinStackArgumentAlignment()) {
+    VAList = DAG.getNode(
+        ISD::ADD, DL, VAList.getValueType(), VAList,
+        DAG.getConstant(Align.value() - 1, DL, VAList.getValueType()));
+
+    VAList = DAG.getNode(ISD::AND, DL, VAList.getValueType(), VAList,
+                         DAG.getSignedConstant(-(int64_t)Align.value(), DL,
+                                               VAList.getValueType()));
+  }
+
+  // Increment the pointer, VAList, to the next vaarg.
+  auto &TD = DAG.getDataLayout();
+  unsigned ArgSizeInBytes =
+      TD.getTypeAllocSize(VT.getTypeForEVT(*DAG.getContext()));
+  SDValue Tmp3 =
+      DAG.getNode(ISD::ADD, DL, VAList.getValueType(), VAList,
+                  DAG.getConstant(alignTo(ArgSizeInBytes, ArgSlotSizeInBytes),
+                                  DL, VAList.getValueType()));
+  // Store the incremented VAList to the legalized pointer
+  Chain = DAG.getStore(VAListLoad.getValue(1), DL, Tmp3, VAListPtr,
+                       MachinePointerInfo(SV));
+
+  // Load the actual argument out of the pointer VAList
+  return DAG.getLoad(VT, DL, Chain, VAList, MachinePointerInfo());
+}
+
 
 SDValue T8xxTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const
 {

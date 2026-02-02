@@ -301,6 +301,8 @@ createTargetCodeGenInfo(CodeGenModule &CGM) {
     return createDirectXTargetCodeGenInfo(CGM);
   case llvm::Triple::ve:
     return createVETargetCodeGenInfo(CGM);
+  case llvm::Triple::t8xx:
+    return createT8xxTargetCodeGenInfo(CGM);
   case llvm::Triple::csky: {
     bool IsSoftFloat = !Target.hasFeature("hard-float-abi");
     bool hasFP64 =

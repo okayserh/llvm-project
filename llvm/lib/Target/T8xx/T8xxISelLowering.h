@@ -64,6 +64,10 @@ namespace llvm {
     void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue>&Results,
                             SelectionDAG &DAG) const override;
 
+    /// getSetCCResultType - get the ISD::SETCC result ValueType
+    EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
+                           EVT VT) const override;
+
     // TODO: Check if there are cases, where this might not be true
     virtual bool isIntDivCheap(EVT VT, AttributeList Attr) const override { return true; }
     
@@ -117,6 +121,7 @@ namespace llvm {
     SDValue LowerLOAD(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerVAARG(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
 
