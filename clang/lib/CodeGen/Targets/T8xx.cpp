@@ -31,10 +31,9 @@ public:
   T8xxABIInfo(CodeGenTypes &CGT) :
     ABIInfo(CGT), MinABIStackAlignInBytes(4),
     StackAlignInBytes(4) {}
-  /*
+
   ABIArgInfo classifyReturnType(QualType RetTy) const;
-  ABIArgInfo classifyArgumentType(QualType RetTy, uint64_t &Offset) const;
-  */
+  ABIArgInfo classifyArgumentType(QualType RetTy) const;
   void computeInfo(CGFunctionInfo &FI) const override;
   RValue EmitVAArg(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
                    AggValueSlot Slot) const override;
@@ -73,19 +72,71 @@ public:
   
 // Based on MipsABIInfo implementation
 
-void T8xxABIInfo::computeInfo(CGFunctionInfo &FI) const {
-  ABIArgInfo &RetInfo = FI.getReturnInfo();
-  //  if (!getCXXABI().classifyReturnType(FI))
-  //    RetInfo = classifyReturnType(FI.getReturnType());
+ABIArgInfo T8xxABIInfo::classifyArgumentType(QualType Ty) const {
+  Ty = useFirstFieldIfTransparentUnion(Ty);
 
-  // Check if a pointer to an aggregate is passed as a hidden argument.
-  uint64_t Offset = RetInfo.isIndirect() ? MinABIStackAlignInBytes : 0;
-  /*
-  for (auto &I : FI.arguments())
-    I.info = classifyArgumentType(I.type, Offset);
-  */
+  if (isAggregateTypeForABI(Ty)) {
+    // Records with non-trivial destructors/copy-constructors should not be
+    // passed by value.
+    if (CGCXXABI::RecordArgABI RAA = getRecordArgABI(Ty, getCXXABI()))
+      return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace(),
+                                     RAA == CGCXXABI::RAA_DirectInMemory);
+
+    return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace());
+  }
+
+  // Treat an enum type as its underlying type.
+  if (const auto *ED = Ty->getAsEnumDecl())
+    Ty = ED->getIntegerType();
+
+  ASTContext &Context = getContext();
+  if (const auto *EIT = Ty->getAs<BitIntType>())
+    if (EIT->getNumBits() >
+        Context.getTypeSize(Context.getTargetInfo().hasInt128Type()
+                                ? Context.Int128Ty
+                                : Context.LongLongTy))
+      return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace());
+
+  return (isPromotableIntegerTypeForABI(Ty)
+              ? ABIArgInfo::getExtend(Ty, CGT.ConvertType(Ty))
+              : ABIArgInfo::getDirect());
 }
 
+ABIArgInfo T8xxABIInfo::classifyReturnType(QualType RetTy) const {
+  if (RetTy->isVoidType())
+    return ABIArgInfo::getIgnore();
+
+  if (isAggregateTypeForABI(RetTy))
+    return getNaturalAlignIndirect(RetTy, getDataLayout().getAllocaAddrSpace());
+
+  // Treat an enum type as its underlying type.
+  if (const auto *ED = RetTy->getAsEnumDecl())
+    RetTy = ED->getIntegerType();
+
+  if (const auto *EIT = RetTy->getAs<BitIntType>())
+    if (EIT->getNumBits() >
+        getContext().getTypeSize(getContext().getTargetInfo().hasInt128Type()
+                                     ? getContext().Int128Ty
+                                     : getContext().LongLongTy))
+      return getNaturalAlignIndirect(RetTy,
+                                     getDataLayout().getAllocaAddrSpace());
+
+  return (isPromotableIntegerTypeForABI(RetTy) ? ABIArgInfo::getExtend(RetTy)
+                                               : ABIArgInfo::getDirect());
+}
+
+void T8xxABIInfo::computeInfo(CGFunctionInfo &FI) const {
+  ABIArgInfo &RetInfo = FI.getReturnInfo();
+  if (!getCXXABI().classifyReturnType(FI))
+    RetInfo = classifyReturnType(FI.getReturnType());
+
+  // Check if a pointer to an aggregate is passed as a hidden argument.
+  for (auto &I : FI.arguments())
+    I.info = classifyArgumentType(I.type);
+}
+
+
+// TODO: Copied from MIPS. Needs to be adapted to T8xx architecture
 RValue T8xxABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                               QualType OrigTy, AggValueSlot Slot) const {
   QualType Ty = OrigTy;
