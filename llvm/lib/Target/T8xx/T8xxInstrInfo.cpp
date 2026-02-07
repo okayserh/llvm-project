@@ -321,7 +321,7 @@ loadRegFromStackSlot(MachineBasicBlock &MBB,
 		     MachineBasicBlock::iterator I,
                      Register DestReg, int FI,
                      const TargetRegisterClass *RC,
-		     Register VReg,
+		     Register VReg, unsigned SubReg,
 		     MachineInstr::MIFlag Flags) const {
   if (RC == &T8xx::ORegRegClass)
     BuildMI(MBB, I, I->getDebugLoc(), get(T8xx::LDL), DestReg).addFrameIndex(FI).addImm(0);
