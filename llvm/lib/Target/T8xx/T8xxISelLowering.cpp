@@ -85,8 +85,6 @@ const char *T8xxTargetLowering::getTargetNodeName(unsigned Opcode) const {
   }
 }
 
-
-
 // Return true if it is OK for this CMOV pseudo-opcode to be cascaded
 // together with other CMOV pseudo-opcodes into a single basic-block with
 // conditional jump around it.
@@ -687,6 +685,10 @@ SDValue T8xxTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
 
   // Increment the pointer, VAList, to the next vaarg.
   auto &TD = DAG.getDataLayout();
+
+  Type *ty = VT.getTypeForEVT(*DAG.getContext());
+  dbgs() << "#### Vaarg  " << *ty << "\n";
+
   unsigned ArgSizeInBytes =
       TD.getTypeAllocSize(VT.getTypeForEVT(*DAG.getContext()));
   SDValue Tmp3 =

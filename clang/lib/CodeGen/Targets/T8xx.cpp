@@ -154,6 +154,9 @@ RValue T8xxABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                                             Ty->isSignedIntegerType());
   }
 
+  // note: In its core the method getTypeInfoImpl (ASTContext.cpp) yields the type info
+  // There vector types are rounded up in size to powers of 2.
+  // note: TypeInfoChars TyInfo (cf. ASTContext.h)
   auto TyInfo = getContext().getTypeInfoInChars(Ty);
 
   // The alignment of things in the argument area is never larger than
@@ -162,8 +165,7 @@ RValue T8xxABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
     std::min(TyInfo.Align, CharUnits::fromQuantity(StackAlignInBytes));
 
   // MinABIStackAlignInBytes is the size of argument slots on the stack.
-  CharUnits ArgSlotSize = CharUnits::fromQuantity(MinABIStackAlignInBytes);
-
+  CharUnits ArgSlotSize = CharUnits::fromQuantity(MinABIStackAlignInBytes);  
   RValue Res = emitVoidPtrVAArg(CGF, VAListAddr, Ty, /*indirect*/ false, TyInfo,
                                 ArgSlotSize, /*AllowHigherAlign*/ true, Slot);
 
