@@ -60,6 +60,9 @@ typedef struct {
 #if __ARM_FP
   long fopaque[8]; // d8-d15
 #endif
+#elif defined(__t8xx__)
+  //TODO: Needs to be defined how the Transputer should handle longjumps
+  int __sp;
 #else
 #error "__jmp_buf not available for your target architecture."
 #endif
