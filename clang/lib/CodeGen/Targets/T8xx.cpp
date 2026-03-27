@@ -75,10 +75,14 @@ public:
 ABIArgInfo T8xxABIInfo::classifyArgumentType(QualType Ty) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
 
-  llvm::dbgs () << "classifyArgumentType " << Ty.getAsString () << "\n";
+  //  llvm::dbgs () << "classifyArgumentType " << Ty.getAsString () << "\n";
   
+  uint64_t TySize = getContext().getTypeSize(Ty);
+  uint64_t Align = getContext().getTypeAlign(Ty) / 8;
+  //  llvm::dbgs() << "TySize: " << TySize << "  Align: " << Align << "n";
+
   if (isAggregateTypeForABI(Ty) || Ty->isVectorType()) {
-    llvm::dbgs () << "Aggregate for ABI\n";
+    //    llvm::dbgs () << "Aggregate for ABI\n";
     
     // Records with non-trivial destructors/copy-constructors should not be
     // passed by value.
@@ -96,7 +100,7 @@ ABIArgInfo T8xxABIInfo::classifyArgumentType(QualType Ty) const {
   ASTContext &Context = getContext();
   if (const auto *EIT = Ty->getAs<BitIntType>())
     {
-      llvm::dbgs () << "Aggregate for ABI\n";
+      //      llvm::dbgs () << "Aggregate for ABI\n";
 
       if (EIT->getNumBits() >
 	  Context.getTypeSize(Context.getTargetInfo().hasInt128Type()
@@ -105,16 +109,13 @@ ABIArgInfo T8xxABIInfo::classifyArgumentType(QualType Ty) const {
 	return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace());
     }
 
-  if (isPromotableIntegerTypeForABI(Ty))
-    llvm::dbgs () << "isPromotableIntegerType\n";
-  
   return (isPromotableIntegerTypeForABI(Ty)
               ? ABIArgInfo::getExtend(Ty, CGT.ConvertType(Ty))
               : ABIArgInfo::getDirect());
 }
 
 ABIArgInfo T8xxABIInfo::classifyReturnType(QualType RetTy) const {
-  llvm::dbgs () << "classifyReturnType\n";
+  //  llvm::dbgs () << "classifyReturnType\n";
 
   if (RetTy->isVoidType())
     return ABIArgInfo::getIgnore();
@@ -154,7 +155,7 @@ RValue T8xxABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                               QualType OrigTy, AggValueSlot Slot) const {
   QualType Ty = OrigTy;
 
-  llvm::dbgs () << "EmitVAArg\n";
+  //  llvm::dbgs () << "EmitVAArg\n";
 
   // Integer arguments are promoted to 32-bit on O32 and 64-bit on N32/N64.
   // Pointers are also promoted in the same way but this only matters for N32.
@@ -170,9 +171,18 @@ RValue T8xxABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   }
 
   // note: In its core the method getTypeInfoImpl (ASTContext.cpp) yields the type info
-  // There vector types are rounded up in size to powers of 2.
+  // Their vector types are rounded up in size to powers of 2.
   // note: TypeInfoChars TyInfo (cf. ASTContext.h)
   auto TyInfo = getContext().getTypeInfoInChars(Ty);
+
+  // Vectors will be passed indirectly
+  // Otherwise it creates some complications as vectors of length 3 are passed
+  // as three elements, while they are internally treated as length 4 (due to the
+  // roundup to powers of 2)
+  // TODO: Verify if other types may need to be classified as indirect as well
+  bool IsIndirect = false;
+  if (Ty->isVectorType())
+    IsIndirect = true;
 
   // The alignment of things in the argument area is never larger than
   // StackAlignInBytes.
@@ -181,7 +191,7 @@ RValue T8xxABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   // MinABIStackAlignInBytes is the size of argument slots on the stack.
   CharUnits ArgSlotSize = CharUnits::fromQuantity(MinABIStackAlignInBytes);  
-  RValue Res = emitVoidPtrVAArg(CGF, VAListAddr, Ty, /*indirect*/ false, TyInfo,
+  RValue Res = emitVoidPtrVAArg(CGF, VAListAddr, Ty, IsIndirect, TyInfo,
                                 ArgSlotSize, /*AllowHigherAlign*/ true, Slot);
 
   // If there was a promotion, "unpromote".
