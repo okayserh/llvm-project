@@ -1626,6 +1626,12 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 		      break;
 		    case 2: OP->setReg(T8xx::CREG);
 		      break;
+		      // TODO: This is a quick fix to handle crashes due to DBG_VALUE, where not
+		      // all virtual registers were replaced by "real registers". While this fixes
+		      // the crash, it does not make any sense (i.e. the DBG_VALUE is essentially
+		      // meaningless).
+		    default: OP->setReg(T8xx::CREG);
+		      break;
 		    }
 		  ++RegAdd;
 		}

@@ -213,6 +213,12 @@ T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SETCC, MVT::i16, Promote);
   setOperationAction(ISD::SETCC, MVT::i32, Custom);
 
+  // Not directly supported by T8xx
+  setOperationAction(ISD::UINT_TO_FP,        MVT::i32,   Expand);
+  setOperationAction(ISD::UINT_TO_FP,        MVT::i64,   Expand);
+  setOperationAction(ISD::FP_TO_UINT,        MVT::i32,   Expand);
+  setOperationAction(ISD::FP_TO_UINT,        MVT::i64,   Expand);
+
   // Instructions not natively supported by Transputers
   // TODO: Some of these seem to be available in the T8xx series.
   setOperationAction(ISD::CTPOP,             MVT::i32, Expand);
@@ -1293,9 +1299,20 @@ T8xxTargetLowering::EmitAtomicBinary(MachineInstr &MI,
   Register OldVal = MI.getOperand(0).getReg();
   Register Ptr = MI.getOperand(1).getReg();
   Register Incr = MI.getOperand(2).getReg();
-  Register Scratch = RegInfo.createVirtualRegister(RegInfo.getRegClass(OldVal));
 
   MachineBasicBlock::iterator II(MI);
+
+  // Check whether a workspace location was already allocated
+  // as temporary storage for Move instructions
+  T8xxMachineFunctionInfo *FuncInfo = MF->getInfo<T8xxMachineFunctionInfo>();
+  int FI = FuncInfo->getMoveSlot();
+  if (FI == 0)
+    {
+      FI = MF->getFrameInfo().CreateStackObject(4, // Size in bytes for i16
+						Align(4), // Required alignment for the load to the frame
+						false); // isImmutable
+      FuncInfo->setMoveSlot(FI);
+    }
 
   // The scratch registers here with the EarlyClobber | Define | Implicit
   // flags is used to persuade the register allocator and the machine
@@ -1332,19 +1349,16 @@ T8xxTargetLowering::EmitAtomicBinary(MachineInstr &MI,
   //     containing the word.
   //
 
-  Register PtrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Ptr));
-  Register IncrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Incr));
 
-  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), IncrCopy).addReg(Incr);
-  BuildMI(*BB, II, DL, TII->get(T8xx::COPY), PtrCopy).addReg(Ptr);
-
+  // TODO: Just some quick hack to see, whether that fixes the problem with Stackification
   MachineInstrBuilder MIB =
-      BuildMI(*BB, II, DL, TII->get(AtomicOp))
-          .addReg(OldVal, RegState::Define | RegState::EarlyClobber)
-          .addReg(PtrCopy)
-          .addReg(IncrCopy)
-          .addReg(Scratch, RegState::Define | RegState::EarlyClobber |
-                               RegState::Implicit | RegState::Dead);
+    BuildMI(*BB, II, DL, TII->get(AtomicOp))
+    .addReg(OldVal, RegState::Define | RegState::EarlyClobber)
+    .addReg(Ptr)
+    .addReg(Incr)
+    .addFrameIndex(FI)
+    .addImm(0);
+
   if (NeedsAdditionalReg) {
     Register Scratch2 =
         RegInfo.createVirtualRegister(RegInfo.getRegClass(OldVal));
