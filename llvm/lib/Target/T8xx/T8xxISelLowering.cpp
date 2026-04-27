@@ -101,6 +101,8 @@ static bool isCMOVPseudo(MachineInstr &MI) {
 T8xxTargetLowering::T8xxTargetLowering(const TargetMachine &TM,
                                          const T8xxSubtarget &STI)
   : TargetLowering(TM, STI), Subtarget(STI) {
+  setBooleanContents(ZeroOrOneBooleanContent);
+
   MVT PtrVT = MVT::getIntegerVT(TM.getPointerSizeInBits(0));
 
   // Set up the register classes.
