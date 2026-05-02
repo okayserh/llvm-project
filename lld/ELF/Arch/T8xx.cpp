@@ -281,18 +281,31 @@ void T8xx::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_T8XX_JUMP:
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
-      uint32_t len = calc_pfix_len_pcrel (val);
-      //      printf ("J/CJ, Len : %u  ", len);
-      fill_pnfix (loc, sval - len, loc[len-1], len);
+      //      uint32_t len = calc_pfix_len_pcrel (val);
+      uint32_t len_n = 1;
+      unsigned int i = 0;
+      while (loc[i] == 0x20)
+	{
+	  i++;
+	  len_n++;
+	}
+      fill_pnfix (loc, sval - len_n, loc[len_n-1], len_n);
     }
     break;
 
   case R_T8XX_LDPI_SYM:
     {
       int32_t sval = SignExtend32 ((uint32_t)(val & 0xFFFFFFFF), 32);
-      uint32_t len = calc_pfix_len_pcrel (val - 2);
+      //      uint32_t len = calc_pfix_len_pcrel (val - 2);
+      uint32_t len_n = 1;
+      unsigned int i = 0;
+      while (loc[i] == 0x20)
+	{
+	  i++;
+	  len_n++;
+	}
       // The "-2" is two bytes for the "ldpi" instruction after the ldc.
-      fill_pnfix (loc, sval - 2 - len, loc[len-1], len);
+      fill_pnfix (loc, sval - 2 - len_n, loc[len_n-1], len_n);
     }
     break;
 
@@ -314,10 +327,10 @@ void T8xx::relocateAlloc(InputSection &sec, uint8_t *buf) const {
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
 
+  size_t indx = 0;
   for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     uint64_t val = sec.getRelocTargetVA(ctx, rel, secAddr + rel.offset);
-
     //    printf ("secAddr %08x  Offset %li  relalloc %08x\n", secAddr, rel.offset, val);
     relocate(loc, rel, val);
   }
@@ -343,7 +356,8 @@ static void relaxNPFix(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc
 
   remove = 0;
 
-  sec.relaxAux->writes.push_back(0x0); // Dummy value to keep array indices in sync
+  // sec.relaxAux->writes.push_back(0x0); // Dummy value to keep array indices in sync
+  sec.relaxAux->writes[i] = 0x0;  // Dummy value
   sec.relaxAux->relocTypes[i] = r.type;
 }
 
@@ -379,18 +393,20 @@ static void relaxBinary(Ctx &ctx, const InputSection &sec, size_t i, uint64_t lo
       uint32_t req_bytes = calc_pfix_len_abs (displace);
       remove = 8 - req_bytes;
 
+      // TODO: Find a way to handle the case, where no more relaxation is required.
+
       // Put the resulting value into the "writes" field.
       if (r.type == R_T8XX_ADDR_SUB)
-	sec.relaxAux->writes.push_back((uint32_t) base - dest);
+	sec.relaxAux->writes[i] = ((uint32_t) base - dest);
       else
-	sec.relaxAux->writes.push_back((uint32_t) base + dest);
+	sec.relaxAux->writes[i] = ((uint32_t) base + dest);
       sec.relaxAux->relocTypes[i] = r.type;
     }
 }
 
 
 static void relaxLDPI(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
-                      Relocation &r, uint32_t &remove) {
+                      Relocation &r, uint32_t &remove, bool stop_relax) {
   const Symbol &sym = *r.sym;
   const uint64_t dest = sym.getVA(ctx) + r.addend;
   const int64_t displace = dest - loc;
@@ -404,33 +420,48 @@ static void relaxLDPI(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
   printf ("Symbol %s\n\n", toStr(ctx, sym).c_str ());
   */
 
-  // Relocation is selected based on required bytes
-  remove = 8 - req_bytes;
-  if (req_bytes < 8)
-    sec.relaxAux->relocTypes[i] = r.type;
+  // The first 20 iterations, the number of bytes can be reduced. After the 20th iteration
+  // only increase of the size are allowed to lead to process to convergence
 
-  sec.relaxAux->writes.push_back(0x0); // Dummy value to keep array indices in sync
+  if (stop_relax)
+    {
+      if (req_bytes > sec.relaxAux->writes[i])
+	sec.relaxAux->writes[i] = req_bytes;
+    }
+  else
+    sec.relaxAux->writes[i] = req_bytes;
+
+  // Relocation is selected based on required bytes
+  remove = 8 - sec.relaxAux->writes[i];
+  if (remove > 0)
+    sec.relaxAux->relocTypes[i] = r.type;
 }
 
 
 static void relaxJump(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
-                      Relocation &r, uint32_t &remove) {
+                      Relocation &r, uint32_t &remove, bool stop_relax) {
   const Symbol &sym = *r.sym;
   const uint64_t dest = sym.getVA(ctx) + r.addend;
   const int64_t displace = dest - loc;
 
   uint32_t req_bytes = calc_pfix_len_pcrel (displace);
 
-  // Relocation is kept as it is
-  remove = 8 - req_bytes;
-  if (req_bytes < 8)
-    sec.relaxAux->relocTypes[i] = r.type;
+  if (stop_relax)
+    {
+      if (req_bytes > sec.relaxAux->writes[i])
+	sec.relaxAux->writes[i] = req_bytes;
+    }
+  else
+    sec.relaxAux->writes[i] = req_bytes;
 
-  sec.relaxAux->writes.push_back(0x0); // Dummy value to keep array indices in sync
+  // Relocation is kept as it is
+  remove = 8 - sec.relaxAux->writes[i];
+  if (remove > 0)
+    sec.relaxAux->relocTypes[i] = r.type;
 }
 
 
-static bool relax(Ctx &ctx, InputSection &sec) {
+static bool relax(Ctx &ctx, InputSection &sec, bool stop_relax) {
   const uint64_t secAddr = sec.getVA();
   const MutableArrayRef<Relocation> relocs = sec.relocs();
   auto &aux = *sec.relaxAux;
@@ -439,8 +470,11 @@ static bool relax(Ctx &ctx, InputSection &sec) {
   uint64_t delta = 0;
   bool tlsdescRelax = false, toLeShortForm = false;
 
-  std::fill_n(aux.relocTypes.get(), relocs.size(), R_RISCV_NONE);
-  aux.writes.clear();
+  std::fill_n(aux.relocTypes.get(), relocs.size(), R_T8XX_NONE);
+  //  printf ("Aux.writes.size %i  Relocs.size() %i\n", aux.writes.size(), relocs.size());
+  if (aux.writes.size() < relocs.size())
+    aux.writes.resize(relocs.size(), 0);
+
   for (auto [i, r] : llvm::enumerate(relocs)) {
     const uint64_t loc = secAddr + r.offset - delta;
     uint32_t &cur = aux.relocDeltas[i], remove = 0;
@@ -460,7 +494,6 @@ static bool relax(Ctx &ctx, InputSection &sec) {
                  << align << " bytes";
         remove = 0;
       }
-      aux.writes.push_back (0x0);  // Dummy value to keep array indices in sync
       break;
     }
 
@@ -470,7 +503,7 @@ static bool relax(Ctx &ctx, InputSection &sec) {
       break;
 
     case R_T8XX_JUMP:
-      relaxJump(ctx, sec, i, loc, r, remove);
+      relaxJump(ctx, sec, i, loc, r, remove, stop_relax);
       break;
 
     case R_T8XX_ADDR_BASE:
@@ -480,11 +513,11 @@ static bool relax(Ctx &ctx, InputSection &sec) {
       break;
 
     case R_T8XX_LDPI_SYM:
-      relaxLDPI(ctx, sec, i, loc, r, remove);
+      relaxLDPI(ctx, sec, i, loc, r, remove, stop_relax);
       break;
 
     default:
-      aux.writes.push_back (0x0);  // Dummy value to keep array indices in sync
+      break;
     }
 
     // For all anchors whose offsets are <= r.offset, they are preceded by
@@ -518,7 +551,7 @@ static bool relax(Ctx &ctx, InputSection &sec) {
 }
 
 
-// When relaxing just R_RISCV_ALIGN, relocDeltas is usually changed only once in
+// When relaxing just R_T8XX_ALIGN, relocDeltas is usually changed only once in
 // the absence of a linker script. For call and load/store R_RISCV_RELAX, code
 // shrinkage may reduce displacement and make more relocations eligible for
 // relaxation. Code shrinkage may increase displacement to a call/load/store
@@ -541,7 +574,7 @@ bool T8xx::relaxOnce(int pass) const {
     if (!(osec->flags & SHF_EXECINSTR))
       continue;
     for (InputSection *sec : getInputSections(*osec, storage))
-      changed |= relax(ctx, *sec);
+      changed |= relax(ctx, *sec, (pass > 20));
   }
   return changed;
 }
@@ -584,6 +617,9 @@ void T8xx::finalizeRelax(int passes) const {
         memcpy(p, old.data() + offset, size);
         p += size;
 
+	// [OKH] Note: It copies the code segment before the relocation bytes!!!.
+
+
         // For R_RISCV_ALIGN, we will place `offset` in a location (among NOPs)
         // to satisfy the alignment requirement. If both `remove` and r.addend
         // are multiples of 4, it is as if we have skipped some NOPs. Otherwise
@@ -604,8 +640,9 @@ void T8xx::finalizeRelax(int passes) const {
           }
 	  } else*/
 
+
 	if (RelType newType = aux.relocTypes[i]) {
-	  // TODO: Here the code for putting in the difference in case of binary
+	  // Code for putting in the difference in case of binary
 	  // relocations needs to be filled in.
 	  switch (newType)
 	    {
@@ -613,7 +650,6 @@ void T8xx::finalizeRelax(int passes) const {
 	    case R_T8XX_ADDR_SUB:
 	      {
 		uint32_t len = calc_pfix_len_abs (aux.writes[i]);
-		//		printf ("Finalize SUB %i   Size %i  Rem %i\n", aux.writes[i], size, remove);
 		rels[i].addend = aux.writes[i];
 	      }
 	      break;
@@ -633,7 +669,7 @@ void T8xx::finalizeRelax(int passes) const {
         uint64_t cur = rels[i].offset;
         do {
           rels[i].offset -= delta;
-          if (aux.relocTypes[i] != R_RISCV_NONE)
+          if (aux.relocTypes[i] != R_T8XX_NONE)
             rels[i].type = aux.relocTypes[i];
         } while (++i != e && rels[i].offset == cur);
         delta = aux.relocDeltas[i - 1];
