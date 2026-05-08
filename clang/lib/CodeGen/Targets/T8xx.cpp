@@ -79,10 +79,10 @@ ABIArgInfo T8xxABIInfo::classifyArgumentType(QualType Ty) const {
   
   uint64_t TySize = getContext().getTypeSize(Ty);
   uint64_t Align = getContext().getTypeAlign(Ty) / 8;
-  //  llvm::dbgs() << "TySize: " << TySize << "  Align: " << Align << "n";
+  // llvm::dbgs() << "TySize: " << TySize << "  Align: " << Align << "\n";
 
   if (isAggregateTypeForABI(Ty) || Ty->isVectorType()) {
-    //    llvm::dbgs () << "Aggregate for ABI\n";
+    // llvm::dbgs () << "Aggregate for ABI\n";
     
     // Records with non-trivial destructors/copy-constructors should not be
     // passed by value.
@@ -181,7 +181,7 @@ RValue T8xxABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   // roundup to powers of 2)
   // TODO: Verify if other types may need to be classified as indirect as well
   bool IsIndirect = false;
-  if (Ty->isVectorType())
+  if (Ty->isVectorType() || isAggregateTypeForABI(Ty))
     IsIndirect = true;
 
   // The alignment of things in the argument area is never larger than

@@ -497,6 +497,9 @@ bool T8xxExpandPseudo::expandMI(MachineBasicBlock &MBB,
 
       if (MBBI->getOpcode() == T8xx::MoveSEXTLoad)
 	{
+	  BuildMI (MBB, *MBBI, DL, TII->get(T8xx::LDC), T8xx::AREG).addImm(65535);
+	  BuildMI (MBB, *MBBI, DL, TII->get(T8xx::AND), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
+
 	  BuildMI (MBB, *MBBI, DL, TII->get(T8xx::LDC), T8xx::AREG).addImm(32768);
 	  BuildMI (MBB, *MBBI, DL, TII->get(T8xx::XWORD), T8xx::AREG).addReg(T8xx::AREG).addReg(T8xx::BREG);
 	}

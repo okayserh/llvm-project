@@ -529,9 +529,9 @@ def : Pat<(i32 (sextloadi8 ADDRri8:$addr)),
 
 // "Inreg" extensions
 def : Pat<(sext_inreg (i32 OReg:$in), i16),
-          (XWORD $in, (LDC 32768))>;
+          (XWORD (AND $in, (LDC 65535) ), (LDC 32768))>;
 def : Pat<(sext_inreg (i32 OReg:$in), i8),
-          (XWORD $in, (LDC 128))>;
+          (XWORD (AND $in, (LDC 255) ), (LDC 128))>;
 
 def : Pat<(i32 (zext (i16 OReg:$in))),
           (AND $in, (LDC 65535))>;
