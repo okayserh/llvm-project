@@ -1314,28 +1314,31 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 
 	  // A cloned definition is copied in front of the using instructions
 	  MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
-	  ++use_iter;  // The first use gets the original virtual register
 
-	  for (; use_iter != MRI.use_instr_nodbg_end(); ++use_iter)
+	  // Attempt to findf all instructions
+	  MachineRegisterInfo::use_nodbg_iterator use_op_iter = MRI.use_nodbg_begin(VirtReg);
+	  ++use_op_iter;  // First use is served by the original definition
+	  for (; use_op_iter != MRI.use_nodbg_end(); ++use_op_iter)
 	    {
-	      MachineBasicBlock *MBB = use_iter->getParent ();
-	      MachineBasicBlock::instr_iterator MBBI_use(*use_iter);
+	      MachineBasicBlock *MBB = use_op_iter->getParent ()->getParent();
 	      MachineBasicBlock::instr_iterator MBBI_def(*def_iter);
-
-	      // Clone instruction
-	      MachineInstr &MI_Clone = MF.cloneMachineInstrBundle(*MBB, MBBI_use, *MBBI_def);
-
-	      // Create new virtual register and replace in cloned definition
-	      const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI_Clone.defs();
-	      Register VirtNew = MRI.createVirtualRegister (MRI.getRegClassOrNull (VirtReg));
-	      Range_defs.begin()->setReg(VirtNew);
 
 	      // Replace register in using instruction with newly created virtual register
 	      const iterator_range<MachineInstr::mop_iterator> &Range_uses = use_iter->uses();
-	      for (MachineOperand *op_use = Range_uses.begin(); op_use != Range_uses.end (); ++op_use)
+
+	      // Note: Iterate over all operands. If a constant is used twice in a single
+	      // instruction, the corresponding "ldc" needs to be cloned twice!
+	      if (use_op_iter->isReg() && (use_op_iter->getReg() == VirtReg))
 		{
-		  if (op_use->isReg() && (op_use->getReg() == VirtReg))
-		    vreg_replace.push_back (std::make_pair (op_use, VirtNew));
+		  // Clone instruction
+		  MachineInstr &MI_Clone = MF.cloneMachineInstrBundle(*MBB, use_op_iter->getParent(), *MBBI_def);
+		  MachineOperand *mop = &(*use_op_iter);
+
+		  // Create new virtual register and replace in cloned definition
+		  const iterator_range<MachineInstr::mop_iterator> &Range_defs = MI_Clone.defs();
+		  Register VirtNew = MRI.createVirtualRegister (MRI.getRegClassOrNull (VirtReg));
+		  Range_defs.begin()->setReg(VirtNew);
+		  vreg_replace.push_back (std::make_pair (mop, VirtNew));
 		}
 	    }
 	}
