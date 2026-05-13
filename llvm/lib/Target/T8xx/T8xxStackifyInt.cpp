@@ -1313,19 +1313,15 @@ bool T8xxStackPass::runOnMachineFunction(MachineFunction &MF) {
 	  MachineRegisterInfo::def_instr_iterator def_iter = MRI.def_instr_begin(VirtReg);
 
 	  // A cloned definition is copied in front of the using instructions
-	  MachineRegisterInfo::use_instr_nodbg_iterator use_iter = MRI.use_instr_nodbg_begin(VirtReg);
-
-	  // Attempt to findf all instructions
 	  MachineRegisterInfo::use_nodbg_iterator use_op_iter = MRI.use_nodbg_begin(VirtReg);
 	  ++use_op_iter;  // First use is served by the original definition
+
 	  for (; use_op_iter != MRI.use_nodbg_end(); ++use_op_iter)
 	    {
 	      MachineBasicBlock *MBB = use_op_iter->getParent ()->getParent();
 	      MachineBasicBlock::instr_iterator MBBI_def(*def_iter);
 
 	      // Replace register in using instruction with newly created virtual register
-	      const iterator_range<MachineInstr::mop_iterator> &Range_uses = use_iter->uses();
-
 	      // Note: Iterate over all operands. If a constant is used twice in a single
 	      // instruction, the corresponding "ldc" needs to be cloned twice!
 	      if (use_op_iter->isReg() && (use_op_iter->getReg() == VirtReg))
