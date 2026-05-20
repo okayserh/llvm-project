@@ -22,6 +22,7 @@ add_header_library(
     op_builtin.h
     op_generic.h
     op_x86.h
+    op_t8xx.h
     riscv/inline_bcmp.h
     riscv/inline_memcmp.h
     riscv/inline_memcpy.h

@@ -11,6 +11,8 @@
 
 #if defined(__linux__)
 #include "linux/signal-macros.h"
+#elif defined(__t8xx__)
+#include "baremetal/signal-macros.h"
 #elif defined(__NVPTX__) || defined(__AMDGPU__)
 #include "gpu/signal-macros.h"
 #endif
