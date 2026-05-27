@@ -27,8 +27,6 @@ lor.rhs:
 ; CHECK: ldl 4
 ; CHECK: ldiff
 ; CHECK: rev
-; CHECK: ldc 1
-; CHECK: and
 ; CHECK: stl 2
 ; CHECK: ldl 2
 ; CHECK: stl 1

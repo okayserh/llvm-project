@@ -107,22 +107,26 @@ entry:
 ; CHECK: stl 0
 ; CHECK: ajw -3
 ; CHECK: ldlp 0
-; CHECK: adc -36
+; CHECK: adc -40
 ; CHECK: ldc 7
 ; CHECK: not
 ; CHECK: and
 ; CHECK: gajw
-; CHECK: stl 7
-; CHECK: ldl 7
+; CHECK: stl 8
+; CHECK: ldl 8
 ; CHECK: adc 4
 ; CHECK: fpldnldb
 ; CHECK: ldlp 5
 ; CHECK: fpstnldb
+; CHECK: ldl 8
+; CHECK: fpldnlsn
+; CHECK: ldlp 7
+; CHECK: fpstnlsn
 ; CHECK: ldlp 5
 ; CHECK: fpldnldb
 ; CHECK: ldlp 2
 ; CHECK: fpstnldb
-; CHECK: ldl 7
+; CHECK: ldlp 7
 ; CHECK: fpldnlsn
 ; CHECK: fpur32tor64
 ; CHECK: ldlp 5
@@ -132,7 +136,7 @@ entry:
 ; CHECK: ldlp 4
 ; CHECK: fpstnlsn
 ; CHECK: ldc 0
-; CHECK: ldl 7
+; CHECK: ldl 8
 ; CHECK: gajw
 ; CHECK: rev
 ; CHECK: ajw 3
@@ -159,24 +163,28 @@ entry:
 ; CHECK: stl 0
 ; CHECK: ajw -3
 ; CHECK: ldlp 0
-; CHECK: adc -36
+; CHECK: adc -40
 ; CHECK: ldc 7
 ; CHECK: not
 ; CHECK: and
 ; CHECK: gajw
-; CHECK: stl 7
-; CHECK: ldl 7
+; CHECK: stl 8
+; CHECK: ldl 8
 ; CHECK: fpldnldb
 ; CHECK: ldlp 5
 ; CHECK: fpstnldb
+; CHECK: ldl 8
+; CHECK: adc 8
+; CHECK: fpldnlsn
+; CHECK: ldlp 7
+; CHECK: fpstnlsn
 ; CHECK: ldlp 5
 ; CHECK: fpldnldb
 ; CHECK: ldlp 2
 ; CHECK: fpstnldb
 ; CHECK: ldlp 5
 ; CHECK: fpldnldb
-; CHECK: ldl 7
-; CHECK: adc 8
+; CHECK: ldlp 7
 ; CHECK: fpldnlsn
 ; CHECK: fpur32tor64
 ; CHECK: fpmul
@@ -184,7 +192,7 @@ entry:
 ; CHECK: ldlp 4
 ; CHECK: fpstnlsn
 ; CHECK: ldc 0
-; CHECK: ldl 7
+; CHECK: ldl 8
 ; CHECK: gajw
 ; CHECK: rev
 ; CHECK: ajw 3

@@ -28,13 +28,15 @@ define dso_local i32 @test20a(i32 noundef %0, i32 noundef %1, i32 noundef %2) #0
   ret i32 %21
 ; CHECK-LABEL: test20a:
 ; CHECK: stl 0
-; CHECK: ajw -11
-; CHECK: ldl 8
+; CHECK: ajw -12
+; CHECK: ldl 9
 ; CHECK: stl 4
 ; CHECK: ldl 4
-; CHECK: ldl 9
+; CHECK: ldl 10
 ; CHECK: mul
 ; CHECK: stl 5
+; CHECK: ldl 11
+; CHECK: stl 7
 ; CHECK: ldl 5
 ; CHECK: stl 1
 ; CHECK: ldl 5
@@ -44,15 +46,15 @@ define dso_local i32 @test20a(i32 noundef %0, i32 noundef %1, i32 noundef %2) #0
 ; CHECK: ldl 6
 ; CHECK: stl 2
 ; CHECK: ldl 6
-; CHECK: ldl 10
+; CHECK: ldl 7
 ; CHECK: mul
-; CHECK: stl 7
-; CHECK: ldl 7
+; CHECK: stl 8
+; CHECK: ldl 8
 ; CHECK: stl 3
-; CHECK: ldl 7
+; CHECK: ldl 8
 ; CHECK: ldl 4
 ; CHECK: mul
-; CHECK: ajw 11
+; CHECK: ajw 12
 ; CHECK: ldl 0
 ; CHECK: gcall
 }

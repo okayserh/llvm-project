@@ -17,37 +17,43 @@ define i32 @test4(i32) #0 {
   ret i32 %11
 ; CHECK-LABEL: test4:
 ; CHECK: stl 0
-; CHECK: ajw -8
+; CHECK: ajw -9
+; CHECK: ldl 8
+; CHECK: stl 4
 ; CHECK: ldlp 1
-; CHECK: stl 5
+; CHECK: stl 6
 ; CHECK: ldc 4
-; CHECK: ldl 5
+; CHECK: ldl 6
 ; CHECK: adc 4
 ; CHECK: sb
-; CHECK: ldl 7
-; CHECK: adc 1
-; CHECK: stl 4
 ; CHECK: ldl 4
-; CHECK: stl 7
+; CHECK: adc 1
+; CHECK: stl 5
 ; CHECK: ldl 5
+; CHECK: stl 8
+; CHECK: ldl 6
 ; CHECK: ldlp 3
 ; CHECK: ldc 2
 ; CHECK: move
 ; CHECK: ldl 3
-; CHECK: stl 6
-; CHECK: ldl 5
+; CHECK: ldc 65535
+; CHECK: and
+; CHECK: stl 7
+; CHECK: ldl 6
 ; CHECK: adc 2
 ; CHECK: ldlp 3
 ; CHECK: ldc 2
 ; CHECK: move
 ; CHECK: ldl 3
+; CHECK: ldc 65535
+; CHECK: and
 ; CHECK: ldc 16
 ; CHECK: shl
-; CHECK: ldl 6
+; CHECK: ldl 7
 ; CHECK: or
-; CHECK: ldl 4
+; CHECK: ldl 5
 ; CHECK: add
-; CHECK: ajw 8
+; CHECK: ajw 9
 ; CHECK: ldl 0
 ; CHECK: gcall
 }

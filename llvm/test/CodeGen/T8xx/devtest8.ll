@@ -21,26 +21,28 @@ define i32 @test8a(i32) #0 {
 ; CHECK: stl 0
 ; CHECK: ajw -1
 ; CHECK: ldlp 0
-; CHECK: adc -24
+; CHECK: adc -28
 ; CHECK: ldc 7
 ; CHECK: not
 ; CHECK: and
 ; CHECK: gajw
-; CHECK: stl 4
+; CHECK: stl 5
+; CHECK: ldl 5
+; CHECK: ldnl 0
+; CHECK: stl 3
 ; CHECK: ldc %global_pfix(.L.str)
 ; CHECK: stl 2
-; CHECK: ldl 4
-; CHECK: ldnl 0
+; CHECK: ldl 3
 ; CHECK: ldc %global_pfix(.L.str)
 ; CHECK: add
 ; CHECK: lb
 ; CHECK: ldc 128
 ; CHECK: xword
-; CHECK: stl 3
-; CHECK: ldl 3
-; CHECK: stl 1
-; CHECK: ldl 3
+; CHECK: stl 4
 ; CHECK: ldl 4
+; CHECK: stl 1
+; CHECK: ldl 4
+; CHECK: ldl 5
 ; CHECK: gajw
 ; CHECK: rev
 ; CHECK: ajw 1
