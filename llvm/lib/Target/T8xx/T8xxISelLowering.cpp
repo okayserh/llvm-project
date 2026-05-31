@@ -1735,10 +1735,6 @@ SDValue T8xxTargetLowering::LowerCallResult(
     const SmallVectorImpl<ISD::InputArg> &Ins, SDLoc dl, SelectionDAG &DAG,
     SmallVectorImpl<SDValue> &InVals) const {
 
-  /*
-  assert(!isVarArg && "Unsupported");
-  */
-
   // Assign locations to each value returned by this call.
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), RVLocs,

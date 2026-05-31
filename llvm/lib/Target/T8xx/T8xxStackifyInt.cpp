@@ -244,16 +244,14 @@ public:
 // Identify the definition for this register at this point. This is a
 // generalization of MachineRegisterInfo::getUniqueVRegDef that uses
 // LiveIntervals to handle complex cases.
-static MachineInstr *getVRegDef(unsigned Reg, const MachineInstr *Insert,
-                                const MachineRegisterInfo &MRI,
-                                const LiveIntervals &LIS) {
+static MachineInstr *getVRegDef(unsigned Reg,
+                                const MachineRegisterInfo &MRI) {
   // Most registers are in SSA form here so we try a quick MRI query first.
   if (MachineInstr *Def = MRI.getUniqueVRegDef(Reg))
     return Def;
 
   LLVM_DEBUG({
       dbgs () << "getVRegDef not found in MRI " << Reg << "\n";
-      Insert->dump();
     });
 
   return nullptr;
@@ -339,7 +337,7 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
 	      (mapRegisterStack(MRI.getRegClassOrNull (I->getReg ())->getID ()) == RegStack))
 	    {
 	      Register Reg = I->getReg();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      MachineInstr *DefI = getVRegDef(Reg, MRI);
 	      if (DefI)
 		{
 		  unsigned int SubE = getDepth (DefI, MRI, LIS, RegStack);
@@ -383,6 +381,139 @@ unsigned int T8xxStackPass::getDepth (MachineInstr *MI,
   return (DepthE);
 }
 
+static MachineInstr *insertTempStore (MachineBasicBlock::instr_iterator def,
+				      MachineRegisterInfo &MRI,
+				      VirtRegMap &VRM,
+				      Register VirtOrig,
+				      Register VirtNew)
+{
+  DebugLoc DL = def->getDebugLoc();
+  MachineBasicBlock *MBB = def->getParent ();
+  MachineFunction *MF = MBB->getParent ();
+  MIMetadata MIMD = MIMetadata(*def);
+  const auto *TII = MF->getSubtarget<T8xxSubtarget>().getInstrInfo();
+
+  bool isFP = false;
+  unsigned OpCode = 0;
+
+  switch (MRI.getRegClassOrNull (VirtOrig)->getID ())
+    {
+    case T8xx::ORegRegClassID:
+      OpCode = T8xx::STL;
+      break;
+    case T8xx::FPRegRegClassID:
+      isFP = true;
+      OpCode = T8xx::FPSTNLSN;
+      break;
+    case T8xx::DFPRegRegClassID:
+      isFP = true;
+      OpCode = T8xx::FPSTNLDB;
+      break;
+    default:
+      llvm_unreachable("Unknow register class!");
+      return (nullptr);
+    }
+
+  Register RegFPStack;
+  if (isFP)
+    RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
+
+  if (++def == MBB->end ())
+    {
+      if (isFP)
+	{
+	  BuildMI(MBB, MIMD, TII->get(T8xx::LDLP),RegFPStack).
+	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
+	    addImm(0);
+
+	  return (BuildMI(MBB, MIMD, TII->get(OpCode)).
+		  addReg(VirtNew).
+		  addReg(RegFPStack));
+	}
+      else
+	{
+	  return (BuildMI(MBB, MIMD, TII->get(OpCode)).
+		  addReg(VirtNew).
+		  addFrameIndex(VRM.getStackSlot(VirtOrig)).
+		  addImm(0));
+	}
+    }
+  else
+    {
+      if (isFP)
+	{
+	  BuildMI(*MBB, *def, DL, TII->get(T8xx::LDLP),RegFPStack).
+	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
+	    addImm(0);
+
+	  return (BuildMI(*MBB, *def, DL, TII->get(OpCode)).
+		  addReg(VirtNew).
+		  addReg(RegFPStack));
+	}
+      else
+	{
+	  return (BuildMI(*MBB, *def, DL, TII->get(T8xx::STL)).
+		  addReg(VirtNew).
+		  addFrameIndex(VRM.getStackSlot(VirtOrig)).
+		  addImm(0));
+	}
+    }
+}
+
+static MachineInstr *insertTempLoad (MachineBasicBlock::instr_iterator use,
+			    MachineRegisterInfo &MRI,
+			    VirtRegMap &VRM,
+			    Register VirtOrig,
+			    Register VirtNew)
+{
+  DebugLoc DL = use->getDebugLoc();
+  MachineBasicBlock *MBB = use->getParent ();
+  MachineFunction *MF = MBB->getParent ();
+  const auto *TII = MF->getSubtarget<T8xxSubtarget>().getInstrInfo();
+
+  switch (MRI.getRegClassOrNull (VirtOrig)->getID ())
+    {
+    case T8xx::ORegRegClassID:
+      {
+	return (BuildMI(*MBB, *use, DL, TII->get(T8xx::LDL), VirtNew).
+		addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0));
+      }
+      break;
+
+    case T8xx::FPRegRegClassID:
+      {
+	// For floating point numbers, an additional i32 register
+	// is needed to address the stack
+	Register RegFPStack;
+	RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
+
+	BuildMI(*MBB, *use, DL, TII->get(T8xx::LDLP),RegFPStack).
+	  addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0);
+
+	return (BuildMI(*MBB, *use, DL, TII->get(T8xx::FPLDNLSN), VirtNew).
+		addReg(RegFPStack));
+      }
+      break;
+
+    case T8xx::DFPRegRegClassID:
+      {
+	// For floating point numbers, an additional i32 register
+	// is needed to address the stack
+	Register RegFPStack;
+	RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
+
+	BuildMI(*MBB, *use, DL, TII->get(T8xx::LDLP),RegFPStack).
+	  addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0);
+
+	return (BuildMI(*MBB, *use, DL, TII->get(T8xx::FPLDNLDB), VirtNew).
+		addReg(RegFPStack));
+      }
+      break;
+    default:
+      llvm_unreachable("Unknow register class\n");
+      return (nullptr);
+    }
+}
 
 /*
  * Either inserts the instruction that defines "Use"
@@ -399,13 +530,13 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 			  MachineOperand *Use)
 {
   Register Reg = Use->getReg ();
-  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+  MachineInstr *DefI = getVRegDef(Reg, MRI);
   const auto *TII = MF.getSubtarget<T8xxSubtarget>().getInstrInfo();
 
   if (!Reg.isPhysical())
     {
-      MachineBasicBlock::iterator ItDef = *DefI;
-      MachineBasicBlock::iterator ItMi = *MI;
+      MachineBasicBlock::instr_iterator ItDef(*DefI);
+      MachineBasicBlock::instr_iterator ItMi(*MI);
 
       // Debug output
       LLVM_DEBUG({
@@ -418,39 +549,36 @@ MachineInstr *SpliceOrCloneInstruction (MachineFunction &MF,
 
       // If the instructions are already in the right sequence,
       // no splice is required
+
+      // TODO: This does not work for floating point numbers, where
+      // a LDLP instruction sits between the FPSTNL that consumes the copied
+      // result and the call function. A better recognition is needed for those
+      // cases!
       if (std::next(ItDef) == ItMi)
 	LLVM_DEBUG(dbgs() << "SpliceOrCloneInstruction: ### Instruction sequence already OK\n");
       else
 	{
-	  // Specifically only address the COPY $areg instruction!
+	  // Specifically only address the COPY $areg/$fareg instruction!
 	  if ((DefI->getOpcode () == T8xx::COPY) &&
 	      (DefI->getOperand (1).isReg ()) &&
-	      (DefI->getOperand (1).getReg () == T8xx::AREG))
+	      ((DefI->getOperand (1).getReg () == T8xx::AREG) ||
+	       (DefI->getOperand (1).getReg () == T8xx::FAREG)))
 	    {
 	      // If the results of the copy is needed at some other place,
 	      // the return value is stored in a temporary variable
 	      LLVM_DEBUG(dbgs() << "SpliceOrCloneInstruction: ### Copy instruction\n");
-	      DebugLoc DL = DefI->getDebugLoc();
 
 	      Register RegClone = MRI.cloneVirtualRegister (Reg);
 	      Use->setReg (RegClone);
-
-	      // TODO: Just to see if this works. Might be rather inefficient to have this
-	      // after each newly created virtual register
 	      VRM.grow ();
 
 	      // Store temporary variable after defining instruction
 	      if (VRM.isAssignedReg (Reg))
 		VRM.assignVirt2StackSlot (Reg);
 
-	      MachineBasicBlock::iterator MBBI = *DefI;
-
-	      BuildMI(*(MBBI->getParent()), ++MBBI, DL, TII->get(T8xx::STL)).addReg(Reg).
-		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
-
-	      // Create new virtual register for clone
-	      DefI = BuildMI(*MBB, *MI, DL, TII->get(T8xx::LDL),RegClone).
-		addFrameIndex(VRM.getStackSlot(Reg)).addImm(0);
+	      insertTempStore (ItDef, MRI, VRM, Reg, Reg);
+	      DefI = insertTempLoad (ItMi, MRI, VRM, Reg, RegClone);
+	      VRM.grow ();
 	    }
 
 	  // Shift defining instruction in front of consuming instruction
@@ -521,7 +649,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	   (RC->getID () == T8xx::LRegRegClassID)))
 	{
 	  Register Reg = I->getReg();
-	  MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	  MachineInstr *DefI = getVRegDef(Reg, MRI);
 	  T8xxRegStack RegStack = mapRegisterStack (RC->getID());
 
 	  if (DefI)
@@ -655,7 +783,11 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	    // For non commuting operators this string must be used
 	    // It brings FAREG and FBREG into the required order
 	    // (div, sub, stnl!)
-	    str2code = "EsDEl";
+	    //	    str2code = "EsDEl";
+
+	    // OKH 22.5.2026
+	    str2code = "DsEDl";  // It seems like a reversal is needed in the int branch.
+	  // As sloppy implementation, the two components are processed in different order
 
 	    // TODO: Very sloppy fix. Instead of implementing the reversal,
 	    // just use a safe combination with additional store.
@@ -693,7 +825,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      // Note Character denotes operand position!
 	      MachineOperand *Use = OpDepth[(*str2code) - 'A'].second;
 	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      MachineInstr *DefI = getVRegDef(Reg, MRI);
 
 	      assert((DefI != nullptr) && "Integer, Instruction not found!!!");
 
@@ -708,7 +840,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      // Note Character denotes operand position!
 	      MachineOperand *Use = OpDepthFP[(*str2code) - 'D'].second;
 	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      MachineInstr *DefI = getVRegDef(Reg, MRI);
 
 	      assert((DefI != nullptr) && "Floating Point, Instruction not found!!!");
 
@@ -771,7 +903,7 @@ MachineInstr *T8xxStackPass::reorderRecursive (MachineFunction &MF,
 	      MachineOperand *Use = bIntCase ? OpDepth[opno].second :
 		OpDepthFP[opno].second;
 	      Register Reg = Use->getReg ();
-	      MachineInstr *DefI = getVRegDef(Reg, MI, MRI, LIS);
+	      MachineInstr *DefI = getVRegDef(Reg, MRI);
 
 	      // Save register for later
 	      reg_mem[(*(str2code-1)) - 'A'] = Reg;
@@ -894,140 +1026,6 @@ typedef struct StackInfos_s
   //  SmallVector<Register, 4> RegClones;
 } StackInfos;
 
-
-
-static void insertTempStore (MachineBasicBlock::instr_iterator def,
-			     MachineRegisterInfo &MRI,
-			     VirtRegMap &VRM,
-			     Register VirtOrig,
-			     Register VirtNew)
-{
-  DebugLoc DL = def->getDebugLoc();
-  MachineBasicBlock *MBB = def->getParent ();
-  MachineFunction *MF = MBB->getParent ();
-  MIMetadata MIMD = MIMetadata(*def);
-  const auto *TII = MF->getSubtarget<T8xxSubtarget>().getInstrInfo();
-
-  bool isFP = false;
-  unsigned OpCode = 0;
-
-  switch (MRI.getRegClassOrNull (VirtOrig)->getID ())
-    {
-    case T8xx::ORegRegClassID:
-      OpCode = T8xx::STL;
-      break;
-    case T8xx::FPRegRegClassID:
-      isFP = true;
-      OpCode = T8xx::FPSTNLSN;
-      break;
-    case T8xx::DFPRegRegClassID:
-      isFP = true;
-      OpCode = T8xx::FPSTNLDB;
-      break;
-    default:
-      llvm_unreachable("Unknow register class!");
-    }
-
-  Register RegFPStack;
-  if (isFP)
-    RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
-
-  if (++def == MBB->end ())
-    {
-      if (isFP)
-	{
-	  BuildMI(MBB, MIMD, TII->get(T8xx::LDLP),RegFPStack).
-	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
-	    addImm(0);
-
-	  BuildMI(MBB, MIMD, TII->get(OpCode)).
-	    addReg(VirtNew).
-	    addReg(RegFPStack);
-	}
-      else
-	{
-	  BuildMI(MBB, MIMD, TII->get(OpCode)).
-	    addReg(VirtNew).
-	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
-	    addImm(0);
-	}
-    }
-  else
-    {
-      if (isFP)
-	{
-	  BuildMI(*MBB, *def, DL, TII->get(T8xx::LDLP),RegFPStack).
-	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
-	    addImm(0);
-
-	  BuildMI(*MBB, *def, DL, TII->get(OpCode)).
-	    addReg(VirtNew).
-	    addReg(RegFPStack);
-	}
-      else
-	{
-	  BuildMI(*MBB, *def, DL, TII->get(T8xx::STL)).
-	    addReg(VirtNew).
-	    addFrameIndex(VRM.getStackSlot(VirtOrig)).
-	    addImm(0);
-	}
-    }
-
-}
-
-static void insertTempLoad (MachineBasicBlock::instr_iterator use,
-			    MachineRegisterInfo &MRI,
-			    VirtRegMap &VRM,
-			    Register VirtOrig,
-			    Register VirtNew)
-{
-  DebugLoc DL = use->getDebugLoc();
-  MachineBasicBlock *MBB = use->getParent ();
-  MachineFunction *MF = MBB->getParent ();
-  const auto *TII = MF->getSubtarget<T8xxSubtarget>().getInstrInfo();
-
-  switch (MRI.getRegClassOrNull (VirtOrig)->getID ())
-    {
-    case T8xx::ORegRegClassID:
-      {
-	BuildMI(*MBB, *use, DL, TII->get(T8xx::LDL), VirtNew).
-	  addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0);
-      }
-      break;
-
-    case T8xx::FPRegRegClassID:
-      {
-	// For floating point numbers, an additional i32 register
-	// is needed to address the stack
-	Register RegFPStack;
-	RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
-
-	BuildMI(*MBB, *use, DL, TII->get(T8xx::LDLP),RegFPStack).
-	  addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0);
-
-	BuildMI(*MBB, *use, DL, TII->get(T8xx::FPLDNLSN), VirtNew).
-	  addReg(RegFPStack);
-      }
-      break;
-
-    case T8xx::DFPRegRegClassID:
-      {
-	// For floating point numbers, an additional i32 register
-	// is needed to address the stack
-	Register RegFPStack;
-	RegFPStack = MRI.createVirtualRegister (&T8xx::ORegRegClass);
-
-	BuildMI(*MBB, *use, DL, TII->get(T8xx::LDLP),RegFPStack).
-	  addFrameIndex(VRM.getStackSlot(VirtOrig)).addImm(0);
-
-	BuildMI(*MBB, *use, DL, TII->get(T8xx::FPLDNLDB), VirtNew).
-	  addReg(RegFPStack);
-      }
-      break;
-    default:
-      llvm_unreachable("Unknow register class\n");
-    }
-}
 
 // Note: Based on the same function in the WebAssembly backend
 // Determine whether MI reads memory, writes memory, has side effects,
