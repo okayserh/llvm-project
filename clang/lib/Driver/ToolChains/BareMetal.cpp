@@ -604,8 +604,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                      const char *LinkingOutput) const {
   ArgStringList CmdArgs;
 
-  llvm::dbgs () << "Linker::ConstructJob\n";
-
   auto &TC = static_cast<const toolchains::BareMetal &>(getToolChain());
   const Driver &D = getToolChain().getDriver();
   const llvm::Triple::ArchType Arch = TC.getArch();
@@ -623,8 +621,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("text");
   }
 
-  llvm::dbgs () << "Linker::ConstructJob a\n";
-
   if (const char *LDMOption = getLDMOption(TC.getTriple(), Args)) {
     CmdArgs.push_back("-m");
     CmdArgs.push_back(LDMOption);
@@ -632,8 +628,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     D.Diag(diag::err_target_unknown_triple) << Triple.str();
     return;
   }
-
-    llvm::dbgs () << "Linker::ConstructJob b\n";
 
   if (Triple.isRISCV()) {
     CmdArgs.push_back("-X");
@@ -665,8 +659,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   bool NeedCRTs =
       !Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles);
 
-  llvm::dbgs () << "Linker::ConstructJob c\n";
-
   const char *CRTBegin, *CRTEnd;
   if (NeedCRTs) {
     if (!Args.hasArg(options::OPT_r)) {
@@ -694,8 +686,6 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(TC.GetFilePath(CRTBegin)));
     }
   }
-
-  llvm::dbgs () << "Linker::ConstructJob  2\n";
 
   Args.addAllArgs(CmdArgs,
                   {options::OPT_L, options::OPT_u, options::OPT_T_Group,

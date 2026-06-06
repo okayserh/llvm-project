@@ -20,13 +20,7 @@ using namespace clang::CodeGen;
 namespace {
 class T8xxABIInfo : public ABIInfo {
   const unsigned MinABIStackAlignInBytes, StackAlignInBytes;
-  /*
-  void CoerceToIntArgs(uint64_t TySize,
-                       SmallVectorImpl<llvm::Type *> &ArgList) const;
-  llvm::Type* HandleAggregates(QualType Ty, uint64_t TySize) const;
-  llvm::Type* returnAggregateInRegs(QualType RetTy, uint64_t Size) const;
-  llvm::Type* getPaddingType(uint64_t Align, uint64_t Offset) const;
-  */
+
 public:
   T8xxABIInfo(CodeGenTypes &CGT) :
     ABIInfo(CGT), MinABIStackAlignInBytes(4),
@@ -75,15 +69,7 @@ public:
 ABIArgInfo T8xxABIInfo::classifyArgumentType(QualType Ty) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
 
-  //  llvm::dbgs () << "classifyArgumentType " << Ty.getAsString () << "\n";
-  
-  uint64_t TySize = getContext().getTypeSize(Ty);
-  uint64_t Align = getContext().getTypeAlign(Ty) / 8;
-  // llvm::dbgs() << "TySize: " << TySize << "  Align: " << Align << "\n";
-
   if (isAggregateTypeForABI(Ty) || Ty->isVectorType()) {
-    // llvm::dbgs () << "Aggregate for ABI\n";
-    
     // Records with non-trivial destructors/copy-constructors should not be
     // passed by value.
     if (CGCXXABI::RecordArgABI RAA = getRecordArgABI(Ty, getCXXABI()))
@@ -100,8 +86,6 @@ ABIArgInfo T8xxABIInfo::classifyArgumentType(QualType Ty) const {
   ASTContext &Context = getContext();
   if (const auto *EIT = Ty->getAs<BitIntType>())
     {
-      //      llvm::dbgs () << "Aggregate for ABI\n";
-
       if (EIT->getNumBits() >
 	  Context.getTypeSize(Context.getTargetInfo().hasInt128Type()
 			      ? Context.Int128Ty
@@ -115,8 +99,6 @@ ABIArgInfo T8xxABIInfo::classifyArgumentType(QualType Ty) const {
 }
 
 ABIArgInfo T8xxABIInfo::classifyReturnType(QualType RetTy) const {
-  //  llvm::dbgs () << "classifyReturnType\n";
-
   if (RetTy->isVoidType())
     return ABIArgInfo::getIgnore();
 
@@ -154,8 +136,6 @@ void T8xxABIInfo::computeInfo(CGFunctionInfo &FI) const {
 RValue T8xxABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                               QualType OrigTy, AggValueSlot Slot) const {
   QualType Ty = OrigTy;
-
-  //  llvm::dbgs () << "EmitVAArg\n";
 
   // Integer arguments are promoted to 32-bit on O32 and 64-bit on N32/N64.
   // Pointers are also promoted in the same way but this only matters for N32.
