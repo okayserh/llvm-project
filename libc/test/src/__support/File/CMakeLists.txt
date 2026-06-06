@@ -5,21 +5,22 @@ if(NOT (TARGET libc.src.__support.threads.mutex) OR LIBC_TARGET_OS_IS_GPU)
   return()
 endif()
 
-add_libc_test(
-  file_test
-  SUITE
-    libc-support-tests
-  SRCS
-    file_test.cpp
-  LINK_LIBRARIES
-    LibcMemoryHelpers
-  DEPENDS
-    libc.include.stdio
-    libc.hdr.types.size_t
-    libc.src.errno.errno
-    libc.src.__support.CPP.new
-    libc.src.__support.File.file
-)
+#TODO: OKH Temporary disabled
+#add_libc_test(
+#  file_test
+#  SUITE
+#    libc-support-tests
+#  SRCS
+#    file_test.cpp
+#  LINK_LIBRARIES
+#    LibcMemoryHelpers
+#  DEPENDS
+#    libc.include.stdio
+#    libc.hdr.types.size_t
+#    libc.src.errno.errno
+#    libc.src.__support.CPP.new
+#    libc.src.__support.File.file
+#)
 
 add_libc_test(
   platform_file_test

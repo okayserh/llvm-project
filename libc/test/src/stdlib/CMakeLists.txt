@@ -440,31 +440,34 @@ add_libc_test(
 
 if(LLVM_LIBC_FULL_BUILD)
 
-  add_libc_test(
-    _Exit_test
-    # The EXPECT_EXITS test is only availible for unit tests.
-    UNIT_TEST_ONLY
-    SUITE
-      libc-stdlib-tests
-    SRCS
-      _Exit_test.cpp
-    DEPENDS
-      libc.src.__support.OSUtil.osutil
-      libc.src.stdlib._Exit
-  )
+# TODO: OKH/T8XX, Revisit at a later time if a suitable baremetal implementation can be provided
+  if(NOT LIBC_TARGET_OS_IS_BAREMETAL)
+    add_libc_test(
+      _Exit_test
+      # The EXPECT_EXITS test is only availible for unit tests.
+      UNIT_TEST_ONLY
+      SUITE
+        libc-stdlib-tests
+      SRCS
+        _Exit_test.cpp
+      DEPENDS
+        libc.src.__support.OSUtil.osutil
+        libc.src.stdlib._Exit
+    )
 
-  add_libc_test(
-    exit_test
-    # The EXPECT_EXITS test is only availible for unit tests.
-    UNIT_TEST_ONLY
-    SUITE
-      libc-stdlib-tests
-    SRCS
-      exit_test.cpp
-    DEPENDS
-      libc.src.stdlib._Exit
-      libc.src.stdlib.exit
-  )
+    add_libc_test(
+      exit_test
+      # The EXPECT_EXITS test is only availible for unit tests.
+      UNIT_TEST_ONLY
+      SUITE
+        libc-stdlib-tests
+      SRCS
+        exit_test.cpp
+      DEPENDS
+        libc.src.stdlib._Exit
+        libc.src.stdlib.exit
+    )
+  endif()
 
   add_libc_test(
     atexit_test
